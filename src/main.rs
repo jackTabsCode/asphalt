@@ -1,11 +1,8 @@
 use clap::Parser;
 use extension::FromExtension;
-use rbxcloud::rbx::assets::{
-    create_asset, get_asset, AssetCreation, AssetCreationContext, AssetCreator, AssetType,
-    AssetUserCreator, CreateAssetParams, GetAssetParams,
-};
+use rbxcloud::rbx::assets::AssetType;
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, path::PathBuf, time::Duration};
+use std::{collections::BTreeMap, path::Path};
 use tokio::fs::{self, read};
 use upload::upload_asset;
 
@@ -23,12 +20,13 @@ struct LockFile {
     entries: BTreeMap<String, FileEntry>,
 }
 
-const API_KEY: &str = "Pgq2mxqvjUSup1WReHIpep1amHq1/hb+Y8p2Fp+cV1n/mECa";
-
 #[derive(Parser, Debug)]
 struct Args {
     #[arg(short, long)]
     api_key: String,
+
+    #[arg(short, long)]
+    typescript: bool,
 }
 
 #[tokio::main]
@@ -103,5 +101,47 @@ async fn main() {
         println!("Synced");
     } else {
         println!("No changes");
+    }
+
+    let lua_table = new_lockfile
+        .entries
+        .iter()
+        .map(|(file_name, file_entry)| {
+            let file_stem = Path::new(file_name).file_stem().unwrap().to_str().unwrap();
+            format!(
+                "\t[\"{}\"] = \"rbxassetid://{}\"",
+                file_stem,
+                file_entry
+                    .asset_id
+                    .as_ref()
+                    .unwrap_or(&String::from("None"))
+            )
+        })
+        .collect::<Vec<String>>()
+        .join(",\n");
+
+    let lua_output = format!("return {{\n{}\n}}", lua_table);
+
+    fs::write("test/assets.lua", lua_output)
+        .await
+        .expect("can't write to assets.lua");
+
+    if args.typescript {
+        let ts_definitions = format!(
+            "declare const assets: {{\n{}\n}}\nexport = assets",
+            new_lockfile
+                .entries
+                .keys()
+                .map(|file_name| {
+                    let file_stem = Path::new(file_name).file_stem().unwrap().to_str().unwrap();
+                    format!("\t\"{}\": string", file_stem)
+                })
+                .collect::<Vec<String>>()
+                .join(",\n")
+        );
+
+        fs::write("test/assets.d.ts", ts_definitions)
+            .await
+            .expect("can't write to assets.d.ts");
     }
 }
