@@ -21,9 +21,8 @@ struct LockFile {
     entries: BTreeMap<String, FileEntry>,
 }
 
-// is this how you define constants?
-static EXTENSIONS: [&str; 3] = ["jpeg", "png", "jpg"];
-static API_KEY: &str = "Pgq2mxqvjUSup1WReHIpep1amHq1/hb+Y8p2Fp+cV1n/mECa";
+const EXTENSIONS: [&str; 3] = ["jpeg", "png", "jpg"];
+const API_KEY: &str = "Pgq2mxqvjUSup1WReHIpep1amHq1/hb+Y8p2Fp+cV1n/mECa";
 
 async fn upload_asset(path: PathBuf) -> String {
     let path_str = path.to_str().unwrap();
@@ -57,7 +56,6 @@ async fn upload_asset(path: PathBuf) -> String {
         operation_id: id,
     };
 
-    // chatgpt v
     loop {
         if let Ok(asset_operation) = get_asset(&create_params).await {
             if let Some(done) = asset_operation.done {
@@ -69,7 +67,6 @@ async fn upload_asset(path: PathBuf) -> String {
 
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
-    // ^
 }
 
 #[tokio::main]
@@ -77,7 +74,6 @@ async fn main() {
     let existing_lockfile: LockFile =
         toml::from_str(&fs::read_to_string("test/asphault.lock.toml").unwrap_or_default())
             .unwrap_or_default();
-    // ^ this is defintiely bad
 
     let mut new_lockfile: LockFile = Default::default();
 
@@ -103,7 +99,6 @@ async fn main() {
 
         let existing = existing_lockfile.entries.get(path.to_str().unwrap());
 
-        // there's gotta be a better way to do this v
         if let Some(existing_value) = existing {
             if existing_value.hash != hash || existing_value.asset_id.is_none() {
                 changed = true;
@@ -120,7 +115,6 @@ async fn main() {
             asset_id = Some(upload_asset(path.clone()).await);
             println!("Uploaded asset: {:?}", asset_id.clone().unwrap());
         }
-        // ^
 
         let entry_name = path.to_str().unwrap().to_string();
         new_lockfile
