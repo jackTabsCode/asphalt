@@ -21,17 +21,35 @@ struct LockFile {
     entries: BTreeMap<String, FileEntry>,
 }
 
-const EXTENSIONS: [&str; 3] = ["jpeg", "png", "jpg"];
 const API_KEY: &str = "Pgq2mxqvjUSup1WReHIpep1amHq1/hb+Y8p2Fp+cV1n/mECa";
 
-async fn upload_asset(path: PathBuf) -> String {
+trait FromExtension {
+    fn from_extension(extension: &str) -> Option<Self>
+    where
+        Self: Sized;
+}
+
+impl FromExtension for AssetType {
+    fn from_extension(extension: &str) -> Option<Self> {
+        match extension {
+            "png" => Some(AssetType::DecalPng),
+            "jpg" | "jpeg" => Some(AssetType::DecalJpeg),
+            "bmp" => Some(AssetType::DecalBmp),
+            "mp3" => Some(AssetType::AudioMp3),
+            "ogg" => Some(AssetType::AudioOgg),
+            _ => None,
+        }
+    }
+}
+
+async fn upload_asset(path: PathBuf, asset_type: AssetType) -> String {
     let path_str = path.to_str().unwrap();
 
     let create_params = CreateAssetParams {
         api_key: API_KEY.to_string(),
         filepath: path_str.to_string(),
         asset: AssetCreation {
-            asset_type: AssetType::DecalPng, // i've got to figure out the file extension mapping to the correct enum
+            asset_type,
             display_name: path_str.to_string(),
             creation_context: AssetCreationContext {
                 creator: AssetCreator::User(AssetUserCreator {
@@ -85,9 +103,13 @@ async fn main() {
         let path = entry.path();
 
         let extension = path.extension().unwrap();
-        if !EXTENSIONS.contains(&extension.to_str().unwrap()) {
-            continue;
-        }
+        let asset_type = match AssetType::from_extension(extension.to_str().unwrap()) {
+            Some(asset_type) => asset_type,
+            None => {
+                println!("{} is not a supported file type", path.to_str().unwrap());
+                continue;
+            }
+        };
 
         let mut hasher = blake3::Hasher::new();
 
@@ -112,7 +134,7 @@ async fn main() {
         }
 
         if asset_id.is_none() {
-            asset_id = Some(upload_asset(path.clone()).await);
+            asset_id = Some(upload_asset(path.clone(), asset_type).await);
             println!("Uploaded asset: {:?}", asset_id.clone().unwrap());
         }
 
