@@ -16,7 +16,7 @@ struct FileEntry {
     asset_id: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Default)]
 struct LockFile {
     entries: BTreeMap<String, FileEntry>,
 }
@@ -47,7 +47,7 @@ async fn upload_asset(path: PathBuf) -> String {
     let id = operation
         .path
         .unwrap()
-        .split_once("/")
+        .split_once('/')
         .unwrap()
         .1
         .to_string();
@@ -59,15 +59,12 @@ async fn upload_asset(path: PathBuf) -> String {
 
     // chatgpt v
     loop {
-        match get_asset(&create_params).await {
-            Ok(asset_operation) => {
-                if let Some(done) = asset_operation.done {
-                    if done {
-                        return asset_operation.response.unwrap().asset_id;
-                    }
+        if let Ok(asset_operation) = get_asset(&create_params).await {
+            if let Some(done) = asset_operation.done {
+                if done {
+                    return asset_operation.response.unwrap().asset_id;
                 }
             }
-            _ => {}
         }
 
         tokio::time::sleep(Duration::from_millis(100)).await;
@@ -78,15 +75,11 @@ async fn upload_asset(path: PathBuf) -> String {
 #[tokio::main]
 async fn main() {
     let existing_lockfile: LockFile =
-        toml::from_str(&fs::read_to_string("test/asphault.lock.toml").unwrap_or("".to_string()))
-            .unwrap_or(LockFile {
-                entries: BTreeMap::new(),
-            });
+        toml::from_str(&fs::read_to_string("test/asphault.lock.toml").unwrap_or_default())
+            .unwrap_or_default();
     // ^ this is defintiely bad
 
-    let mut new_lockfile: LockFile = LockFile {
-        entries: BTreeMap::new(),
-    };
+    let mut new_lockfile: LockFile = Default::default();
 
     let mut changed = false;
 
@@ -142,8 +135,8 @@ async fn main() {
         )
         .expect("can't write lockfile");
 
-        println!("Synced")
+        println!("Synced");
     } else {
-        println!("No changes")
+        println!("No changes");
     }
 }
