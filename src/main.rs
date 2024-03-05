@@ -1,17 +1,16 @@
+use clap::Parser;
 use extension::FromExtension;
 use rbxcloud::rbx::assets::{
     create_asset, get_asset, AssetCreation, AssetCreationContext, AssetCreator, AssetType,
     AssetUserCreator, CreateAssetParams, GetAssetParams,
 };
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::BTreeMap,
-    fs::{self, read},
-    path::PathBuf,
-    time::Duration,
-};
+use std::{collections::BTreeMap, path::PathBuf, time::Duration};
+use tokio::fs::{self, read};
+use upload::upload_asset;
 
 mod extension;
+mod upload;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct FileEntry {
@@ -26,64 +25,29 @@ struct LockFile {
 
 const API_KEY: &str = "Pgq2mxqvjUSup1WReHIpep1amHq1/hb+Y8p2Fp+cV1n/mECa";
 
-async fn upload_asset(path: PathBuf, asset_type: AssetType) -> String {
-    let path_str = path.to_str().unwrap();
-
-    let create_params = CreateAssetParams {
-        api_key: API_KEY.to_string(),
-        filepath: path_str.to_string(),
-        asset: AssetCreation {
-            asset_type,
-            display_name: path_str.to_string(),
-            creation_context: AssetCreationContext {
-                creator: AssetCreator::User(AssetUserCreator {
-                    user_id: "9670971".to_string(),
-                }),
-                expected_price: None,
-            },
-            description: "Hey".to_string(),
-        },
-    };
-    let operation = create_asset(&create_params).await.unwrap();
-    let id = operation
-        .path
-        .unwrap()
-        .split_once('/')
-        .unwrap()
-        .1
-        .to_string();
-
-    let create_params = GetAssetParams {
-        api_key: API_KEY.to_string(),
-        operation_id: id,
-    };
-
-    loop {
-        if let Ok(asset_operation) = get_asset(&create_params).await {
-            if let Some(done) = asset_operation.done {
-                if done {
-                    return asset_operation.response.unwrap().asset_id;
-                }
-            }
-        }
-
-        tokio::time::sleep(Duration::from_millis(100)).await;
-    }
+#[derive(Parser, Debug)]
+struct Args {
+    #[arg(short, long)]
+    api_key: String,
 }
 
 #[tokio::main]
 async fn main() {
-    let existing_lockfile: LockFile =
-        toml::from_str(&fs::read_to_string("test/asphault.lock.toml").unwrap_or_default())
-            .unwrap_or_default();
+    let args = Args::parse();
+
+    let existing_lockfile: LockFile = toml::from_str(
+        &fs::read_to_string("test/asphault.lock.toml")
+            .await
+            .unwrap_or_default(),
+    )
+    .unwrap_or_default();
 
     let mut new_lockfile: LockFile = Default::default();
 
     let mut changed = false;
 
-    let dir_entries = fs::read_dir("test").expect("can't read dir");
-    for entry in dir_entries {
-        let entry = entry.unwrap();
+    let mut dir_entries = fs::read_dir("test").await.expect("can't read dir");
+    while let Some(entry) = dir_entries.next_entry().await.unwrap() {
         let path = entry.path();
 
         let extension = path.extension().unwrap();
@@ -97,7 +61,7 @@ async fn main() {
 
         let mut hasher = blake3::Hasher::new();
 
-        let bytes = read(&path).unwrap();
+        let bytes = read(&path).await.unwrap();
         hasher.update(&bytes);
         let hash = hasher.finalize().to_string();
 
@@ -118,7 +82,7 @@ async fn main() {
         }
 
         if asset_id.is_none() {
-            asset_id = Some(upload_asset(path.clone(), asset_type).await);
+            asset_id = Some(upload_asset(path.clone(), asset_type, args.api_key.clone()).await);
             println!("Uploaded asset: {:?}", asset_id.clone().unwrap());
         }
 
@@ -133,6 +97,7 @@ async fn main() {
             "test/asphault.lock.toml",
             toml::to_string(&new_lockfile).unwrap(),
         )
+        .await
         .expect("can't write lockfile");
 
         println!("Synced");
