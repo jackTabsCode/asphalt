@@ -19,32 +19,42 @@ struct FileEntry {
 struct LockFile {
     entries: BTreeMap<String, FileEntry>,
 }
-
 #[derive(Parser, Debug)]
 struct Args {
+    // The directory of assets to look for
+    #[arg(required = true)]
+    read_directory: String,
+
+    /// The directory to write the output to
+    #[arg(required = true)]
+    write_directory: String,
+
+    /// Your Open Cloud API key
     #[arg(short, long)]
     api_key: String,
 
+    /// Generate a TypeScript definition file
     #[arg(short, long)]
     typescript: bool,
 }
+
+const LOCKFILE_PATH: &str = "asphalt.lock.toml";
 
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
 
-    let existing_lockfile: LockFile = toml::from_str(
-        &fs::read_to_string("test/asphault.lock.toml")
-            .await
-            .unwrap_or_default(),
-    )
-    .unwrap_or_default();
+    let existing_lockfile: LockFile =
+        toml::from_str(&fs::read_to_string(LOCKFILE_PATH).await.unwrap_or_default())
+            .unwrap_or_default();
 
     let mut new_lockfile: LockFile = Default::default();
 
     let mut changed = false;
 
-    let mut dir_entries = fs::read_dir("test").await.expect("can't read dir");
+    let mut dir_entries = fs::read_dir(&args.read_directory)
+        .await
+        .expect("can't read dir");
     while let Some(entry) = dir_entries.next_entry().await.unwrap() {
         let path = entry.path();
 
@@ -70,18 +80,18 @@ async fn main() {
         if let Some(existing_value) = existing {
             if existing_value.hash != hash || existing_value.asset_id.is_none() {
                 changed = true;
-                println!("{} is out of date", path.to_str().unwrap());
+                println!("\"{}\" is out of date", path.to_str().unwrap());
             } else {
                 asset_id = existing_value.asset_id.clone();
             }
         } else {
             changed = true;
-            println!("{} is new", path.to_str().unwrap());
+            println!("\"{}\" is new", path.to_str().unwrap());
         }
 
         if asset_id.is_none() {
             asset_id = Some(upload_asset(path.clone(), asset_type, args.api_key.clone()).await);
-            println!("Uploaded asset: {:?}", asset_id.clone().unwrap());
+            println!("Uploaded asset: rbxassetid://{}", asset_id.clone().unwrap());
         }
 
         let entry_name = path.to_str().unwrap().to_string();
@@ -91,12 +101,9 @@ async fn main() {
     }
 
     if changed {
-        fs::write(
-            "test/asphault.lock.toml",
-            toml::to_string(&new_lockfile).unwrap(),
-        )
-        .await
-        .expect("can't write lockfile");
+        fs::write(LOCKFILE_PATH, toml::to_string(&new_lockfile).unwrap())
+            .await
+            .expect("can't write lockfile");
 
         println!("Synced");
     } else {
@@ -122,7 +129,8 @@ async fn main() {
 
     let lua_output = format!("return {{\n{}\n}}", lua_table);
 
-    fs::write("test/assets.lua", lua_output)
+    let assets_lua_path = Path::new(&args.write_directory).join("assets.lua");
+    fs::write(assets_lua_path, lua_output)
         .await
         .expect("can't write to assets.lua");
 
@@ -140,7 +148,8 @@ async fn main() {
                 .join(",\n")
         );
 
-        fs::write("test/assets.d.ts", ts_definitions)
+        let assets_d_ts_path = Path::new(&args.write_directory).join("assets.d.ts");
+        fs::write(assets_d_ts_path, ts_definitions)
             .await
             .expect("can't write to assets.d.ts");
     }
