@@ -1,3 +1,4 @@
+use extension::FromExtension;
 use rbxcloud::rbx::assets::{
     create_asset, get_asset, AssetCreation, AssetCreationContext, AssetCreator, AssetType,
     AssetUserCreator, CreateAssetParams, GetAssetParams,
@@ -9,6 +10,8 @@ use std::{
     path::PathBuf,
     time::Duration,
 };
+
+mod extension;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct FileEntry {
@@ -22,25 +25,6 @@ struct LockFile {
 }
 
 const API_KEY: &str = "Pgq2mxqvjUSup1WReHIpep1amHq1/hb+Y8p2Fp+cV1n/mECa";
-
-trait FromExtension {
-    fn from_extension(extension: &str) -> Option<Self>
-    where
-        Self: Sized;
-}
-
-impl FromExtension for AssetType {
-    fn from_extension(extension: &str) -> Option<Self> {
-        match extension {
-            "png" => Some(AssetType::DecalPng),
-            "jpg" | "jpeg" => Some(AssetType::DecalJpeg),
-            "bmp" => Some(AssetType::DecalBmp),
-            "mp3" => Some(AssetType::AudioMp3),
-            "ogg" => Some(AssetType::AudioOgg),
-            _ => None,
-        }
-    }
-}
 
 async fn upload_asset(path: PathBuf, asset_type: AssetType) -> String {
     let path_str = path.to_str().unwrap();
