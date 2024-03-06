@@ -1,4 +1,5 @@
 use clap::Parser;
+use console::style;
 use extension::FromExtension;
 use rbxcloud::rbx::assets::AssetType;
 use serde::{Deserialize, Serialize};
@@ -55,14 +56,18 @@ async fn main() {
     let mut dir_entries = fs::read_dir(&args.read_directory)
         .await
         .expect("can't read dir");
+
+    println!("{}", style("Syncing...").dim());
+
     while let Some(entry) = dir_entries.next_entry().await.unwrap() {
         let path = entry.path();
+        let path_str = path.to_str().unwrap();
 
         let extension = path.extension().unwrap();
         let asset_type = match AssetType::from_extension(extension.to_str().unwrap()) {
             Some(asset_type) => asset_type,
             None => {
-                println!("{} is not a supported file type", path.to_str().unwrap());
+                println!("{} is not a supported file type!", style(path_str).red());
                 continue;
             }
         };
@@ -75,26 +80,24 @@ async fn main() {
 
         let mut asset_id: Option<String> = None;
 
-        let existing = existing_lockfile.entries.get(path.to_str().unwrap());
+        let existing = existing_lockfile.entries.get(path_str);
 
         if let Some(existing_value) = existing {
             if existing_value.hash != hash || existing_value.asset_id.is_none() {
                 changed = true;
-                println!("\"{}\" is out of date", path.to_str().unwrap());
             } else {
                 asset_id = existing_value.asset_id.clone();
             }
         } else {
             changed = true;
-            println!("\"{}\" is new", path.to_str().unwrap());
         }
 
         if asset_id.is_none() {
             asset_id = Some(upload_asset(path.clone(), asset_type, args.api_key.clone()).await);
-            println!("Uploaded asset: rbxassetid://{}", asset_id.clone().unwrap());
+            println!("Uploaded {}", style(path_str).green());
         }
 
-        let entry_name = path.to_str().unwrap().to_string();
+        let entry_name = path_str.to_string();
         new_lockfile
             .entries
             .insert(entry_name, FileEntry { hash, asset_id });
@@ -104,10 +107,6 @@ async fn main() {
         fs::write(LOCKFILE_PATH, toml::to_string(&new_lockfile).unwrap())
             .await
             .expect("can't write lockfile");
-
-        println!("Synced");
-    } else {
-        println!("No changes");
     }
 
     let lua_table = new_lockfile
@@ -153,4 +152,6 @@ async fn main() {
             .await
             .expect("can't write to assets.d.ts");
     }
+
+    println!("{}", style("Synced!").dim());
 }
