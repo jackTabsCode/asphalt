@@ -4,6 +4,7 @@ use rbxcloud::rbx::assets::{
     create_asset, get_asset, AssetCreation, AssetCreationContext, AssetCreator, AssetType,
     AssetUserCreator, CreateAssetParams, GetAssetParams,
 };
+use rbxcloud::rbx::error::Error;
 
 pub async fn upload_asset(path: PathBuf, asset_type: AssetType, api_key: String) -> String {
     let path_str = path.to_str().unwrap();
@@ -24,6 +25,7 @@ pub async fn upload_asset(path: PathBuf, asset_type: AssetType, api_key: String)
         },
     };
     let operation = create_asset(&create_params).await.unwrap();
+
     let id = operation
         .path
         .unwrap()
@@ -38,10 +40,19 @@ pub async fn upload_asset(path: PathBuf, asset_type: AssetType, api_key: String)
     };
 
     loop {
-        if let Ok(asset_operation) = get_asset(&create_params).await {
-            if let Some(done) = asset_operation.done {
-                if done {
-                    return asset_operation.response.unwrap().asset_id;
+        match get_asset(&create_params).await {
+            Ok(asset_operation) => {
+                if let Some(done) = asset_operation.done {
+                    if done {
+                        return asset_operation.response.unwrap().asset_id;
+                    }
+                }
+            }
+            Err(e) => {
+                if let Error::HttpStatusError { code, msg } = e {
+                    if code != 404 {
+                        panic!("{}: {}", code, msg);
+                    }
                 }
             }
         }
