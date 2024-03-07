@@ -2,7 +2,7 @@ use clap::Parser;
 use console::style;
 use dotenv::dotenv;
 use extension::FromExtension;
-use rbxcloud::rbx::assets::AssetType;
+use rbxcloud::rbx::assets::{AssetCreator, AssetGroupCreator, AssetType, AssetUserCreator};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, path::Path};
 use tokio::fs::{self, read};
@@ -21,6 +21,19 @@ struct FileEntry {
 struct LockFile {
     entries: BTreeMap<String, FileEntry>,
 }
+
+#[derive(Parser, Debug)]
+#[group(required = true, multiple = false)]
+struct AssetCreatorGroup {
+    /// A Roblox user ID
+    #[arg(short, long)]
+    user_id: Option<u64>,
+
+    /// A Roblox group ID
+    #[arg(short, long)]
+    group_id: Option<u64>,
+}
+
 #[derive(Parser, Debug)]
 #[command(version, about = "Sync assets to Roblox.")]
 struct Args {
@@ -42,8 +55,8 @@ struct Args {
     #[arg(short, long)]
     typescript: bool,
 
-    #[arg(short, long)]
-    user_id: u64,
+    #[clap(flatten)]
+    creator: AssetCreatorGroup,
 }
 
 const LOCKFILE_PATH: &str = "asphalt.lock.toml";
@@ -107,9 +120,25 @@ async fn main() {
             changed = true;
         }
 
+        let asset_creator: AssetCreator = match args.creator {
+            AssetCreatorGroup {
+                user_id: Some(user_id),
+                group_id: None,
+            } => AssetCreator::User(AssetUserCreator {
+                user_id: user_id.to_string(),
+            }),
+            AssetCreatorGroup {
+                user_id: None,
+                group_id: Some(group_id),
+            } => AssetCreator::Group(AssetGroupCreator {
+                group_id: group_id.to_string(),
+            }),
+            _ => return,
+        };
+
         if asset_id.is_none() {
             asset_id =
-                Some(upload_asset(path.clone(), asset_type, api_key.clone(), args.user_id).await);
+                Some(upload_asset(path.clone(), asset_type, api_key.clone(), asset_creator).await);
             println!("Uploaded {}", style(path_str).green());
         }
 
