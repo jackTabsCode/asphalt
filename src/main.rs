@@ -1,5 +1,6 @@
 use clap::Parser;
 use console::style;
+use dotenv::dotenv;
 use extension::FromExtension;
 use rbxcloud::rbx::assets::AssetType;
 use serde::{Deserialize, Serialize};
@@ -31,8 +32,9 @@ struct Args {
     write_directory: String,
 
     /// Your Open Cloud API key
+    /// Can also be set with the ASPHALT_API_KEY environment variable
     #[arg(short, long)]
-    api_key: String,
+    api_key: Option<String>,
 
     /// Generate a TypeScript definition file
     #[arg(short, long)]
@@ -44,6 +46,11 @@ const LOCKFILE_PATH: &str = "asphalt.lock.toml";
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
+    dotenv().ok();
+
+    let api_key: String = args
+        .api_key
+        .unwrap_or_else(|| std::env::var("ASPHALT_API_KEY").expect("no API key provided"));
 
     let existing_lockfile: LockFile =
         toml::from_str(&fs::read_to_string(LOCKFILE_PATH).await.unwrap_or_default())
@@ -93,7 +100,7 @@ async fn main() {
         }
 
         if asset_id.is_none() {
-            asset_id = Some(upload_asset(path.clone(), asset_type, args.api_key.clone()).await);
+            asset_id = Some(upload_asset(path.clone(), asset_type, api_key.clone()).await);
             println!("Uploaded {}", style(path_str).green());
         }
 
