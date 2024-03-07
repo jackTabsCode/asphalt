@@ -4,7 +4,6 @@ on:
     push:
         tags:
             - "[0-9]+.[0-9]+.[0-9]+"
-    workflow_dispatch:
 
 permissions:
     contents: write
@@ -35,7 +34,7 @@ jobs:
 
             - name: Get the release version from the tag
               shell: bash
-              run: echo "VERSION=${GITHUB_REF
+              run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
 
             - name: Install Rust
 
