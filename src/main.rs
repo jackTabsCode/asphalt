@@ -41,6 +41,9 @@ struct Args {
     /// Generate a TypeScript definition file for roblox-ts users.
     #[arg(short, long)]
     typescript: bool,
+
+    #[arg(short, long)]
+    user_id: u64,
 }
 
 const LOCKFILE_PATH: &str = "asphalt.lock.toml";
@@ -102,7 +105,8 @@ async fn main() {
         }
 
         if asset_id.is_none() {
-            asset_id = Some(upload_asset(path.clone(), asset_type, api_key.clone()).await);
+            asset_id =
+                Some(upload_asset(path.clone(), asset_type, api_key.clone(), args.user_id).await);
             println!("Uploaded {}", style(path_str).green());
         }
 

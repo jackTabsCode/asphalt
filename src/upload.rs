@@ -63,7 +63,12 @@ async fn get_image_id(asset_id: u64) -> u64 {
     id_str.parse::<u64>().unwrap()
 }
 
-pub async fn upload_asset(path: PathBuf, asset_type: AssetType, api_key: String) -> u64 {
+pub async fn upload_asset(
+    path: PathBuf,
+    asset_type: AssetType,
+    api_key: String,
+    user_id: u64,
+) -> u64 {
     let path_str = path.to_str().unwrap();
 
     let create_params = CreateAssetParams {
@@ -74,7 +79,7 @@ pub async fn upload_asset(path: PathBuf, asset_type: AssetType, api_key: String)
             display_name: path_str.to_string(),
             creation_context: AssetCreationContext {
                 creator: AssetCreator::User(AssetUserCreator {
-                    user_id: "9670971".to_string(),
+                    user_id: user_id.to_string(),
                 }),
                 expected_price: None,
             },
