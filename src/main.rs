@@ -13,7 +13,7 @@ mod upload;
 #[derive(Debug, Serialize, Deserialize)]
 struct FileEntry {
     hash: String,
-    asset_id: Option<String>,
+    asset_id: Option<u64>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Default)]
@@ -78,7 +78,7 @@ async fn main() {
         hasher.update(&bytes);
         let hash = hasher.finalize().to_string();
 
-        let mut asset_id: Option<String> = None;
+        let mut asset_id: Option<u64> = None;
 
         let existing = existing_lockfile.entries.get(path_str);
 
@@ -86,7 +86,7 @@ async fn main() {
             if existing_value.hash != hash || existing_value.asset_id.is_none() {
                 changed = true;
             } else {
-                asset_id = existing_value.asset_id.clone();
+                asset_id = existing_value.asset_id;
             }
         } else {
             changed = true;
@@ -120,7 +120,7 @@ async fn main() {
                 file_entry
                     .asset_id
                     .as_ref()
-                    .unwrap_or(&String::from("None"))
+                    .expect("we never got an asset id?")
             )
         })
         .collect::<Vec<String>>()
