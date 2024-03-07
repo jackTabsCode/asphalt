@@ -23,20 +23,21 @@ struct LockFile {
 }
 #[derive(Parser, Debug)]
 struct Args {
-    // The directory of assets to look for
+    // The directory of assets to upload to Roblox.
     #[arg(required = true)]
-    read_directory: String,
+    asset_directory: String,
 
-    /// The directory to write the output to
+    /// The directory to write the output Luau (and optionally Typescript) files to.
+    /// This should probably be somewhere in your game's source directory. This does not include the lockfile, which is always written to the current directory.
     #[arg(required = true)]
     write_directory: String,
 
-    /// Your Open Cloud API key
-    /// Can also be set with the ASPHALT_API_KEY environment variable
+    /// Your Open Cloud API key.
+    /// Can also be set with the ASPHALT_API_KEY environment variable.
     #[arg(short, long)]
     api_key: Option<String>,
 
-    /// Generate a TypeScript definition file
+    /// Generate a TypeScript definition file for roblox-ts users.
     #[arg(short, long)]
     typescript: bool,
 }
@@ -60,7 +61,7 @@ async fn main() {
 
     let mut changed = false;
 
-    let mut dir_entries = fs::read_dir(&args.read_directory)
+    let mut dir_entries = fs::read_dir(&args.asset_directory)
         .await
         .expect("can't read dir");
 
