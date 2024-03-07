@@ -102,16 +102,20 @@ pub async fn upload_asset(
         match get_asset(&create_params).await {
             Ok(asset_operation) => {
                 if let Some(done) = asset_operation.done {
-                    if done {
-                        let id_str = asset_operation.response.unwrap().asset_id;
-                        let id = id_str.parse::<u64>().unwrap();
+                    if let Some(response) = asset_operation.response {
+                        if done {
+                            let id_str = response.asset_id;
+                            let id = id_str.parse::<u64>().unwrap();
 
-                        match asset_type {
-                            AssetType::DecalPng | AssetType::DecalJpeg | AssetType::DecalBmp => {
-                                return get_image_id(id).await
+                            match asset_type {
+                                AssetType::DecalPng
+                                | AssetType::DecalJpeg
+                                | AssetType::DecalBmp => return get_image_id(id).await,
+                                _ => return id,
                             }
-                            _ => return id,
                         }
+                    } else {
+                        panic!("no response from get_asset, your file might be empty?");
                     }
                 }
             }
