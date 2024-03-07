@@ -75,8 +75,11 @@ async fn main() {
         let path = entry.path();
         let path_str = path.to_str().unwrap();
 
-        let extension = path.extension().unwrap();
-        let asset_type = match AssetType::from_extension(extension.to_str().unwrap()) {
+        let extension = path.extension().and_then(|s| s.to_str());
+        if extension.is_none() {
+            continue;
+        }
+        let asset_type = match AssetType::from_extension(extension.unwrap()) {
             Some(asset_type) => asset_type,
             None => {
                 println!("{} is not a supported file type!", style(path_str).red());
