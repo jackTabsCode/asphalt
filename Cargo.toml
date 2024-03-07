@@ -2,6 +2,12 @@
 name = "asphalt"
 version = "0.2.0"
 edition = "2021"
+license = "MIT"
+authors = ["Jack T <jack@jackt.space>"]
+description = "A super sloppy Roblox asset manager"
+repository = "https://github.com/jacktabscode/asphalt"
+homepage = "https://github.com/jacktabscode/asphalt"
+readme = "README.md"
 
 [dependencies]
 blake3 = "1.5.0"
