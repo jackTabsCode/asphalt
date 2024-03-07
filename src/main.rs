@@ -22,6 +22,7 @@ struct LockFile {
     entries: BTreeMap<String, FileEntry>,
 }
 #[derive(Parser, Debug)]
+#[command(version, about = "Sync assets to Roblox.")]
 struct Args {
     // The directory of assets to upload to Roblox.
     #[arg(required = true)]
