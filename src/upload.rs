@@ -67,7 +67,7 @@ pub async fn upload_asset(
     path: PathBuf,
     asset_type: AssetType,
     api_key: String,
-    user_id: u64,
+    creator: AssetCreator,
 ) -> u64 {
     let path_str = path.to_str().unwrap();
 
@@ -78,9 +78,7 @@ pub async fn upload_asset(
             asset_type,
             display_name: path_str.to_string(),
             creation_context: AssetCreationContext {
-                creator: AssetCreator::User(AssetUserCreator {
-                    user_id: user_id.to_string(),
-                }),
+                creator,
                 expected_price: None,
             },
             description: "Uploaded by Asphalt".to_string(),
