@@ -17,7 +17,7 @@ Asphalt is a simple CLI tool used to upload assets to Roblox and easily referenc
 You can install Asphalt using [Aftman](https://github.com/LPGhatguy/aftman):
 
 ```sh
-aftman add asphalt
+aftman add jacktabscode/asphalt
 ```
 
 ## Usage
