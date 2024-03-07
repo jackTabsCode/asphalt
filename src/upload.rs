@@ -28,7 +28,6 @@ struct Properties {
 }
 
 #[derive(Deserialize, Debug)]
-#[serde(rename_all = "PascalCase")]
 struct Content {
     url: String,
 }
