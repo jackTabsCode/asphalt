@@ -110,7 +110,8 @@ pub async fn upload_asset(
                             match asset_type {
                                 AssetType::DecalPng
                                 | AssetType::DecalJpeg
-                                | AssetType::DecalBmp => return get_image_id(id).await,
+                                | AssetType::DecalBmp
+                                | AssetType::DecalTga => return get_image_id(id).await,
                                 _ => return id,
                             }
                         }
