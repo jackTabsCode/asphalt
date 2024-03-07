@@ -5,8 +5,66 @@ use rbxcloud::rbx::assets::{
     AssetUserCreator, CreateAssetParams, GetAssetParams,
 };
 use rbxcloud::rbx::error::Error;
+use reqwest::Client;
+use serde::Deserialize;
+use serde_xml_rs::from_str;
 
-pub async fn upload_asset(path: PathBuf, asset_type: AssetType, api_key: String) -> String {
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "PascalCase")]
+struct Roblox {
+    item: Item,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "PascalCase")]
+struct Item {
+    properties: Properties,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "PascalCase")]
+struct Properties {
+    content: Content,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "PascalCase")]
+struct Content {
+    url: String,
+}
+
+static CONTENT_URL_PREFIX: &str = "http://www.roblox.com/asset/?id=";
+
+async fn get_image_id(asset_id: u64) -> u64 {
+    let client = Client::new();
+    let url = format!("https://assetdelivery.roblox.com/v1/asset?id={}", asset_id);
+
+    let response = client
+        .get(url)
+        .send()
+        .await
+        .expect("failed to get image id");
+    let body = response
+        .text()
+        .await
+        .expect("failed to parse request body to text");
+
+    let roblox: Roblox =
+        from_str(&body).expect("failed to parse request body to Roblox XML format");
+
+    let id_str = roblox
+        .item
+        .properties
+        .content
+        .url
+        .strip_prefix(CONTENT_URL_PREFIX)
+        .unwrap()
+        .to_string();
+
+    id_str.parse::<u64>().unwrap()
+}
+
+pub async fn upload_asset(path: PathBuf, asset_type: AssetType, api_key: String) -> u64 {
     let path_str = path.to_str().unwrap();
 
     let create_params = CreateAssetParams {
@@ -21,7 +79,7 @@ pub async fn upload_asset(path: PathBuf, asset_type: AssetType, api_key: String)
                 }),
                 expected_price: None,
             },
-            description: "Hey".to_string(),
+            description: "Uploaded by Asphalt".to_string(),
         },
     };
     let operation = create_asset(&create_params).await.unwrap();
@@ -29,9 +87,8 @@ pub async fn upload_asset(path: PathBuf, asset_type: AssetType, api_key: String)
     let id = operation
         .path
         .unwrap()
-        .split_once('/')
+        .strip_prefix("operations/")
         .unwrap()
-        .1
         .to_string();
 
     let create_params = GetAssetParams {
@@ -44,7 +101,15 @@ pub async fn upload_asset(path: PathBuf, asset_type: AssetType, api_key: String)
             Ok(asset_operation) => {
                 if let Some(done) = asset_operation.done {
                     if done {
-                        return asset_operation.response.unwrap().asset_id;
+                        let id_str = asset_operation.response.unwrap().asset_id;
+                        let id = id_str.parse::<u64>().unwrap();
+
+                        match asset_type {
+                            AssetType::DecalPng | AssetType::DecalJpeg | AssetType::DecalBmp => {
+                                return get_image_id(id).await
+                            }
+                            _ => return id,
+                        }
                     }
                 }
             }
