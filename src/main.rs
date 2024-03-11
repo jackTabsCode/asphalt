@@ -3,15 +3,13 @@ use clap::Parser;
 use codegen::{generate_lua, generate_ts};
 use console::style;
 use dotenv::dotenv;
-use extension::from_extension;
 pub use lockfile::{FileEntry, LockFile};
-use rbxcloud::rbx::assets::{AssetCreator, AssetGroupCreator, AssetUserCreator};
+use rbxcloud::rbx::assets::{AssetCreator, AssetGroupCreator, AssetType, AssetUserCreator};
 use std::path::Path;
 use tokio::fs::{self, read, DirEntry};
 use upload::upload_asset;
 
 mod codegen;
-mod extension;
 pub mod lockfile;
 mod upload;
 
@@ -65,10 +63,14 @@ async fn handle_file_entry(
 
     let extension = path.extension().and_then(|s| s.to_str())?;
 
-    let asset_type = match from_extension(extension) {
-        Some(asset_type) => asset_type,
-        None => {
-            println!("{} is not a supported file type!", style(path_str).red());
+    let asset_type = match AssetType::try_from_extension(extension) {
+        Ok(asset_type) => asset_type,
+        Err(e) => {
+            eprintln!(
+                "Skipping {} because it has an unsupported extension: {}",
+                style(path_str).yellow(),
+                e
+            );
             return None;
         }
     };
