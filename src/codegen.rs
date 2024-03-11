@@ -1,6 +1,5 @@
-use std::path::Path;
-
 use crate::lockfile::LockFile;
+use std::path::Path;
 
 pub fn generate_lua(lockfile: &LockFile, strip_directory: &str) -> String {
     let table = lockfile
