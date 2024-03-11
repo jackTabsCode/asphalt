@@ -32,8 +32,6 @@ struct Content {
     url: String,
 }
 
-static CONTENT_URL_PREFIX: &str = "http://www.roblox.com/asset/?id=";
-
 async fn get_image_id(asset_id: u64) -> u64 {
     let client = Client::new();
     let url = format!("https://assetdelivery.roblox.com/v1/asset?id={}", asset_id);
@@ -56,7 +54,7 @@ async fn get_image_id(asset_id: u64) -> u64 {
         .properties
         .content
         .url
-        .strip_prefix(CONTENT_URL_PREFIX)
+        .strip_prefix("http://www.roblox.com/asset/?id=")
         .unwrap()
         .to_string();
 
