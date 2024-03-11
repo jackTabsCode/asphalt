@@ -26,7 +26,7 @@ pub fn generate_lua(lockfile: &LockFile, strip_directory: &str) -> String {
     format!("return {{\n{}\n}}", table)
 }
 
-pub fn generate_ts(lockfile: &LockFile, strip_directory: &str) -> String {
+pub fn generate_ts(lockfile: &LockFile, strip_dir: &str, output_dir: &str) -> String {
     let interface = lockfile
         .entries
         .keys()
@@ -34,7 +34,7 @@ pub fn generate_ts(lockfile: &LockFile, strip_directory: &str) -> String {
             let file_stem = Path::new(file_path)
                 .to_str()
                 .unwrap()
-                .strip_prefix(strip_directory)
+                .strip_prefix(strip_dir)
                 .unwrap();
             format!("\t\"{}\": string", file_stem)
         })
@@ -42,7 +42,7 @@ pub fn generate_ts(lockfile: &LockFile, strip_directory: &str) -> String {
         .join(",\n");
 
     format!(
-        "declare const assets: {{\n{}\n}}\nexport = assets",
-        interface
+        "declare const {}: {{\n{}\n}}\nexport = {}",
+        output_dir, interface, output_dir
     )
 }

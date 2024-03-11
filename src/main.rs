@@ -48,6 +48,9 @@ struct Args {
 
     #[clap(flatten)]
     creator: AssetCreatorGroup,
+
+    #[arg(short, long)]
+    output_name: Option<String>,
 }
 
 const LOCKFILE_PATH: &str = "asphalt.lock.toml";
@@ -157,6 +160,8 @@ async fn main() {
         .api_key
         .unwrap_or_else(|| std::env::var("ASPHALT_API_KEY").expect("no API key provided"));
 
+    let output_name = args.output_name.unwrap_or("assets".to_string());
+
     fs::create_dir_all(&args.write_dir)
         .await
         .expect("can't create write dir");
@@ -185,18 +190,24 @@ async fn main() {
         .await
         .expect("can't write lockfile");
 
+    let lua_filename = format!("{}.lua", output_name);
     let lua_output = generate_lua(&new_lockfile, asset_directory_path_str);
 
-    fs::write(Path::new(&args.write_dir).join("assets.lua"), lua_output)
+    fs::write(Path::new(&args.write_dir).join(lua_filename), lua_output)
         .await
-        .expect("can't write to assets.lua");
+        .expect("can't write output lua file");
 
     if args.typescript {
-        let ts_output = generate_ts(&new_lockfile, asset_directory_path_str);
+        let ts_filename = format!("{}.d.ts", output_name);
+        let ts_output = generate_ts(
+            &new_lockfile,
+            asset_directory_path_str,
+            ts_filename.as_str(),
+        );
 
-        fs::write(Path::new(&args.write_dir).join("assets.d.ts"), ts_output)
+        fs::write(Path::new(&args.write_dir).join(ts_filename), ts_output)
             .await
-            .expect("can't write to assets.d.ts");
+            .expect("can't write output ts file");
     }
 
     println!("{}", style("Synced!").dim());
