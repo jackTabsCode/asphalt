@@ -120,8 +120,9 @@ pub async fn upload_asset(
             }
             Err(e) => {
                 if let Error::HttpStatusError { code, msg } = e {
-                    if code != 404 {
-                        panic!("{}: {}", code, msg);
+                    match code {
+                        404 => {}
+                        _ => panic!("{}: {}", code, msg),
                     }
                 }
             }
