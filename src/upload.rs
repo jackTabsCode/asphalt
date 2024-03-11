@@ -98,36 +98,29 @@ pub async fn upload_asset(
         operation_id: id,
     };
 
+    let mut backoff = Duration::from_millis(100);
     loop {
         match get_asset(&create_params).await {
-            Ok(asset_operation) => {
-                if let Some(done) = asset_operation.done {
-                    if let Some(response) = asset_operation.response {
-                        if done {
-                            let id_str = response.asset_id;
-                            let id = id_str.parse::<u64>().unwrap();
+            Ok(asset_operation) if asset_operation.done.unwrap_or(false) => {
+                if let Some(response) = asset_operation.response {
+                    let id_str = response.asset_id;
+                    let id = id_str.parse::<u64>().expect("asset ID must be a u64");
 
-                            match asset_type {
-                                AssetType::DecalPng
-                                | AssetType::DecalJpeg
-                                | AssetType::DecalBmp
-                                | AssetType::DecalTga => return get_image_id(id).await,
-                                _ => return id,
-                            }
-                        }
-                    }
+                    return match asset_type {
+                        AssetType::DecalPng
+                        | AssetType::DecalJpeg
+                        | AssetType::DecalBmp
+                        | AssetType::DecalTga => get_image_id(id).await,
+                        _ => id,
+                    };
                 }
             }
-            Err(e) => {
-                if let Error::HttpStatusError { code, msg } = e {
-                    match code {
-                        404 => {}
-                        _ => panic!("{}: {}", code, msg),
-                    }
-                }
-            }
+            Ok(_) => {}
+            Err(Error::HttpStatusError { code: 404, .. }) => {}
+            Err(e) => panic!("failed to get asset: {:?}", e),
         }
 
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        tokio::time::sleep(backoff).await;
+        backoff = (backoff * 2).min(Duration::from_secs(10));
     }
 }
