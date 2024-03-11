@@ -33,12 +33,12 @@ struct AssetCreatorGroup {
 struct Args {
     // The directory of assets to upload to Roblox.
     #[arg(required = true)]
-    asset_directory: String,
+    asset_dir: String,
 
     /// The directory to write the output Luau (and optionally Typescript) files to.
     /// This should probably be somewhere in your game's source directory. This does not include the lockfile, which is always written to the current directory.
     #[arg(required = true)]
-    write_directory: String,
+    write_dir: String,
 
     /// Your Open Cloud API key.
     /// Can also be set with the ASPHALT_API_KEY environment variable.
@@ -156,6 +156,10 @@ async fn main() {
         .api_key
         .unwrap_or_else(|| std::env::var("ASPHALT_API_KEY").expect("no API key provided"));
 
+    fs::create_dir_all(&args.write_dir)
+        .await
+        .expect("can't create write dir");
+
     let existing_lockfile: LockFile =
         toml::from_str(&fs::read_to_string(LOCKFILE_PATH).await.unwrap_or_default())
             .unwrap_or_default();
@@ -164,9 +168,9 @@ async fn main() {
 
     println!("{}", style("Syncing...").dim());
 
-    let asset_directory_path = Path::new(&args.asset_directory);
+    let asset_dir_path = Path::new(&args.asset_dir);
     traverse_dir(
-        asset_directory_path,
+        asset_dir_path,
         &existing_lockfile,
         &args.creator,
         &api_key,
@@ -174,7 +178,7 @@ async fn main() {
     )
     .await;
 
-    let asset_directory_path_str = asset_directory_path.to_str().unwrap();
+    let asset_directory_path_str = asset_dir_path.to_str().unwrap();
 
     fs::write(LOCKFILE_PATH, toml::to_string(&new_lockfile).unwrap())
         .await
@@ -182,16 +186,14 @@ async fn main() {
 
     let lua_output = generate_lua(&new_lockfile, asset_directory_path_str);
 
-    let lua_path = Path::new(&args.write_directory).join("assets.lua");
-    fs::write(lua_path, lua_output)
+    fs::write(Path::new(&args.write_dir).join("assets.lua"), lua_output)
         .await
         .expect("can't write to assets.lua");
 
     if args.typescript {
         let ts_output = generate_ts(&new_lockfile, asset_directory_path_str);
 
-        let ts_path = Path::new(&args.write_directory).join("assets.d.ts");
-        fs::write(ts_path, ts_output)
+        fs::write(Path::new(&args.write_dir).join("assets.d.ts"), ts_output)
             .await
             .expect("can't write to assets.d.ts");
     }
