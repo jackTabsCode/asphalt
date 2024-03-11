@@ -115,8 +115,6 @@ pub async fn upload_asset(
                                 _ => return id,
                             }
                         }
-                    } else {
-                        panic!("no response from get_asset, your file might be empty?");
                     }
                 }
             }
