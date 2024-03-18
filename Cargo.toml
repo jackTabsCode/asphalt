@@ -21,4 +21,4 @@ reqwest = { version = "0.11.25", features = ["gzip"] }
 serde = { version = "1.0.197", features = ["derive"] }
 serde-xml-rs = "0.6.0"
 tokio = { version = "1.36.0" }
-toml = "0.8.11"
+toml = "0.8.12"
