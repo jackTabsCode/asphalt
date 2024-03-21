@@ -144,9 +144,9 @@ async fn traverse_dir(
         } else if let Some(result) =
             handle_file_entry(&entry, existing_lockfile, creator, api_key).await
         {
-            new_lockfile
-                .entries
-                .insert(entry.path().to_str().unwrap().to_string(), result);
+            let fixed_path = entry_path.to_str().unwrap().to_string().replace("\\", "/");
+
+            new_lockfile.entries.insert(fixed_path, result);
         }
     }
 }
