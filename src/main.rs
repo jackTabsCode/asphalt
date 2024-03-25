@@ -202,7 +202,7 @@ async fn main() {
         let ts_output = generate_ts(
             &new_lockfile,
             asset_directory_path_str,
-            ts_filename.as_str(),
+            output_name.as_str(),
         );
 
         fs::write(Path::new(&args.write_dir).join(ts_filename), ts_output)
