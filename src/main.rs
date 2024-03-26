@@ -55,6 +55,10 @@ struct Args {
 
 const LOCKFILE_PATH: &str = "asphalt.lock.toml";
 
+fn fix_path(path: &str) -> String {
+    path.replace("\\", "/")
+}
+
 async fn handle_file_entry(
     entry: &DirEntry,
     existing_lockfile: &LockFile,
@@ -63,6 +67,7 @@ async fn handle_file_entry(
 ) -> Option<FileEntry> {
     let path = entry.path();
     let path_str = path.to_str().unwrap();
+    let fixed_path = fix_path(path_str);
 
     let extension = path.extension().and_then(|s| s.to_str())?;
 
@@ -71,7 +76,7 @@ async fn handle_file_entry(
         Err(e) => {
             eprintln!(
                 "Skipping {} because it has an unsupported extension: {}",
-                style(path_str).yellow(),
+                style(fixed_path).yellow(),
                 e
             );
             return None;
@@ -86,7 +91,7 @@ async fn handle_file_entry(
 
     let mut asset_id: Option<u64> = None;
 
-    let existing = existing_lockfile.entries.get(path_str);
+    let existing = existing_lockfile.entries.get(fixed_path.as_str());
 
     if let Some(existing_value) = existing {
         if existing_value.hash != hash || existing_value.asset_id.is_none() {
@@ -114,7 +119,7 @@ async fn handle_file_entry(
     if asset_id.is_none() {
         asset_id =
             Some(upload_asset(path.clone(), asset_type, api_key.to_string(), asset_creator).await);
-        println!("Uploaded {}", style(path_str).green());
+        println!("Uploaded {}", style(fixed_path).green());
     }
 
     Some(FileEntry { hash, asset_id })
@@ -144,7 +149,8 @@ async fn traverse_dir(
         } else if let Some(result) =
             handle_file_entry(&entry, existing_lockfile, creator, api_key).await
         {
-            let fixed_path = entry_path.to_str().unwrap().to_string().replace("\\", "/");
+            let path_str = entry_path.to_str().unwrap();
+            let fixed_path = fix_path(path_str);
 
             new_lockfile.entries.insert(fixed_path, result);
         }
