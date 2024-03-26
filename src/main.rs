@@ -51,6 +51,9 @@ struct Args {
 
     #[arg(short, long)]
     output_name: Option<String>,
+
+    #[arg(long)]
+    luau: bool,
 }
 
 const LOCKFILE_PATH: &str = "asphalt.lock.toml";
@@ -196,7 +199,9 @@ async fn main() {
         .await
         .expect("can't write lockfile");
 
-    let lua_filename = format!("{}.lua", output_name);
+    let lua_extension = if args.luau { "luau" } else { "lua" };
+
+    let lua_filename = format!("{}.{}", output_name, lua_extension);
     let lua_output = generate_lua(&new_lockfile, asset_directory_path_str);
 
     fs::write(Path::new(&args.write_dir).join(lua_filename), lua_output)
