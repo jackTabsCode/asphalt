@@ -104,7 +104,7 @@ pub async fn upload_asset(
             Ok(asset_operation) if asset_operation.done.unwrap_or(false) => {
                 if let Some(response) = asset_operation.response {
                     let id_str = response.asset_id;
-                    let id = id_str.parse::<u64>().expect("asset ID must be a u64");
+                    let id = id_str.parse::<u64>().expect("Asset ID must be a u64");
 
                     return match asset_type {
                         AssetType::DecalPng
@@ -117,7 +117,7 @@ pub async fn upload_asset(
             }
             Ok(_) => {}
             Err(Error::HttpStatusError { code: 404, .. }) => {}
-            Err(e) => bail!("failed to get asset: {:?}", e),
+            Err(e) => bail!("Failed to get asset: {:?}", e),
         }
 
         tokio::time::sleep(backoff).await;

@@ -25,7 +25,7 @@ impl State {
     pub async fn new(args: Args) -> Self {
         let api_key: String = args
             .api_key
-            .unwrap_or_else(|| std::env::var("ASPHALT_API_KEY").expect("no API key provided"));
+            .unwrap_or_else(|| std::env::var("ASPHALT_API_KEY").expect("No API key provided"));
 
         let asset_creator: AssetCreator = match args.creator {
             AssetCreatorGroup {
@@ -40,14 +40,14 @@ impl State {
             } => AssetCreator::Group(AssetGroupCreator {
                 group_id: group_id.to_string(),
             }),
-            _ => panic!("either user_id or group_id must be provided"),
+            _ => panic!("Either user_id or group_id must be provided"),
         };
 
         let asset_dir = PathBuf::from(args.asset_dir);
 
         create_dir_all(&args.write_dir)
             .await
-            .expect("can't create write directory");
+            .expect("Failed to create write directory");
         let write_dir = PathBuf::from(args.write_dir);
 
         let output_name = args.output_name.unwrap_or("assets".to_string());
