@@ -18,7 +18,7 @@ pub mod state;
 mod upload;
 
 fn fix_path(path: &str) -> String {
-    path.replace("\\", "/")
+    path.replace('\\', "/")
 }
 
 async fn check_file(entry: &DirEntry, state: &State) -> anyhow::Result<Option<FileEntry>> {
