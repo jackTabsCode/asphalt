@@ -1,7 +1,7 @@
 use crate::lockfile::LockFile;
 use std::path::Path;
 
-pub fn generate_lua(lockfile: &LockFile, strip_directory: &str) -> String {
+pub fn generate_lua(lockfile: &LockFile, strip_dir: &str) -> String {
     let table = lockfile
         .entries
         .iter()
@@ -9,15 +9,11 @@ pub fn generate_lua(lockfile: &LockFile, strip_directory: &str) -> String {
             let file_stem = Path::new(file_path)
                 .to_str()
                 .unwrap()
-                .strip_prefix(strip_directory)
+                .strip_prefix(strip_dir)
                 .unwrap();
             format!(
                 "\t[\"{}\"] = \"rbxassetid://{}\"",
-                file_stem,
-                file_entry
-                    .asset_id
-                    .as_ref()
-                    .expect("we never got an asset id?")
+                file_stem, file_entry.asset_id
             )
         })
         .collect::<Vec<String>>()

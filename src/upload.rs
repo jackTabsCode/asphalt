@@ -1,5 +1,6 @@
 use std::{path::PathBuf, time::Duration};
 
+use anyhow::Context;
 use rbxcloud::rbx::assets::{
     create_asset, get_asset, AssetCreation, AssetCreationContext, AssetCreator, AssetType,
     CreateAssetParams, GetAssetParams,
@@ -32,7 +33,7 @@ struct Content {
     url: String,
 }
 
-async fn get_image_id(asset_id: u64) -> u64 {
+async fn get_image_id(asset_id: u64) -> anyhow::Result<u64> {
     let client = Client::new();
     let url = format!("https://assetdelivery.roblox.com/v1/asset?id={}", asset_id);
 
@@ -40,14 +41,15 @@ async fn get_image_id(asset_id: u64) -> u64 {
         .get(url)
         .send()
         .await
-        .expect("failed to get image id");
+        .context("Failed to get image ID")?;
+
     let body = response
         .text()
         .await
-        .expect("failed to parse request body to text");
+        .context("Failed to parse request body to text")?;
 
     let roblox: Roblox =
-        from_str(&body).expect("failed to parse request body to Roblox XML format");
+        from_str(&body).context("Failed to parse request body to Roblox XML format")?;
 
     let id_str = roblox
         .item
@@ -55,10 +57,10 @@ async fn get_image_id(asset_id: u64) -> u64 {
         .content
         .url
         .strip_prefix("http://www.roblox.com/asset/?id=")
-        .unwrap()
+        .context("Failed to strip Roblox URL prefix")?
         .to_string();
 
-    id_str.parse::<u64>().unwrap()
+    id_str.parse::<u64>().context("Failed to parse image ID")
 }
 
 pub async fn upload_asset(
@@ -66,7 +68,7 @@ pub async fn upload_asset(
     asset_type: AssetType,
     api_key: String,
     creator: AssetCreator,
-) -> u64 {
+) -> anyhow::Result<u64> {
     let path_str = path.to_str().unwrap();
 
     let create_params = CreateAssetParams {
@@ -109,7 +111,7 @@ pub async fn upload_asset(
                         | AssetType::DecalJpeg
                         | AssetType::DecalBmp
                         | AssetType::DecalTga => get_image_id(id).await,
-                        _ => id,
+                        _ => Ok(id),
                     };
                 }
             }
