@@ -4,7 +4,7 @@ use crate::{
     args::{Args, AssetCreatorGroup},
     LockFile,
 };
-use rbxcloud::rbx::assets::{AssetCreator, AssetGroupCreator, AssetUserCreator};
+use rbxcloud::rbx::v1::assets::{AssetCreator, AssetGroupCreator, AssetUserCreator};
 use tokio::fs::{create_dir_all, read_to_string};
 
 pub struct State {
