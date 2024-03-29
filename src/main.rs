@@ -88,7 +88,7 @@ async fn main() {
     remaining_items.push_back(state.asset_dir.clone());
 
     while let Some(path) = remaining_items.pop_front() {
-        let mut dir_entries = read_dir(path).await.expect("can't read dir");
+        let mut dir_entries = read_dir(path).await.expect("Failed to read directory");
 
         while let Some(entry) = dir_entries.next_entry().await.unwrap() {
             let entry_path = entry.path();
@@ -117,7 +117,7 @@ async fn main() {
         toml::to_string(&state.new_lockfile).unwrap(),
     )
     .await
-    .expect("can't write lockfile");
+    .expect("Failed to write lockfile");
 
     let asset_dir_str = state.asset_dir.to_str().unwrap();
 
@@ -126,7 +126,7 @@ async fn main() {
 
     write(Path::new(&state.write_dir).join(lua_filename), lua_output)
         .await
-        .expect("can't write output lua file");
+        .expect("Failed to write output Lua file");
 
     if state.typescript {
         let ts_filename = format!("{}.d.ts", state.output_name);
@@ -138,7 +138,7 @@ async fn main() {
 
         write(Path::new(&state.write_dir).join(ts_filename), ts_output)
             .await
-            .expect("can't write output ts file");
+            .expect("Failed to write output TypeScript file");
     }
 
     eprintln!("{}", style("Synced!").dim());
