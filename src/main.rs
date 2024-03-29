@@ -1,5 +1,6 @@
 use anyhow::Context;
 use args::Args;
+use blake3::Hasher;
 use clap::Parser;
 use codegen::{generate_lua, generate_ts};
 use console::style;
@@ -8,7 +9,7 @@ pub use lockfile::{FileEntry, LockFile};
 use rbxcloud::rbx::v1::assets::AssetType;
 use state::State;
 use std::{collections::VecDeque, path::Path};
-use tokio::fs::{self, read, DirEntry};
+use tokio::fs::{read, read_dir, write, DirEntry};
 use upload::upload_asset;
 
 pub mod args;
@@ -43,10 +44,10 @@ async fn check_file(entry: &DirEntry, state: &State) -> anyhow::Result<Option<Fi
         }
     };
 
-    let mut hasher = blake3::Hasher::new();
-
+    let mut hasher = Hasher::new();
     let bytes = read(&path).await.unwrap();
     hasher.update(&bytes);
+
     let hash = hasher.finalize().to_string();
 
     let existing = state.existing_lockfile.entries.get(fixed_path.as_str());
@@ -87,7 +88,7 @@ async fn main() {
     remaining_items.push_back(state.asset_dir.clone());
 
     while let Some(path) = remaining_items.pop_front() {
-        let mut dir_entries = fs::read_dir(path).await.expect("can't read dir");
+        let mut dir_entries = read_dir(path).await.expect("can't read dir");
 
         while let Some(entry) = dir_entries.next_entry().await.unwrap() {
             let entry_path = entry.path();
@@ -111,7 +112,7 @@ async fn main() {
         }
     }
 
-    fs::write(
+    write(
         "asphalt.lock.toml",
         toml::to_string(&state.new_lockfile).unwrap(),
     )
@@ -123,7 +124,7 @@ async fn main() {
     let lua_filename = format!("{}.{}", state.output_name, state.lua_extension);
     let lua_output = generate_lua(&state.new_lockfile, asset_dir_str);
 
-    fs::write(Path::new(&state.write_dir).join(lua_filename), lua_output)
+    write(Path::new(&state.write_dir).join(lua_filename), lua_output)
         .await
         .expect("can't write output lua file");
 
@@ -135,7 +136,7 @@ async fn main() {
             state.output_name.as_str(),
         );
 
-        fs::write(Path::new(&state.write_dir).join(ts_filename), ts_output)
+        write(Path::new(&state.write_dir).join(ts_filename), ts_output)
             .await
             .expect("can't write output ts file");
     }
