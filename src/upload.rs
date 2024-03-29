@@ -1,11 +1,11 @@
 use std::{path::PathBuf, time::Duration};
 
 use anyhow::{bail, Context};
-use rbxcloud::rbx::assets::{
+use rbxcloud::rbx::error::Error;
+use rbxcloud::rbx::v1::assets::{
     create_asset, get_asset, AssetCreation, AssetCreationContext, AssetCreator, AssetType,
     CreateAssetParams, GetAssetParams,
 };
-use rbxcloud::rbx::error::Error;
 use reqwest::Client;
 use serde::Deserialize;
 use serde_xml_rs::from_str;

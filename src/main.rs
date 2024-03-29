@@ -5,7 +5,7 @@ use codegen::{generate_lua, generate_ts};
 use console::style;
 use dotenv::dotenv;
 pub use lockfile::{FileEntry, LockFile};
-use rbxcloud::rbx::assets::AssetType;
+use rbxcloud::rbx::v1::assets::AssetType;
 use state::State;
 use std::{collections::VecDeque, path::Path};
 use tokio::fs::{self, read, DirEntry};
