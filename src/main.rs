@@ -1,4 +1,4 @@
-use anyhow::{bail, Context};
+use anyhow::Context;
 use args::Args;
 use clap::Parser;
 use codegen::{generate_lua, generate_ts};
