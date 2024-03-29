@@ -1,6 +1,6 @@
 use std::{path::PathBuf, time::Duration};
 
-use anyhow::Context;
+use anyhow::{bail, Context};
 use rbxcloud::rbx::assets::{
     create_asset, get_asset, AssetCreation, AssetCreationContext, AssetCreator, AssetType,
     CreateAssetParams, GetAssetParams,
@@ -117,7 +117,7 @@ pub async fn upload_asset(
             }
             Ok(_) => {}
             Err(Error::HttpStatusError { code: 404, .. }) => {}
-            Err(e) => panic!("failed to get asset: {:?}", e),
+            Err(e) => bail!("failed to get asset: {:?}", e),
         }
 
         tokio::time::sleep(backoff).await;
