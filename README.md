@@ -28,6 +28,21 @@ cargo install asphalt
 
 Asphalt is configured with a project file called `asphalt.toml`. It is required for the program to run.
 
+<details>
+<summary>Example</summary>
+
+```toml
+asset_dir = "test/"
+write_dir = "output/"
+typescript = true
+luau = true
+
+[creator]
+type = "user"
+id = 9670971
+```
+</details>
+
 ### Format
 
 - `asset_dir`: path
