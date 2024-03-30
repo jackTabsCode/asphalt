@@ -5,6 +5,7 @@ use crate::{
     LockFile,
 };
 use rbxcloud::rbx::v1::assets::{AssetCreator, AssetGroupCreator, AssetUserCreator};
+use resvg::usvg::fontdb::Database;
 use tokio::fs::{create_dir_all, read_to_string};
 
 pub struct State {
@@ -16,6 +17,8 @@ pub struct State {
     pub typescript: bool,
     pub output_name: String,
     pub lua_extension: String,
+
+    pub font_db: Database,
 
     pub existing_lockfile: LockFile,
     pub new_lockfile: LockFile,
@@ -54,6 +57,9 @@ impl State {
 
         let lua_extension = String::from(if args.luau { "luau" } else { "lua" });
 
+        let mut font_db = Database::new();
+        font_db.load_system_fonts();
+
         let existing_lockfile: LockFile = toml::from_str(
             &read_to_string("asphalt.lock.toml")
                 .await
@@ -71,6 +77,7 @@ impl State {
             typescript: args.typescript,
             output_name,
             lua_extension,
+            font_db,
             existing_lockfile,
             new_lockfile,
         }
