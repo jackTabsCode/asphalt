@@ -72,7 +72,11 @@ async fn check_file(entry: &DirEntry, state: &State) -> anyhow::Result<Option<Fi
         }
     }
 
-    let file_name = path.file_name().unwrap().to_str().unwrap();
+    let file_name = path
+        .file_name()
+        .context("Failed to get path file name")?
+        .to_str()
+        .context("Failed to convert path file name to string")?;
 
     let asset_id = upload_asset(
         bytes,
@@ -111,7 +115,11 @@ async fn main() -> anyhow::Result<()> {
     while let Some(path) = remaining_items.pop_front() {
         let mut dir_entries = read_dir(path).await.expect("Failed to read directory");
 
-        while let Some(entry) = dir_entries.next_entry().await.unwrap() {
+        while let Some(entry) = dir_entries
+            .next_entry()
+            .await
+            .context("Failed to read entry")?
+        {
             let entry_path = entry.path();
             if entry_path.is_dir() {
                 remaining_items.push_back(entry_path);
@@ -125,7 +133,9 @@ async fn main() -> anyhow::Result<()> {
                     }
                 };
 
-                let path_str = entry_path.to_str().unwrap();
+                let path_str = entry_path
+                    .to_str()
+                    .context("Failed to convert path to string")?;
                 let fixed_path = fix_path(path_str);
 
                 state.new_lockfile.entries.insert(fixed_path, result);
@@ -135,12 +145,15 @@ async fn main() -> anyhow::Result<()> {
 
     write(
         "asphalt.lock.toml",
-        toml::to_string(&state.new_lockfile).unwrap(),
+        toml::to_string(&state.new_lockfile).context("Failed to serialize lockfile")?,
     )
     .await
     .expect("Failed to write lockfile");
 
-    let asset_dir_str = state.asset_dir.to_str().unwrap();
+    let asset_dir_str = state
+        .asset_dir
+        .to_str()
+        .context("Failed to convert asset dir to string")?;
 
     let lua_filename = format!("{}.{}", state.output_name, state.lua_extension);
     let lua_output = generate_lua(&state.new_lockfile, asset_dir_str);
