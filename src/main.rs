@@ -9,11 +9,14 @@ pub use lockfile::{FileEntry, LockFile};
 use rbxcloud::rbx::v1::assets::AssetType;
 use state::State;
 use std::{collections::VecDeque, path::Path};
-use tokio::fs::{read, read_dir, write, DirEntry};
+use tokio::fs::{read, read_dir, read_to_string, write, DirEntry};
 use upload::upload_asset;
+
+use crate::config::Config;
 
 pub mod args;
 mod codegen;
+pub mod config;
 pub mod lockfile;
 pub mod state;
 mod svg;
@@ -85,11 +88,18 @@ async fn check_file(entry: &DirEntry, state: &State) -> anyhow::Result<Option<Fi
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> anyhow::Result<()> {
     dotenv().ok();
 
     let args = Args::parse();
-    let mut state = State::new(args).await;
+    let config: Config = {
+        let file_contents = read_to_string("asphalt.toml")
+            .await
+            .context("Failed to read asphalt.toml")?;
+        toml::from_str(&file_contents).context("Failed to parse config")
+    }?;
+
+    let mut state = State::new(args, &config).await;
 
     eprintln!("{}", style("Syncing...").dim());
 
@@ -151,4 +161,6 @@ async fn main() {
     }
 
     eprintln!("{}", style("Synced!").dim());
+
+    Ok(())
 }
