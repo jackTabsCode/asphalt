@@ -105,7 +105,9 @@ async fn main() -> anyhow::Result<()> {
         toml::from_str(&file_contents).context("Failed to parse config")
     }?;
 
-    let mut state = State::new(args, &config).await;
+    let mut state = State::new(args, &config)
+        .await
+        .context("Failed to create state")?;
 
     eprintln!("{}", style("Syncing...").dim());
 
@@ -113,7 +115,7 @@ async fn main() -> anyhow::Result<()> {
     remaining_items.push_back(state.asset_dir.clone());
 
     while let Some(path) = remaining_items.pop_front() {
-        let mut dir_entries = read_dir(path).await.expect("Failed to read directory");
+        let mut dir_entries = read_dir(path).await.context("Failed to read directory")?;
 
         while let Some(entry) = dir_entries
             .next_entry()
@@ -148,7 +150,7 @@ async fn main() -> anyhow::Result<()> {
         toml::to_string(&state.new_lockfile).context("Failed to serialize lockfile")?,
     )
     .await
-    .expect("Failed to write lockfile");
+    .context("Failed to write lockfile")?;
 
     let asset_dir_str = state
         .asset_dir
@@ -160,7 +162,7 @@ async fn main() -> anyhow::Result<()> {
 
     write(Path::new(&state.write_dir).join(lua_filename), lua_output?)
         .await
-        .expect("Failed to write output Lua file");
+        .context("Failed to write output Lua file")?;
 
     if state.typescript {
         let ts_filename = format!("{}.d.ts", state.output_name);
@@ -172,7 +174,7 @@ async fn main() -> anyhow::Result<()> {
 
         write(Path::new(&state.write_dir).join(ts_filename), ts_output?)
             .await
-            .expect("Failed to write output TypeScript file");
+            .context("Failed to write output TypeScript file")?;
     }
 
     eprintln!("{}", style("Synced!").dim());
