@@ -4,7 +4,7 @@ Asphalt is a simple CLI tool used to upload assets to Roblox and easily referenc
 
 ## Features
 
--   Upload images and audio
+-   Upload images, audio, and even SVGs!
 -   Generate Luau code to reference the uploaded assets
 -   Generate Typescript definitions for roblox-ts users
 -   Uses the Open Cloud API
