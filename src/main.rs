@@ -28,10 +28,10 @@ fn fix_path(path: &str) -> String {
 
 async fn check_file(entry: &DirEntry, state: &State) -> anyhow::Result<Option<FileEntry>> {
     let path = entry.path();
-    let path_str = path.to_str().unwrap();
+    let path_str = path.to_str().context("Failed to convert path to string")?;
     let fixed_path = fix_path(path_str);
 
-    let mut bytes = read(&path).await.unwrap();
+    let mut bytes = read(&path).await.context("Failed to read file")?;
 
     let mut extension = match path.extension().and_then(|s| s.to_str()) {
         Some(extension) => extension,
@@ -143,7 +143,7 @@ async fn main() -> anyhow::Result<()> {
     let lua_filename = format!("{}.{}", state.output_name, state.lua_extension);
     let lua_output = generate_lua(&state.new_lockfile, asset_dir_str);
 
-    write(Path::new(&state.write_dir).join(lua_filename), lua_output)
+    write(Path::new(&state.write_dir).join(lua_filename), lua_output?)
         .await
         .expect("Failed to write output Lua file");
 
@@ -155,7 +155,7 @@ async fn main() -> anyhow::Result<()> {
             state.output_name.as_str(),
         );
 
-        write(Path::new(&state.write_dir).join(ts_filename), ts_output)
+        write(Path::new(&state.write_dir).join(ts_filename), ts_output?)
             .await
             .expect("Failed to write output TypeScript file");
     }

@@ -88,9 +88,9 @@ pub async fn upload_asset(
 
     let id = operation
         .path
-        .unwrap()
+        .context("The operation had no path")?
         .strip_prefix("operations/")
-        .unwrap()
+        .context("The operation path was not prefixed with 'operations/'")?
         .to_string();
 
     let create_params = GetAssetParams {
