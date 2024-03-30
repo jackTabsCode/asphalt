@@ -1,14 +1,13 @@
-use std::{path::PathBuf, time::Duration};
-
 use anyhow::{bail, Context};
 use rbxcloud::rbx::error::Error;
 use rbxcloud::rbx::v1::assets::{
-    create_asset, get_asset, AssetCreation, AssetCreationContext, AssetCreator, AssetType,
-    CreateAssetParams, GetAssetParams,
+    create_asset_with_contents, get_asset, AssetCreation, AssetCreationContext, AssetCreator,
+    AssetType, CreateAssetParamsWithContents, GetAssetParams,
 };
 use reqwest::Client;
 use serde::Deserialize;
 use serde_xml_rs::from_str;
+use std::time::Duration;
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "PascalCase")]
@@ -64,19 +63,18 @@ async fn get_image_id(asset_id: u64) -> anyhow::Result<u64> {
 }
 
 pub async fn upload_asset(
-    path: PathBuf,
+    contents: Vec<u8>,
+    name: &str,
     asset_type: AssetType,
     api_key: String,
     creator: AssetCreator,
 ) -> anyhow::Result<u64> {
-    let path_str = path.to_str().unwrap();
-
-    let create_params = CreateAssetParams {
+    let create_params = CreateAssetParamsWithContents {
+        contents: &contents,
         api_key: api_key.clone(),
-        filepath: path_str.to_string(),
         asset: AssetCreation {
             asset_type,
-            display_name: path_str.to_string(),
+            display_name: name.to_string(),
             creation_context: AssetCreationContext {
                 creator,
                 expected_price: None,
@@ -84,7 +82,7 @@ pub async fn upload_asset(
             description: "Uploaded by Asphalt".to_string(),
         },
     };
-    let operation = create_asset(&create_params).await.unwrap();
+    let operation = create_asset_with_contents(&create_params).await.unwrap();
 
     let id = operation
         .path
