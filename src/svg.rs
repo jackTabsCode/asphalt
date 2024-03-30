@@ -1,23 +1,13 @@
-use std::path::PathBuf;
-
 use anyhow::Context;
 use resvg::{
     tiny_skia::Pixmap,
     usvg::{fontdb::Database, Options, Transform, Tree},
 };
-use tokio::fs::read_to_string;
 
-pub async fn svg_to_png(path: &PathBuf) -> anyhow::Result<Vec<u8>> {
-    let str = read_to_string(path)
-        .await
-        .context("Failed to read SVG file")?;
-
+pub async fn svg_to_png(bytes: &[u8], font_db: &Database) -> anyhow::Result<Vec<u8>> {
     let opt = Options::default();
 
-    let mut db = Database::new();
-    db.load_system_fonts();
-
-    let rtree = Tree::from_str(&str, &opt, &db).context("Failed to parse SVG file")?;
+    let rtree = Tree::from_data(bytes, &opt, font_db).context("Failed to parse SVG file")?;
     let pixmap_size = rtree.size();
 
     let mut pixmap = Pixmap::new(pixmap_size.width() as u32, pixmap_size.height() as u32)

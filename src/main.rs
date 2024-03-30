@@ -36,7 +36,7 @@ async fn check_file(entry: &DirEntry, state: &State) -> anyhow::Result<Option<Fi
     };
 
     if extension == "svg" {
-        bytes = svg::svg_to_png(&path)
+        bytes = svg::svg_to_png(&bytes, &state.font_db)
             .await
             .context("Failed to convert SVG to PNG")?;
         extension = "png";
