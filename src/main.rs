@@ -16,6 +16,7 @@ pub mod args;
 mod codegen;
 pub mod lockfile;
 pub mod state;
+mod svg;
 mod upload;
 
 fn fix_path(path: &str) -> String {
@@ -27,10 +28,19 @@ async fn check_file(entry: &DirEntry, state: &State) -> anyhow::Result<Option<Fi
     let path_str = path.to_str().unwrap();
     let fixed_path = fix_path(path_str);
 
-    let extension = match path.extension().and_then(|s| s.to_str()) {
+    let mut bytes = read(&path).await.unwrap();
+
+    let mut extension = match path.extension().and_then(|s| s.to_str()) {
         Some(extension) => extension,
         None => return Ok(None),
     };
+
+    if extension == "svg" {
+        bytes = svg::svg_to_png(&path)
+            .await
+            .context("Failed to convert SVG to PNG")?;
+        extension = "png";
+    }
 
     let asset_type = match AssetType::try_from_extension(extension) {
         Ok(asset_type) => asset_type,
@@ -45,9 +55,7 @@ async fn check_file(entry: &DirEntry, state: &State) -> anyhow::Result<Option<Fi
     };
 
     let mut hasher = Hasher::new();
-    let bytes = read(&path).await.unwrap();
     hasher.update(&bytes);
-
     let hash = hasher.finalize().to_string();
 
     let existing = state.existing_lockfile.entries.get(fixed_path.as_str());
@@ -62,7 +70,8 @@ async fn check_file(entry: &DirEntry, state: &State) -> anyhow::Result<Option<Fi
     }
 
     let asset_id = upload_asset(
-        path,
+        bytes,
+        fixed_path.as_str(),
         asset_type,
         state.api_key.clone(),
         state.creator.clone(),
