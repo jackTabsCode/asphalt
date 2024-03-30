@@ -72,9 +72,11 @@ async fn check_file(entry: &DirEntry, state: &State) -> anyhow::Result<Option<Fi
         }
     }
 
+    let file_name = path.file_name().unwrap().to_str().unwrap();
+
     let asset_id = upload_asset(
         bytes,
-        fixed_path.as_str(),
+        file_name,
         asset_type,
         state.api_key.clone(),
         state.creator.clone(),
