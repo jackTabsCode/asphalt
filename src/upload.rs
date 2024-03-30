@@ -82,7 +82,9 @@ pub async fn upload_asset(
             description: "Uploaded by Asphalt".to_string(),
         },
     };
-    let operation = create_asset_with_contents(&create_params).await.unwrap();
+    let operation = create_asset_with_contents(&create_params)
+        .await
+        .context("Failed to create asset")?;
 
     let id = operation
         .path
