@@ -1,7 +1,7 @@
 use std::{env, path::PathBuf};
 
 use crate::{
-    args::Args,
+    args::{Args, UploadTarget},
     config::{Config, CreatorType},
     LockFile,
 };
@@ -40,6 +40,8 @@ pub struct State {
 
     pub existing_lockfile: LockFile,
     pub new_lockfile: LockFile,
+
+    pub target: UploadTarget,
 }
 
 impl State {
@@ -90,6 +92,8 @@ impl State {
 
         let new_lockfile: LockFile = Default::default();
 
+        let target = args.target.unwrap_or_default();
+
         Ok(Self {
             asset_dir,
             write_dir,
@@ -101,6 +105,7 @@ impl State {
             font_db,
             existing_lockfile,
             new_lockfile,
+            target,
         })
     }
 }

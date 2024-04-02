@@ -7,12 +7,13 @@ use console::style;
 use dotenv::dotenv;
 pub use lockfile::{FileEntry, LockFile};
 use rbxcloud::rbx::v1::assets::AssetType;
+use roblox_install::RobloxStudio;
 use state::State;
 use std::{collections::VecDeque, path::Path};
 use tokio::fs::{read, read_dir, read_to_string, write, DirEntry};
 use upload::upload_asset;
 
-use crate::config::Config;
+use crate::{args::UploadTarget, config::Config};
 
 pub mod args;
 mod codegen;
@@ -24,6 +25,18 @@ mod upload;
 
 fn fix_path(path: &str) -> String {
     path.replace('\\', "/")
+}
+
+async fn write_local_file(contents: Vec<u8>, name: &str) -> anyhow::Result<String> {
+    let studio = RobloxStudio::locate()?;
+    let content_path = studio.content_path();
+
+    let file_path = content_path.join(name);
+    write(&file_path, &contents)
+        .await
+        .context("Failed to write local file")?;
+
+    Ok(format!("rbxasset://{}", name))
 }
 
 async fn check_file(entry: &DirEntry, state: &State) -> anyhow::Result<Option<FileEntry>> {
@@ -78,15 +91,22 @@ async fn check_file(entry: &DirEntry, state: &State) -> anyhow::Result<Option<Fi
         .to_str()
         .context("Failed to convert path file name to string")?;
 
-    let asset_id = upload_asset(
-        bytes,
-        file_name,
-        asset_type,
-        state.api_key.clone(),
-        state.creator.clone(),
-    )
-    .await
-    .with_context(|| format!("Failed to upload {}", fixed_path))?;
+    let asset_id = match state.target {
+        UploadTarget::Roblox => upload_asset(
+            bytes,
+            file_name,
+            asset_type,
+            state.api_key.clone(),
+            state.creator.clone(),
+        )
+        .await
+        .with_context(|| format!("Failed to upload {}", fixed_path))?,
+        UploadTarget::Local => {
+            let name = write_local_file(bytes, file_name).await?;
+            eprintln!("Uploaded {}", style(name).green());
+            return Ok(None);
+        }
+    };
 
     eprintln!("Uploaded {}", style(fixed_path).green());
 
