@@ -31,7 +31,9 @@ async fn check_file(entry: &DirEntry, state: &State) -> anyhow::Result<Option<Fi
     let path_str = path.to_str().context("Failed to convert path to string")?;
     let fixed_path = fix_path(path_str);
 
-    let mut bytes = read(&path).await.context("Failed to read file")?;
+    let mut bytes = read(&path)
+        .await
+        .with_context(|| format!("Failed to read {}", fixed_path))?;
 
     let mut extension = match path.extension().and_then(|s| s.to_str()) {
         Some(extension) => extension,
@@ -41,7 +43,7 @@ async fn check_file(entry: &DirEntry, state: &State) -> anyhow::Result<Option<Fi
     if extension == "svg" {
         bytes = svg::svg_to_png(&bytes, &state.font_db)
             .await
-            .context("Failed to convert SVG to PNG")?;
+            .with_context(|| format!("Failed to convert SVG to PNG: {}", fixed_path))?;
         extension = "png";
     }
 
@@ -74,9 +76,9 @@ async fn check_file(entry: &DirEntry, state: &State) -> anyhow::Result<Option<Fi
 
     let file_name = path
         .file_name()
-        .context("Failed to get path file name")?
+        .with_context(|| format!("Failed to get file name of {}", fixed_path))?
         .to_str()
-        .context("Failed to convert path file name to string")?;
+        .with_context(|| format!("Failed to convert file name to string: {}", fixed_path))?;
 
     let asset_id = upload_asset(
         bytes,
@@ -115,12 +117,17 @@ async fn main() -> anyhow::Result<()> {
     remaining_items.push_back(state.asset_dir.clone());
 
     while let Some(path) = remaining_items.pop_front() {
-        let mut dir_entries = read_dir(path).await.context("Failed to read directory")?;
+        let mut dir_entries = read_dir(path.clone()).await.with_context(|| {
+            format!(
+                "Failed to read directory: {}",
+                path.to_str().unwrap_or("???")
+            )
+        })?;
 
         while let Some(entry) = dir_entries
             .next_entry()
             .await
-            .context("Failed to read entry")?
+            .with_context(|| format!("Failed to read directory entry: {:?}", path))?
         {
             let entry_path = entry.path();
             if entry_path.is_dir() {
@@ -135,9 +142,9 @@ async fn main() -> anyhow::Result<()> {
                     }
                 };
 
-                let path_str = entry_path
-                    .to_str()
-                    .context("Failed to convert path to string")?;
+                let path_str = entry_path.to_str().with_context(|| {
+                    format!("Failed to convert path to string: {:?}", entry_path)
+                })?;
                 let fixed_path = fix_path(path_str);
 
                 state.new_lockfile.entries.insert(fixed_path, result);
@@ -155,7 +162,7 @@ async fn main() -> anyhow::Result<()> {
     let asset_dir_str = state
         .asset_dir
         .to_str()
-        .context("Failed to convert asset dir to string")?;
+        .context("Failed to convert asset directory to string")?;
 
     let lua_filename = format!("{}.{}", state.output_name, state.lua_extension);
     let lua_output = generate_lua(&state.new_lockfile, asset_dir_str);
