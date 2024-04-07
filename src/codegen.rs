@@ -47,3 +47,46 @@ pub fn generate_ts(
         output_dir, interface, output_dir
     ))
 }
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+
+    use crate::{FileEntry, LockFile};
+
+    fn test_lockfile() -> LockFile {
+        let mut entries = BTreeMap::new();
+        entries.insert(
+            "assets/foo.png".to_string(),
+            FileEntry {
+                asset_id: 1,
+                hash: "a".to_string(),
+            },
+        );
+        entries.insert(
+            "assets/bar/baz.png".to_string(),
+            FileEntry {
+                asset_id: 2,
+                hash: "b".to_string(),
+            },
+        );
+
+        LockFile { entries }
+    }
+
+    #[test]
+    fn generate_lua() {
+        let lockfile = test_lockfile();
+
+        let lua = super::generate_lua(&lockfile, "assets").unwrap();
+        assert_eq!(lua, "return {\n\t[\"/bar/baz.png\"] = \"rbxassetid://2\",\n\t[\"/foo.png\"] = \"rbxassetid://1\"\n}");
+    }
+
+    #[test]
+    fn generate_ts() {
+        let lockfile = test_lockfile();
+
+        let ts = super::generate_ts(&lockfile, "assets", "assets").unwrap();
+        assert_eq!(ts, "declare const assets: {\n\t\"/bar/baz.png\": string,\n\t\"/foo.png\": string\n}\nexport = assets");
+    }
+}
