@@ -517,9 +517,9 @@ dependencies = [
 
 [[package]]
 name = "gif"
-version = "0.12.0"
+version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "80792593675e051cf94a4b111980da2ba60d4a83e43e0048c5693baab3977045"
+checksum = "3fb2d69b19215e18bb912fa30f7ce15846e301408695e44e0ef719f1da9e19f2"
 dependencies = [
  "color_quant",
  "weezl",
@@ -736,18 +736,9 @@ dependencies = [
 
 [[package]]
 name = "kurbo"
-version = "0.9.5"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bd85a5776cd9500c2e2059c8c76c3b01528566b7fcbaf8098b55a33fc298849b"
-dependencies = [
- "arrayvec",
-]
-
-[[package]]
-name = "kurbo"
-version = "0.10.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1618d4ebd923e97d67e7cd363d80aef35fe961005cbbbb3d2dad8bdd1bc63440"
+checksum = "6e5aa9f0f96a938266bdb12928a67169e8d22c6a786fda8ed984b85e6ba93c3c"
 dependencies = [
  "arrayvec",
  "smallvec",
@@ -1117,9 +1108,9 @@ dependencies = [
 
 [[package]]
 name = "resvg"
-version = "0.40.0"
+version = "0.41.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "024e40e1ba7313fc315b1720298988c0cd6f8bfe3754b52838aafecebd11355a"
+checksum = "c2327ced609dadeed3e9702fec3e6b2ddd208758a9268d13e06566c6101ba533"
 dependencies = [
  "gif",
  "jpeg-decoder",
@@ -1223,9 +1214,9 @@ dependencies = [
 
 [[package]]
 name = "rustybuzz"
-version = "0.12.1"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f0ae5692c5beaad6a9e22830deeed7874eae8a4e3ba4076fb48e12c56856222c"
+checksum = "88117946aa1bfb53c2ae0643ceac6506337f44887f8c9fbfb43587b1cc52ba49"
 dependencies = [
  "bitflags 2.5.0",
  "bytemuck",
@@ -1371,9 +1362,9 @@ dependencies = [
 
 [[package]]
 name = "siphasher"
-version = "0.3.11"
+version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "38b58827f4464d87d377d175e90bf58eb00fd8716ff0a62f80356b5e61555d0d"
+checksum = "56199f7ddabf13fe5074ce809e7d3f42b42ae711800501b5b16ea82ad029c39d"
 
 [[package]]
 name = "slab"
@@ -1438,11 +1429,11 @@ checksum = "81cdd64d312baedb58e21336b31bc043b77e01cc99033ce76ef539f78e965ebc"
 
 [[package]]
 name = "svgtypes"
-version = "0.14.0"
+version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "59d7618f12b51be8171a7cfdda1e7a93f79cbc57c4e7adf89a749cf671125241"
+checksum = "d97ca9a891c9c70da8139ac9d8e8ea36a210fa21bb50eccd75d4a9561c83e87f"
 dependencies = [
- "kurbo 0.10.4",
+ "kurbo",
  "siphasher",
 ]
 
@@ -1739,15 +1730,15 @@ checksum = "08f95100a766bf4f8f28f90d77e0a5461bbdb219042e7679bebe79004fed8d75"
 
 [[package]]
 name = "unicode-bidi-mirroring"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "56d12260fb92d52f9008be7e4bca09f584780eb2266dc8fecc6a192bec561694"
+checksum = "23cb788ffebc92c5948d0e997106233eeb1d8b9512f93f41651f52b6c5f5af86"
 
 [[package]]
 name = "unicode-ccc"
-version = "0.1.2"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc2520efa644f8268dce4dcd3050eaa7fc044fca03961e9998ac7e2e92b77cf1"
+checksum = "1df77b101bcc4ea3d78dafc5ad7e4f58ceffe0b2b16bf446aeb50b6cb4157656"
 
 [[package]]
 name = "unicode-ident"
@@ -1807,16 +1798,16 @@ dependencies = [
 
 [[package]]
 name = "usvg"
-version = "0.40.0"
+version = "0.41.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c04150a94f0bfc3b2c15d4e151524d14cd06765fc6641d8b1c59a248360d4474"
+checksum = "5c704361d822337cfc00387672c7b59eaa72a1f0744f62b2a68aa228a0c6927d"
 dependencies = [
- "base64 0.21.7",
+ "base64 0.22.0",
  "data-url",
  "flate2",
  "fontdb",
  "imagesize",
- "kurbo 0.9.5",
+ "kurbo",
  "log",
  "pico-args",
  "roxmltree",
