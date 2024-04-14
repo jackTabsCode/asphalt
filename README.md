@@ -40,28 +40,37 @@ luau = true
 [creator]
 type = "user"
 id = 9670971
+
+[existing."test/online_asset.ogg"]
+id = 583095803
 ```
+
 </details>
 
 ### Format
 
-- `asset_dir`: path
-	- The directory of assets to upload to Roblox.
-- `write_dir`: path
-	- The directory to output the generated code to. This should probably be somewhere in your game's source folder.
-- `creator`: Creator
-	- The Roblox creator to upload the assets under.
-- `typescript`: boolean (optional)
-	- Generate a Typescript definition file.
-- `luau`: boolean (optional)
-	- Use the `luau` file extension.
-- `output_name`: string (optional)
-	- The name for the generated files. Defaults to `assets`.
+-   `asset_dir`: path
+    -   The directory of assets to upload to Roblox.
+-   `write_dir`: path
+    -   The directory to output the generated code to. This should probably be somewhere in your game's source folder.
+-   `creator`: Creator
+    -   The Roblox creator to upload the assets under.
+-   `typescript`: boolean (optional)
+    -   Generate a Typescript definition file.
+-   `luau`: boolean (optional)
+    -   Use the `luau` file extension.
+-   `output_name`: string (optional)
+    -   The name for the generated files. Defaults to `assets`.
+-   `existing`: map<string, ExistingAsset> (optional)
 
 #### Creator
 
-- `type`: "user" or "group"
-- `id`: number
+-   `type`: "user" or "group"
+-   `id`: number
+
+#### ExistingAsset
+
+-   `id`: number
 
 ## Usage
 
