@@ -48,4 +48,3 @@ targets = [
 pr-run-mode = "plan"
 windows-archive = ".zip"
 unix-archive = ".zip"
-checksum = false
