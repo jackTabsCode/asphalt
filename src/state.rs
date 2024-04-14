@@ -1,13 +1,12 @@
-use std::{env, path::PathBuf};
-
 use crate::{
     args::Args,
-    config::{Config, CreatorType},
+    config::{Config, CreatorType, ExistingAsset},
     LockFile,
 };
 use anyhow::Context;
 use rbxcloud::rbx::v1::assets::{AssetCreator, AssetGroupCreator, AssetUserCreator};
 use resvg::usvg::fontdb::Database;
+use std::{collections::HashMap, env, path::PathBuf};
 use tokio::fs::{create_dir_all, read_to_string};
 
 fn add_trailing_slash(path: &str) -> String {
@@ -40,10 +39,12 @@ pub struct State {
 
     pub existing_lockfile: LockFile,
     pub new_lockfile: LockFile,
+
+    pub existing: HashMap<String, ExistingAsset>,
 }
 
 impl State {
-    pub async fn new(args: Args, config: &Config) -> anyhow::Result<Self> {
+    pub async fn new(args: Args, config: Config) -> anyhow::Result<Self> {
         let api_key = get_api_key(args.api_key)?;
 
         let creator: AssetCreator = match config.creator.creator_type {
@@ -90,6 +91,8 @@ impl State {
 
         let new_lockfile: LockFile = Default::default();
 
+        let manual = config.existing.unwrap_or_default();
+
         Ok(Self {
             asset_dir,
             write_dir,
@@ -101,6 +104,7 @@ impl State {
             font_db,
             existing_lockfile,
             new_lockfile,
+            existing: manual,
         })
     }
 }
