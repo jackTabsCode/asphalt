@@ -1,6 +1,6 @@
 [package]
 name = "asphalt"
-version = "0.4.1"
+version = "0.4.2"
 edition = "2021"
 license = "MIT"
 authors = ["Jack T <jack@jackt.space>"]
@@ -39,10 +39,10 @@ ci = ["github"]
 installers = []
 # Target platforms to build apps for (Rust target-triple syntax)
 targets = [
-	"aarch64-apple-darwin",
-	"x86_64-apple-darwin",
-	"x86_64-unknown-linux-gnu",
-	"x86_64-pc-windows-msvc",
+    "aarch64-apple-darwin",
+    "x86_64-apple-darwin",
+    "x86_64-unknown-linux-gnu",
+    "x86_64-pc-windows-msvc",
 ]
 # Publish jobs to run in CI
 pr-run-mode = "plan"
