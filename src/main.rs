@@ -107,7 +107,7 @@ async fn main() -> anyhow::Result<()> {
         toml::from_str(&file_contents).context("Failed to parse config")
     }?;
 
-    let mut state = State::new(args, &config)
+    let mut state = State::new(args, config)
         .await
         .context("Failed to create state")?;
 
@@ -163,6 +163,19 @@ async fn main() -> anyhow::Result<()> {
         .asset_dir
         .to_str()
         .context("Failed to convert asset directory to string")?;
+
+    state
+        .new_lockfile
+        .entries
+        .extend(state.existing.into_iter().map(|(path, asset)| {
+            (
+                path,
+                FileEntry {
+                    hash: "".to_string(),
+                    asset_id: asset.id,
+                },
+            )
+        }));
 
     let lua_filename = format!("{}.{}", state.output_name, state.lua_extension);
     let lua_output = generate_lua(&state.new_lockfile, asset_dir_str);

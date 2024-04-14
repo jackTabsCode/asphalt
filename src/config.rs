@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
@@ -15,6 +17,11 @@ pub struct Creator {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+pub struct ExistingAsset {
+    pub id: u64,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
 pub struct Config {
     pub asset_dir: String,
     pub write_dir: String,
@@ -22,4 +29,6 @@ pub struct Config {
     pub output_name: Option<String>,
     pub typescript: Option<bool>,
     pub luau: Option<bool>,
+
+    pub existing: Option<HashMap<String, ExistingAsset>>,
 }
