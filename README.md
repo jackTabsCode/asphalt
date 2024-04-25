@@ -42,8 +42,9 @@ luau = true
 type = "user"
 id = 9670971
 
-[existing."test/online_asset.ogg"]
-id = 583095803
+[existing]
+"test/some_sound_on_roblox.ogg" = { id = 123456789 }
+"test/some_image_on_roblox.png" = { id = 987654321 }
 ```
 
 </details>
