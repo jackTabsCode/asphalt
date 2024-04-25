@@ -1,6 +1,6 @@
 use crate::{
     args::Args,
-    config::{Config, CreatorType, ExistingAsset},
+    config::{Config, CreatorType, ExistingAsset, StyleType},
     LockFile,
 };
 use anyhow::Context;
@@ -35,7 +35,7 @@ pub struct State {
     pub output_name: String,
     pub lua_extension: String,
 
-    pub tarmac: bool,
+    pub style: StyleType,
 
     pub font_db: Database,
 
@@ -74,7 +74,7 @@ impl State {
             .to_string();
 
         let typescript = config.typescript.unwrap_or(false);
-        let tarmac = config.tarmac.unwrap_or(false);
+        let style = config.style.unwrap_or(StyleType::Flat);
 
         let lua_extension = String::from(if config.luau.unwrap_or(false) {
             "luau"
@@ -104,7 +104,7 @@ impl State {
             typescript,
             output_name,
             lua_extension,
-            tarmac,
+            style,
             font_db,
             existing_lockfile,
             new_lockfile,

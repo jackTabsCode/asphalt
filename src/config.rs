@@ -4,6 +4,13 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
+pub enum StyleType {
+    Flat,
+    Nested,
+}
+
+#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
 pub enum CreatorType {
     User,
     Group,
@@ -29,7 +36,7 @@ pub struct Config {
     pub output_name: Option<String>,
     pub typescript: Option<bool>,
     pub luau: Option<bool>,
-    pub tarmac: Option<bool>,
+    pub style: Option<StyleType>,
 
     pub existing: Option<HashMap<String, ExistingAsset>>,
 }
