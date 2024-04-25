@@ -1,9 +1,11 @@
+mod ast;
+
 use anyhow::{bail, Context};
 use std::collections::BTreeMap;
 use std::{path::Component as PathComponent, path::Path};
 
-use crate::ast::{AstTarget, Expression, ReturnStatement};
 use crate::LockFile;
+use ast::{AstTarget, Expression, ReturnStatement};
 use std::fmt::Write;
 
 use self::types::NestedTable;
