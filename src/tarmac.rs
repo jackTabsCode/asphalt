@@ -20,23 +20,23 @@ pub(crate) mod types {
     }
 }
 
-fn build_table(entry: &TarmacTable) -> Option<Expression> {
+/// Recursively builds a **[`TarmacTable`]** (normally a root table) into expressions that can be evaluated in the `ast`.
+fn build_table(entry: &TarmacTable) -> Expression {
     match entry {
-        TarmacTable::Folder(entries) => Some(Expression::table(
+        TarmacTable::Folder(entries) => Expression::table(
             entries
                 .iter()
-                .filter_map(|(component, entry)| {
-                    build_table(entry).map(|table| (component.into(), table))
-                })
+                .map(|(component, entry)| (component.into(), build_table(entry)))
                 .collect(),
-        )),
-        TarmacTable::File(file) => Some(Expression::String(format!(
-            "rbxassetid://{}",
-            file.asset_id
-        ))),
+        ),
+        TarmacTable::File(file) => Expression::String(format!("rbxassetid://{}", file.asset_id)),
     }
 }
 
+/**
+ * Creates expressions based on the **[`LockFile`]**, and will strip the prefix
+ * and iterate through every file entry and build a table for code generation.
+*/
 fn generate_expressions(lockfile: &LockFile, strip_dir: &str) -> anyhow::Result<Expression> {
     let mut root: BTreeMap<String, TarmacTable<'_>> = BTreeMap::new();
 
@@ -83,7 +83,7 @@ fn generate_expressions(lockfile: &LockFile, strip_dir: &str) -> anyhow::Result<
         }
     }
 
-    Ok(build_table(&TarmacTable::Folder(root)).unwrap())
+    Ok(build_table(&TarmacTable::Folder(root)))
 }
 
 pub fn generate_lua(lockfile: &LockFile, strip_dir: &str) -> anyhow::Result<String> {
