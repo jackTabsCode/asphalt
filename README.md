@@ -37,6 +37,7 @@ asset_dir = "test/"
 write_dir = "output/"
 typescript = true
 luau = true
+tarmac = true
 
 [creator]
 type = "user"
@@ -60,6 +61,8 @@ id = 583095803
     -   Generate a Typescript definition file.
 -   `luau`: boolean (optional)
     -   Use the `luau` file extension.
+-   `tarmac`: boolean (optional)
+    -   Use tarmac-styled code generation.
 -   `output_name`: string (optional)
     -   The name for the generated files. Defaults to `assets`.
 -   `existing`: map<string, ExistingAsset> (optional)
