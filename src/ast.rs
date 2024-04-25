@@ -4,16 +4,16 @@ macro_rules! proxy_display {
     ( $target: ty ) => {
         impl fmt::Display for $target {
             fn fmt(&self, output: &mut fmt::Formatter) -> fmt::Result {
-                let mut stream = ASTStream::new(output, &self.1);
-                ASTFormat::fmt_ast(self, &mut stream)
+                let mut stream = AstStream::new(output, &self.1);
+                AstFormat::fmt_ast(self, &mut stream)
             }
         }
     };
 }
 
-trait ASTFormat {
-    fn fmt_ast(&self, output: &mut ASTStream) -> fmt::Result;
-    fn fmt_key(&self, output: &mut ASTStream<'_, '_>) -> fmt::Result {
+trait AstFormat {
+    fn fmt_ast(&self, output: &mut AstStream) -> fmt::Result;
+    fn fmt_key(&self, output: &mut AstStream<'_, '_>) -> fmt::Result {
         write!(output, "[")?;
         self.fmt_ast(output)?;
         write!(output, "]")
@@ -21,21 +21,21 @@ trait ASTFormat {
 }
 
 #[derive(Debug)]
-pub(crate) enum ASTTarget {
+pub(crate) enum AstTarget {
     Lua,
     Typescript { output_dir: String },
 }
 
-pub(crate) struct ASTStream<'a, 'b> {
+pub(crate) struct AstStream<'a, 'b> {
     number_of_spaces: usize,
     indents: usize,
     is_start_of_line: bool,
     writer: &'a mut (dyn Write),
-    target: &'b ASTTarget,
+    target: &'b AstTarget,
 }
 
-impl<'a, 'b> ASTStream<'a, 'b> {
-    pub fn new(writer: &'a mut (dyn fmt::Write + 'a), target: &'b ASTTarget) -> Self {
+impl<'a, 'b> AstStream<'a, 'b> {
+    pub fn new(writer: &'a mut (dyn fmt::Write + 'a), target: &'b AstTarget) -> Self {
         Self {
             number_of_spaces: 4,
             indents: 0,
@@ -61,7 +61,7 @@ impl<'a, 'b> ASTStream<'a, 'b> {
     }
 }
 
-impl Write for ASTStream<'_, '_> {
+impl Write for AstStream<'_, '_> {
     fn write_str(&mut self, value: &str) -> fmt::Result {
         let mut is_first_line = true;
 
@@ -93,21 +93,21 @@ impl Write for ASTStream<'_, '_> {
 proxy_display!(ReturnStatement);
 
 #[derive(Debug)]
-pub(crate) struct ReturnStatement(pub Expression, pub ASTTarget);
+pub(crate) struct ReturnStatement(pub Expression, pub AstTarget);
 
-impl ASTFormat for ReturnStatement {
-    fn fmt_ast(&self, output: &mut ASTStream) -> fmt::Result {
+impl AstFormat for ReturnStatement {
+    fn fmt_ast(&self, output: &mut AstStream) -> fmt::Result {
         match output.target {
-            ASTTarget::Lua => {
+            AstTarget::Lua => {
                 write!(output, "return ")
             }
-            ASTTarget::Typescript { output_dir } => {
+            AstTarget::Typescript { output_dir } => {
                 write!(output, "declare const {output_dir}: ")
             }
         }
         .expect("Failed to write to output");
         let result = self.0.fmt_ast(output);
-        if let ASTTarget::Typescript { output_dir } = output.target {
+        if let AstTarget::Typescript { output_dir } = output.target {
             write!(output, "\nexport = {output_dir}")?
         }
         result
@@ -126,15 +126,15 @@ impl Expression {
     }
 }
 
-impl ASTFormat for Expression {
-    fn fmt_ast(&self, output: &mut ASTStream) -> fmt::Result {
+impl AstFormat for Expression {
+    fn fmt_ast(&self, output: &mut AstStream) -> fmt::Result {
         match self {
             Self::Table(val) => val.fmt_ast(output),
             Self::String(val) => val.fmt_ast(output),
         }
     }
 
-    fn fmt_key(&self, output: &mut ASTStream<'_, '_>) -> fmt::Result {
+    fn fmt_key(&self, output: &mut AstStream<'_, '_>) -> fmt::Result {
         match self {
             Self::Table(val) => val.fmt_key(output),
             Self::String(val) => val.fmt_key(output),
@@ -147,11 +147,11 @@ pub(crate) struct Table {
     pub expressions: Vec<(Expression, Expression)>,
 }
 
-impl ASTFormat for Table {
-    fn fmt_ast(&self, output: &mut ASTStream<'_, '_>) -> fmt::Result {
+impl AstFormat for Table {
+    fn fmt_ast(&self, output: &mut AstStream<'_, '_>) -> fmt::Result {
         let assignment = match output.target {
-            ASTTarget::Lua => " = ",
-            ASTTarget::Typescript { .. } => ": ",
+            AstTarget::Lua => " = ",
+            AstTarget::Typescript { .. } => ": ",
         };
 
         writeln!(output, "{{")?;
@@ -169,18 +169,18 @@ impl ASTFormat for Table {
     }
 }
 
-impl ASTFormat for String {
-    fn fmt_ast(&self, output: &mut ASTStream) -> fmt::Result {
+impl AstFormat for String {
+    fn fmt_ast(&self, output: &mut AstStream) -> fmt::Result {
         write!(output, "\"{}\"", self)
     }
 
-    fn fmt_key(&self, output: &mut ASTStream<'_, '_>) -> fmt::Result {
+    fn fmt_key(&self, output: &mut AstStream<'_, '_>) -> fmt::Result {
         if is_valid_identifier(self) {
             write!(output, "{}", self)
         } else {
             match output.target {
-                ASTTarget::Lua => write!(output, "[\"{}\"]", self),
-                ASTTarget::Typescript { .. } => write!(output, "\"{}\"", self),
+                AstTarget::Lua => write!(output, "[\"{}\"]", self),
+                AstTarget::Typescript { .. } => write!(output, "\"{}\"", self),
             }
         }
     }
