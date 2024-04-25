@@ -29,6 +29,7 @@ pub struct Config {
     pub output_name: Option<String>,
     pub typescript: Option<bool>,
     pub luau: Option<bool>,
+    pub tarmac: Option<bool>,
 
     pub existing: Option<HashMap<String, ExistingAsset>>,
 }

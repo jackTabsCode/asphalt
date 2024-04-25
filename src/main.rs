@@ -15,11 +15,13 @@ use upload::upload_asset;
 use crate::config::Config;
 
 pub mod args;
+mod ast;
 mod codegen;
 pub mod config;
 pub mod lockfile;
 pub mod state;
 mod svg;
+mod tarmac;
 mod upload;
 
 fn fix_path(path: &str) -> String {
@@ -178,7 +180,11 @@ async fn main() -> anyhow::Result<()> {
         }));
 
     let lua_filename = format!("{}.{}", state.output_name, state.lua_extension);
-    let lua_output = generate_lua(&state.new_lockfile, asset_dir_str);
+    let lua_output = if state.tarmac {
+        tarmac::generate_lua
+    } else {
+        generate_lua
+    }(&state.new_lockfile, asset_dir_str);
 
     write(Path::new(&state.write_dir).join(lua_filename), lua_output?)
         .await
@@ -186,7 +192,11 @@ async fn main() -> anyhow::Result<()> {
 
     if state.typescript {
         let ts_filename = format!("{}.d.ts", state.output_name);
-        let ts_output = generate_ts(
+        let ts_output = if state.tarmac {
+            tarmac::generate_ts
+        } else {
+            generate_ts
+        }(
             &state.new_lockfile,
             asset_dir_str,
             state.output_name.as_str(),
