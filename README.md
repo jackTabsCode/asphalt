@@ -43,8 +43,9 @@ tarmac = true
 type = "user"
 id = 9670971
 
-[existing."test/online_asset.ogg"]
-id = 583095803
+[existing]
+"test/some_sound_on_roblox.ogg" = { id = 123456789 }
+"test/some_image_on_roblox.png" = { id = 987654321 }
 ```
 
 </details>
@@ -83,3 +84,5 @@ Just run `asphalt` and make sure you have a config file as specified above. When
 ## API Key
 
 You will need an API key to run Asphalt. You can specify this using the `--api-key` argument, or the `ASPHALT_API_KEY` environment variable.
+
+You can get one from the [Creator Dashboard](https://create.roblox.com/dashboard/credentials). Make sure you select the correct group and Asset-related permissions.
