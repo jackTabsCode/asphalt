@@ -70,7 +70,6 @@ mod tests {
                 hash: "b".to_string(),
             },
         );
-
         LockFile { entries }
     }
 

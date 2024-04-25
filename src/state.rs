@@ -35,6 +35,8 @@ pub struct State {
     pub output_name: String,
     pub lua_extension: String,
 
+    pub tarmac: bool,
+
     pub font_db: Database,
 
     pub existing_lockfile: LockFile,
@@ -72,6 +74,7 @@ impl State {
             .to_string();
 
         let typescript = config.typescript.unwrap_or(false);
+        let tarmac = config.tarmac.unwrap_or(false);
 
         let lua_extension = String::from(if config.luau.unwrap_or(false) {
             "luau"
@@ -101,6 +104,7 @@ impl State {
             typescript,
             output_name,
             lua_extension,
+            tarmac,
             font_db,
             existing_lockfile,
             new_lockfile,
