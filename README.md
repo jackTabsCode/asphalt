@@ -37,7 +37,7 @@ asset_dir = "test/"
 write_dir = "output/"
 typescript = true
 luau = true
-tarmac = true
+style = "flat"
 
 [creator]
 type = "user"

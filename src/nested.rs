@@ -6,7 +6,7 @@ use crate::ast::{AstTarget, Expression, ReturnStatement};
 use crate::LockFile;
 use std::fmt::Write;
 
-use self::types::TarmacTable;
+use self::types::NestedTable;
 
 pub(crate) mod types {
     use std::collections::BTreeMap;
@@ -14,22 +14,22 @@ pub(crate) mod types {
     use crate::FileEntry;
 
     #[derive(Debug)]
-    pub enum TarmacTable<'a> {
-        Folder(BTreeMap<String, TarmacTable<'a>>),
+    pub enum NestedTable<'a> {
+        Folder(BTreeMap<String, NestedTable<'a>>),
         File(&'a FileEntry),
     }
 }
 
-/// Recursively builds a **[`TarmacTable`]** (normally a root table) into expressions that can be evaluated in the `ast`.
-fn build_table(entry: &TarmacTable) -> Expression {
+/// Recursively builds a **[`NestedTable`]** (normally a root table) into expressions that can be evaluated in the `ast`.
+fn build_table(entry: &NestedTable) -> Expression {
     match entry {
-        TarmacTable::Folder(entries) => Expression::table(
+        NestedTable::Folder(entries) => Expression::table(
             entries
                 .iter()
                 .map(|(component, entry)| (component.into(), build_table(entry)))
                 .collect(),
         ),
-        TarmacTable::File(file) => Expression::String(format!("rbxassetid://{}", file.asset_id)),
+        NestedTable::File(file) => Expression::String(format!("rbxassetid://{}", file.asset_id)),
     }
 }
 
@@ -38,7 +38,7 @@ fn build_table(entry: &TarmacTable) -> Expression {
  * and iterate through every file entry and build a table for code generation.
 */
 fn generate_expressions(lockfile: &LockFile, strip_dir: &str) -> anyhow::Result<Expression> {
-    let mut root: BTreeMap<String, TarmacTable<'_>> = BTreeMap::new();
+    let mut root: BTreeMap<String, NestedTable<'_>> = BTreeMap::new();
 
     for (file_path, file_entry) in lockfile.entries.iter() {
         let mut components = vec![];
@@ -70,11 +70,11 @@ fn generate_expressions(lockfile: &LockFile, strip_dir: &str) -> anyhow::Result<
             // last component is assumed to be a file.
             if index == components.len() - 1 {
                 if current_directory.get_mut(component).is_none() {
-                    current_directory.insert(component.to_owned(), TarmacTable::File(file_entry));
+                    current_directory.insert(component.to_owned(), NestedTable::File(file_entry));
                 };
-            } else if let TarmacTable::Folder(entries) = current_directory
+            } else if let NestedTable::Folder(entries) = current_directory
                 .entry(component.to_owned())
-                .or_insert_with(|| TarmacTable::Folder(BTreeMap::new()))
+                .or_insert_with(|| NestedTable::Folder(BTreeMap::new()))
             {
                 current_directory = entries;
             } else {
@@ -83,12 +83,12 @@ fn generate_expressions(lockfile: &LockFile, strip_dir: &str) -> anyhow::Result<
         }
     }
 
-    Ok(build_table(&TarmacTable::Folder(root)))
+    Ok(build_table(&NestedTable::Folder(root)))
 }
 
 pub fn generate_lua(lockfile: &LockFile, strip_dir: &str) -> anyhow::Result<String> {
     generate_code(
-        generate_expressions(lockfile, strip_dir).expect("Failed to create tarmac expressions"),
+        generate_expressions(lockfile, strip_dir).expect("Failed to create nested expressions"),
         AstTarget::Lua,
     )
 }
@@ -99,7 +99,7 @@ pub fn generate_ts(
     output_dir: &str,
 ) -> anyhow::Result<String> {
     generate_code(
-        generate_expressions(lockfile, strip_dir).expect("Failed to create tarmac expressions"),
+        generate_expressions(lockfile, strip_dir).expect("Failed to create nested expressions"),
         AstTarget::Typescript {
             output_dir: output_dir.to_owned(),
         },
