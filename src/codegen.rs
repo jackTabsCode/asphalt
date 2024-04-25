@@ -90,7 +90,7 @@ mod tests {
     }
 
     #[test]
-    fn generate_lua_tarmac() {
+    fn generate_lua_nested() {
         let lockfile = test_lockfile();
 
         let lua = nested::generate_lua(&lockfile, "assets").unwrap();
@@ -100,7 +100,7 @@ mod tests {
     }
 
     #[test]
-    fn generate_ts_tarmac() {
+    fn generate_ts_nested() {
         let lockfile = test_lockfile();
 
         let ts = nested::generate_ts(&lockfile, "assets", "assets").unwrap();
