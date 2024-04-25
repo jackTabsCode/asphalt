@@ -81,3 +81,5 @@ Just run `asphalt` and make sure you have a config file as specified above. When
 ## API Key
 
 You will need an API key to run Asphalt. You can specify this using the `--api-key` argument, or the `ASPHALT_API_KEY` environment variable.
+
+You can get one from the [Creator Dashboard](https://create.roblox.com/dashboard/credentials). Make sure you select the correct group and Asset-related permissions.
