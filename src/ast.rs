@@ -27,6 +27,7 @@ pub(crate) enum ASTTarget {
 }
 
 pub(crate) struct ASTStream<'a, 'b> {
+    number_of_spaces: usize,
     indents: usize,
     is_start_of_line: bool,
     writer: &'a mut (dyn Write),
@@ -36,6 +37,7 @@ pub(crate) struct ASTStream<'a, 'b> {
 impl<'a, 'b> ASTStream<'a, 'b> {
     pub fn new(writer: &'a mut (dyn fmt::Write + 'a), target: &'b ASTTarget) -> Self {
         Self {
+            number_of_spaces: 4,
             indents: 0,
             is_start_of_line: true,
             writer,
@@ -73,8 +75,11 @@ impl Write for ASTStream<'_, '_> {
             if !line.is_empty() {
                 if self.is_start_of_line {
                     self.is_start_of_line = false;
-                    let indentation = "\t".repeat(self.indents);
-                    self.writer.write_str(&indentation)?;
+                    self.writer.write_str(&format!(
+                        "{: >1$}",
+                        "",
+                        self.number_of_spaces * self.indents
+                    ))?;
                 }
 
                 self.writer.write_str(line)?;
