@@ -2,7 +2,7 @@ use anyhow::{bail, Context};
 use std::collections::BTreeMap;
 use std::{path::Component as PathComponent, path::Path};
 
-use crate::ast::{ASTTarget, Expression, ReturnStatement};
+use crate::ast::{AstTarget, Expression, ReturnStatement};
 use crate::LockFile;
 use std::fmt::Write;
 
@@ -89,7 +89,7 @@ fn generate_expressions(lockfile: &LockFile, strip_dir: &str) -> anyhow::Result<
 pub fn generate_lua(lockfile: &LockFile, strip_dir: &str) -> anyhow::Result<String> {
     generate_code(
         generate_expressions(lockfile, strip_dir).expect("Failed to create tarmac expressions"),
-        ASTTarget::Lua,
+        AstTarget::Lua,
     )
 }
 
@@ -100,13 +100,13 @@ pub fn generate_ts(
 ) -> anyhow::Result<String> {
     generate_code(
         generate_expressions(lockfile, strip_dir).expect("Failed to create tarmac expressions"),
-        ASTTarget::Typescript {
+        AstTarget::Typescript {
             output_dir: output_dir.to_owned(),
         },
     )
 }
 
-fn generate_code(expression: Expression, target: ASTTarget) -> anyhow::Result<String> {
+fn generate_code(expression: Expression, target: AstTarget) -> anyhow::Result<String> {
     let mut buffer = String::new();
     write!(buffer, "{}", ReturnStatement(expression, target))?;
     Ok(buffer)
