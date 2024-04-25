@@ -19,9 +19,9 @@ mod ast;
 mod codegen;
 pub mod config;
 pub mod lockfile;
+mod nested;
 pub mod state;
 mod svg;
-mod tarmac;
 mod upload;
 
 fn fix_path(path: &str) -> String {

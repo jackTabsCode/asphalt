@@ -52,7 +52,7 @@ pub fn generate_ts(
 mod tests {
     use std::collections::BTreeMap;
 
-    use crate::{tarmac, FileEntry, LockFile};
+    use crate::{nested, FileEntry, LockFile};
 
     fn test_lockfile() -> LockFile {
         let mut entries = BTreeMap::new();
@@ -93,7 +93,7 @@ mod tests {
     fn generate_lua_tarmac() {
         let lockfile = test_lockfile();
 
-        let lua = tarmac::generate_lua(&lockfile, "assets").unwrap();
+        let lua = nested::generate_lua(&lockfile, "assets").unwrap();
         assert_eq!(
             lua,
             "return {\n    bar = {\n        [\"baz.png\"] = \"rbxassetid://2\",\n    },\n    [\"foo.png\"] = \"rbxassetid://1\",\n}");
@@ -103,7 +103,7 @@ mod tests {
     fn generate_ts_tarmac() {
         let lockfile = test_lockfile();
 
-        let ts = tarmac::generate_ts(&lockfile, "assets", "assets").unwrap();
+        let ts = nested::generate_ts(&lockfile, "assets", "assets").unwrap();
         assert_eq!(
             ts,
             "declare const assets: {\n    bar: {\n        \"baz.png\": \"rbxassetid://2\",\n    },\n    \"foo.png\": \"rbxassetid://1\",\n}\nexport = assets");
