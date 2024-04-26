@@ -37,6 +37,7 @@ asset_dir = "test/"
 write_dir = "output/"
 typescript = true
 luau = true
+style = "flat"
 
 [creator]
 type = "user"
@@ -61,6 +62,8 @@ id = 9670971
     -   Generate a Typescript definition file.
 -   `luau`: boolean (optional)
     -   Use the `luau` file extension.
+-   `style`: string (optional)
+    -   The code-generation style to use. Defaults to `flat`.
 -   `output_name`: string (optional)
     -   The name for the generated files. Defaults to `assets`.
 -   `existing`: map<string, ExistingAsset> (optional)
