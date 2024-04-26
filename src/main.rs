@@ -178,7 +178,7 @@ async fn main() -> anyhow::Result<()> {
         }));
 
     let lua_filename = format!("{}.{}", state.output_name, state.lua_extension);
-    let lua_output = generate_lua(&state.new_lockfile, asset_dir_str);
+    let lua_output = generate_lua(&state.new_lockfile, asset_dir_str, &state.style);
 
     write(Path::new(&state.write_dir).join(lua_filename), lua_output?)
         .await
@@ -190,6 +190,7 @@ async fn main() -> anyhow::Result<()> {
             &state.new_lockfile,
             asset_dir_str,
             state.output_name.as_str(),
+            &state.style,
         );
 
         write(Path::new(&state.write_dir).join(ts_filename), ts_output?)
