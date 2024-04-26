@@ -104,8 +104,8 @@ impl AstFormat for ReturnStatement {
             AstTarget::Typescript { output_dir } => {
                 write!(output, "declare const {output_dir}: ")
             }
-        }
-        .expect("Failed to write to output");
+        }?;
+
         let result = self.0.fmt_ast(output);
         if let AstTarget::Typescript { output_dir } = output.target {
             write!(output, "\nexport = {output_dir}")?
