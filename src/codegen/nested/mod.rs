@@ -55,7 +55,7 @@ fn generate_expressions(lockfile: &LockFile, strip_dir: &str) -> anyhow::Result<
                         component
                             .as_os_str()
                             .to_str()
-                            .expect("Failed to resolve path component"),
+                            .context("Failed to resolve path component")?,
                     )
                 }
                 PathComponent::ParentDir => {
@@ -90,7 +90,7 @@ fn generate_expressions(lockfile: &LockFile, strip_dir: &str) -> anyhow::Result<
 
 pub fn generate_lua(lockfile: &LockFile, strip_dir: &str) -> anyhow::Result<String> {
     generate_code(
-        generate_expressions(lockfile, strip_dir).expect("Failed to create nested expressions"),
+        generate_expressions(lockfile, strip_dir).context("Failed to create nested expressions")?,
         AstTarget::Lua,
     )
 }
@@ -101,7 +101,7 @@ pub fn generate_ts(
     output_dir: &str,
 ) -> anyhow::Result<String> {
     generate_code(
-        generate_expressions(lockfile, strip_dir).expect("Failed to create nested expressions"),
+        generate_expressions(lockfile, strip_dir).context("Failed to create nested expressions")?,
         AstTarget::Typescript {
             output_dir: output_dir.to_owned(),
         },
