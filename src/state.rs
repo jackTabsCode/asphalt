@@ -31,10 +31,10 @@ pub struct State {
 
     pub api_key: String,
     pub creator: AssetCreator,
+
     pub typescript: bool,
     pub output_name: String,
     pub lua_extension: String,
-
     pub style: StyleType,
 
     pub font_db: Database,
@@ -68,15 +68,16 @@ impl State {
         let write_dir = PathBuf::from(write_dir);
 
         let output_name = config
+            .codegen
             .output_name
             .as_ref()
             .unwrap_or(&"assets".to_string())
             .to_string();
 
-        let typescript = config.typescript.unwrap_or(false);
-        let style = config.style.unwrap_or(StyleType::Flat);
+        let typescript = config.codegen.typescript.unwrap_or(false);
+        let style = config.codegen.style.unwrap_or(StyleType::Flat);
 
-        let lua_extension = String::from(if config.luau.unwrap_or(false) {
+        let lua_extension = String::from(if config.codegen.luau.unwrap_or(false) {
             "luau"
         } else {
             "lua"
