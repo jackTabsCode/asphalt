@@ -17,7 +17,7 @@ console = { version = "0.15.8", features = ["ansi-parsing"] }
 dotenv = "0.15.0"
 log = "0.4.21"
 rbxcloud = "0.10.0"
-reqwest = { version = "0.12.3", features = ["gzip"] }
+reqwest = { version = "0.12.4", features = ["gzip"] }
 resvg = "0.41.0"
 serde = { version = "1.0.198", features = ["derive"] }
 serde-xml-rs = "0.6.0"
