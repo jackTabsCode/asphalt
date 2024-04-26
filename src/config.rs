@@ -29,14 +29,18 @@ pub struct ExistingAsset {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct Config {
-    pub asset_dir: String,
-    pub write_dir: String,
-    pub creator: Creator,
+pub struct CodegenConfig {
     pub output_name: Option<String>,
     pub typescript: Option<bool>,
     pub luau: Option<bool>,
     pub style: Option<StyleType>,
+}
 
+#[derive(Debug, Deserialize, Serialize)]
+pub struct Config {
+    pub asset_dir: String,
+    pub write_dir: String,
+    pub creator: Creator,
+    pub codegen: CodegenConfig,
     pub existing: Option<HashMap<String, ExistingAsset>>,
 }
