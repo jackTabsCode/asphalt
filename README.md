@@ -35,9 +35,12 @@ Asphalt is configured with a project file called `asphalt.toml`. It is required 
 ```toml
 asset_dir = "test/"
 write_dir = "output/"
+
+[codegen]
 typescript = true
 luau = true
 style = "flat"
+output_name = "assets"
 
 [creator]
 type = "user"
@@ -58,20 +61,25 @@ id = 9670971
     -   The directory to output the generated code to. This should probably be somewhere in your game's source folder.
 -   `creator`: Creator
     -   The Roblox creator to upload the assets under.
--   `typescript`: boolean (optional)
-    -   Generate a Typescript definition file.
--   `luau`: boolean (optional)
-    -   Use the `luau` file extension.
--   `style`: string (optional)
-    -   The code-generation style to use. Defaults to `flat`.
--   `output_name`: string (optional)
-    -   The name for the generated files. Defaults to `assets`.
+-   `codegen`: Codegen
+    -   Code generation options.
 -   `existing`: map<string, ExistingAsset> (optional)
 
 #### Creator
 
 -   `type`: "user" or "group"
 -   `id`: number
+
+#### Codegen
+
+-   `typescript`: boolean (optional)
+    -   Generate a Typescript definition file.
+-   `luau`: boolean (optional)
+    -   Use the `luau` file extension.
+-   `style`: "flat" | "nested" (optional)
+    -   The code-generation style to use. Defaults to `flat`. If you would like to have an experience similar to [Tarmac](https://github.com/rojo-rbx/tarmac), use `nested`.
+-   `output_name`: string (optional)
+    -   The name for the generated files. Defaults to `assets`.
 
 #### ExistingAsset
 
