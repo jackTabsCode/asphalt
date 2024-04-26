@@ -35,15 +35,20 @@ Asphalt is configured with a project file called `asphalt.toml`. It is required 
 ```toml
 asset_dir = "test/"
 write_dir = "output/"
+
+[codegen]
 typescript = true
 luau = true
+style = "flat"
+output_name = "assets"
 
 [creator]
 type = "user"
 id = 9670971
 
-[existing."test/online_asset.ogg"]
-id = 583095803
+[existing]
+"test/some_sound_on_roblox.ogg" = { id = 123456789 }
+"test/some_image_on_roblox.png" = { id = 987654321 }
 ```
 
 </details>
@@ -56,18 +61,25 @@ id = 583095803
     -   The directory to output the generated code to. This should probably be somewhere in your game's source folder.
 -   `creator`: Creator
     -   The Roblox creator to upload the assets under.
--   `typescript`: boolean (optional)
-    -   Generate a Typescript definition file.
--   `luau`: boolean (optional)
-    -   Use the `luau` file extension.
--   `output_name`: string (optional)
-    -   The name for the generated files. Defaults to `assets`.
+-   `codegen`: Codegen
+    -   Code generation options.
 -   `existing`: map<string, ExistingAsset> (optional)
 
 #### Creator
 
 -   `type`: "user" or "group"
 -   `id`: number
+
+#### Codegen
+
+-   `typescript`: boolean (optional)
+    -   Generate a Typescript definition file.
+-   `luau`: boolean (optional)
+    -   Use the `luau` file extension.
+-   `style`: "flat" | "nested" (optional)
+    -   The code-generation style to use. Defaults to `flat`. If you would like to have an experience similar to [Tarmac](https://github.com/rojo-rbx/tarmac), use `nested`.
+-   `output_name`: string (optional)
+    -   The name for the generated files. Defaults to `assets`.
 
 #### ExistingAsset
 
@@ -80,3 +92,5 @@ Just run `asphalt` and make sure you have a config file as specified above. When
 ## API Key
 
 You will need an API key to run Asphalt. You can specify this using the `--api-key` argument, or the `ASPHALT_API_KEY` environment variable.
+
+You can get one from the [Creator Dashboard](https://create.roblox.com/dashboard/credentials). Make sure you select the correct group and Asset-related permissions.
