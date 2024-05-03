@@ -1,13 +1,12 @@
 use crate::lockfile::LockFile;
 use anyhow::Context;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 fn asset_path(file_path: &str, strip_dir: &str, strip_extension: bool) -> anyhow::Result<String> {
-    let file_path = Path::new(file_path);
     if strip_extension {
-        file_path.with_extension("")
+        Path::new(file_path).with_extension("")
     } else {
-        file_path.to_owned()
+        PathBuf::from(file_path)
     }
     .to_str()
     .context("Failed to convert path to string")?

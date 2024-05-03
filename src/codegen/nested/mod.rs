@@ -2,6 +2,7 @@ mod ast;
 
 use anyhow::{bail, Context};
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 use std::{path::Component as PathComponent, path::Path};
 
 use crate::LockFile;
@@ -51,9 +52,8 @@ fn generate_expressions(
         let full_path = if strip_extension {
             Path::new(file_path).with_extension("")
         } else {
-            Path::new(file_path).to_owned()
+            PathBuf::from(file_path)
         };
-
         let path = full_path
             .strip_prefix(strip_dir)
             .context("Failed to strip directory prefix")?;
