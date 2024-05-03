@@ -34,6 +34,7 @@ pub struct CodegenConfig {
     pub typescript: Option<bool>,
     pub luau: Option<bool>,
     pub style: Option<StyleType>,
+    pub strip_extension: Option<bool>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]

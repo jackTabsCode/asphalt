@@ -39,12 +39,22 @@ fn build_table(entry: &NestedTable) -> Expression {
  * Creates expressions based on the **[`LockFile`]**, and will strip the prefix
  * and iterate through every file entry and build a table for code generation.
 */
-fn generate_expressions(lockfile: &LockFile, strip_dir: &str) -> anyhow::Result<Expression> {
+fn generate_expressions(
+    lockfile: &LockFile,
+    strip_dir: &str,
+    strip_extension: bool,
+) -> anyhow::Result<Expression> {
     let mut root: BTreeMap<String, NestedTable<'_>> = BTreeMap::new();
 
     for (file_path, file_entry) in lockfile.entries.iter() {
         let mut components = vec![];
-        let path = Path::new(file_path)
+        let full_path = if strip_extension {
+            Path::new(file_path).with_extension("")
+        } else {
+            Path::new(file_path).to_owned()
+        };
+
+        let path = full_path
             .strip_prefix(strip_dir)
             .context("Failed to strip directory prefix")?;
 
@@ -88,9 +98,14 @@ fn generate_expressions(lockfile: &LockFile, strip_dir: &str) -> anyhow::Result<
     Ok(build_table(&NestedTable::Folder(root)))
 }
 
-pub fn generate_lua(lockfile: &LockFile, strip_dir: &str) -> anyhow::Result<String> {
+pub fn generate_lua(
+    lockfile: &LockFile,
+    strip_dir: &str,
+    strip_extension: bool,
+) -> anyhow::Result<String> {
     generate_code(
-        generate_expressions(lockfile, strip_dir).context("Failed to create nested expressions")?,
+        generate_expressions(lockfile, strip_dir, strip_extension)
+            .context("Failed to create nested expressions")?,
         AstTarget::Lua,
     )
 }
@@ -99,9 +114,11 @@ pub fn generate_ts(
     lockfile: &LockFile,
     strip_dir: &str,
     output_dir: &str,
+    strip_extension: bool,
 ) -> anyhow::Result<String> {
     generate_code(
-        generate_expressions(lockfile, strip_dir).context("Failed to create nested expressions")?,
+        generate_expressions(lockfile, strip_dir, strip_extension)
+            .context("Failed to create nested expressions")?,
         AstTarget::Typescript {
             output_dir: output_dir.to_owned(),
         },
