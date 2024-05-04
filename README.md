@@ -81,6 +81,8 @@ id = 9670971
     -   The code-generation style to use. Defaults to `flat`. If you would like to have an experience similar to [Tarmac](https://github.com/rojo-rbx/tarmac), use `nested`.
 -   `output_name`: string (optional)
     -   The name for the generated files. Defaults to `assets`.
+-   `strip_extension`: boolean (optional)
+    -   Whether to strip the file extension. Defaults to `false`. If you would like to have an experience similar to [Tarmac](https://github.com/rojo-rbx/tarmac), use `true`.
 
 #### ExistingAsset
 

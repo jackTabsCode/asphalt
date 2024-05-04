@@ -36,6 +36,7 @@ pub struct State {
     pub output_name: String,
     pub lua_extension: String,
     pub style: StyleType,
+    pub strip_extension: bool,
 
     pub font_db: Database,
 
@@ -83,6 +84,8 @@ impl State {
             "lua"
         });
 
+        let strip_extension = config.codegen.strip_extension.unwrap_or(false);
+
         let mut font_db = Database::new();
         font_db.load_system_fonts();
 
@@ -106,6 +109,7 @@ impl State {
             output_name,
             lua_extension,
             style,
+            strip_extension,
             font_db,
             existing_lockfile,
             new_lockfile,
