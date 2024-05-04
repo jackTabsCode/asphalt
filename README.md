@@ -10,6 +10,7 @@ Asphalt is a simple CLI tool used to upload assets to Roblox and easily referenc
 -   Uses the Open Cloud API
 -   Supports uploading to groups
 -   Define existing uploaded assets, so all of your stuff can be referenced in one place
+-   Alpha bleeds images for crisp edges when scaled
 
 ## Installation
 
@@ -94,3 +95,7 @@ Just run `asphalt` and make sure you have a config file as specified above. When
 You will need an API key to run Asphalt. You can specify this using the `--api-key` argument, or the `ASPHALT_API_KEY` environment variable.
 
 You can get one from the [Creator Dashboard](https://create.roblox.com/dashboard/credentials). Make sure you select the correct group and Asset-related permissions.
+
+## Attributions
+
+Thank you to [Tarmac](https://github.com/Roblox/tarmac) for the alpha bleeding and nested codegen implementations, which were used in this project.
