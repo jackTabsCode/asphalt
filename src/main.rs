@@ -9,7 +9,7 @@ use clap::Parser;
 use codegen::{generate_lua, generate_ts};
 use console::style;
 use dotenv::dotenv;
-use image::{imageops, DynamicImage, ImageFormat};
+use image::{DynamicImage, ImageFormat};
 pub use lockfile::{FileEntry, LockFile};
 use rbxcloud::rbx::v1::assets::AssetType;
 use state::State;
