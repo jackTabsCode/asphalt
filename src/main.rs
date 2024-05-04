@@ -1,26 +1,29 @@
-use anyhow::Context;
+use crate::{
+    config::Config,
+    util::{alpha_bleed::alpha_bleed, svg},
+};
+use anyhow::{anyhow, Context};
 use args::Args;
 use blake3::Hasher;
 use clap::Parser;
 use codegen::{generate_lua, generate_ts};
 use console::style;
 use dotenv::dotenv;
+use image::{imageops, DynamicImage, ImageFormat};
 pub use lockfile::{FileEntry, LockFile};
 use rbxcloud::rbx::v1::assets::AssetType;
 use state::State;
-use std::{collections::VecDeque, path::Path};
+use std::{collections::VecDeque, io::Cursor, path::Path};
 use tokio::fs::{read, read_dir, read_to_string, write, DirEntry};
 use upload::upload_asset;
-
-use crate::config::Config;
 
 pub mod args;
 mod codegen;
 pub mod config;
 pub mod lockfile;
 pub mod state;
-mod svg;
 mod upload;
+mod util;
 
 fn fix_path(path: &str) -> String {
     path.replace('\\', "/")
@@ -58,6 +61,25 @@ async fn check_file(entry: &DirEntry, state: &State) -> anyhow::Result<Option<Fi
             return Ok(None);
         }
     };
+
+    #[cfg(feature = "alpha_bleed")]
+    match asset_type {
+        AssetType::DecalJpeg | AssetType::DecalBmp | AssetType::DecalPng => {
+            let mut image: DynamicImage = image::load_from_memory(&bytes)?;
+            alpha_bleed(&mut image);
+
+            let format = ImageFormat::from_extension(extension).ok_or(anyhow!(
+                "Failed to get image format from extension: {}",
+                extension
+            ))?;
+
+            let mut new_bytes: Cursor<Vec<u8>> = Cursor::new(Vec::new());
+            image.write_to(&mut new_bytes, format)?;
+
+            bytes = new_bytes.into_inner();
+        }
+        _ => {}
+    }
 
     let mut hasher = Hasher::new();
     hasher.update(&bytes);
