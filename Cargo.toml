@@ -10,7 +10,7 @@ homepage = "https://github.com/jacktabscode/asphalt"
 readme = "README.md"
 
 [dependencies]
-anyhow = "1.0.82"
+anyhow = "1.0.83"
 blake3 = "1.5.0"
 clap = { version = "4.5.2", features = ["derive"] }
 console = { version = "0.15.8", features = ["ansi-parsing"] }
