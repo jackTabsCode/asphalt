@@ -1,6 +1,6 @@
 use crate::{
-    args::Args,
-    config::{Config, CreatorType, ExistingAsset, StyleType},
+    cli::SyncArgs,
+    commands::sync::config::{CreatorType, ExistingAsset, StyleType},
     LockFile,
 };
 use anyhow::Context;
@@ -8,6 +8,8 @@ use rbxcloud::rbx::v1::assets::{AssetCreator, AssetGroupCreator, AssetUserCreato
 use resvg::usvg::fontdb::Database;
 use std::{collections::HashMap, env, path::PathBuf};
 use tokio::fs::{create_dir_all, read_to_string};
+
+use super::config::SyncConfig;
 
 fn add_trailing_slash(path: &str) -> String {
     if !path.ends_with('/') {
@@ -25,7 +27,8 @@ fn get_api_key(arg_key: Option<String>) -> anyhow::Result<String> {
         None => env_key.context("No API key provided"),
     }
 }
-pub struct State {
+
+pub struct SyncState {
     pub asset_dir: PathBuf,
     pub write_dir: PathBuf,
 
@@ -46,8 +49,8 @@ pub struct State {
     pub existing: HashMap<String, ExistingAsset>,
 }
 
-impl State {
-    pub async fn new(args: Args, config: Config) -> anyhow::Result<Self> {
+impl SyncState {
+    pub async fn new(args: SyncArgs, config: SyncConfig) -> anyhow::Result<Self> {
         let api_key = get_api_key(args.api_key)?;
 
         let creator: AssetCreator = match config.creator.creator_type {

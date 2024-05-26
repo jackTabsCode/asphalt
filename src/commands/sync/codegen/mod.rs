@@ -1,5 +1,4 @@
-use crate::{config::StyleType, LockFile};
-
+use crate::{commands::sync::config::StyleType, LockFile};
 mod flat;
 mod nested;
 

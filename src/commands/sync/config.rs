@@ -38,7 +38,7 @@ pub struct CodegenConfig {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct Config {
+pub struct SyncConfig {
     pub asset_dir: String,
     pub write_dir: String,
     pub creator: Creator,
