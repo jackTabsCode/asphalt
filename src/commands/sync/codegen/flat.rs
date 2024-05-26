@@ -24,7 +24,7 @@ pub fn generate_lua(
         .entries
         .iter()
         .map(|(file_path, file_entry)| {
-            let file_stem = asset_path(&file_path, &strip_dir, strip_extension)?;
+            let file_stem = asset_path(file_path, strip_dir, strip_extension)?;
             Ok(format!(
                 "\t[\"{}\"] = \"rbxassetid://{}\"",
                 file_stem, file_entry.asset_id
@@ -46,7 +46,7 @@ pub fn generate_ts(
         .entries
         .keys()
         .map(|file_path| {
-            let file_stem = asset_path(&file_path, &strip_dir, strip_extension)?;
+            let file_stem = asset_path(file_path, strip_dir, strip_extension)?;
             Ok(format!("\t\"{}\": string", file_stem))
         })
         .collect::<Result<Vec<String>, anyhow::Error>>()?

@@ -1,15 +1,13 @@
-mod ast;
-
+use self::types::NestedTable;
+use crate::LockFile;
 use anyhow::{bail, Context};
+use ast::{AstTarget, Expression, ReturnStatement};
 use std::collections::BTreeMap;
+use std::fmt::Write;
 use std::path::PathBuf;
 use std::{path::Component as PathComponent, path::Path};
 
-use crate::LockFile;
-use ast::{AstTarget, Expression, ReturnStatement};
-use std::fmt::Write;
-
-use self::types::NestedTable;
+mod ast;
 
 pub(crate) mod types {
     use std::collections::BTreeMap;
