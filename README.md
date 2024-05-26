@@ -88,13 +88,19 @@ id = 9670971
 
 -   `id`: number
 
-## Usage
+## Commands
 
-Just run `asphalt` and make sure you have a config file as specified above. When complete, it will generate a `asphalt.lock.toml` file which you should have committed to source control.
+### `asphalt sync`
+
+Uploads all assets in the `asset_dir` to Roblox. It will also generate a `asphalt.lock.toml` file which you should commit to source control.
+
+### `asphalt list`
+
+Lists asset paths from the lockfile and their corresponding Roblox asset IDs.
 
 ## API Key
 
-You will need an API key to run Asphalt. You can specify this using the `--api-key` argument, or the `ASPHALT_API_KEY` environment variable.
+You will need an API key to sync with Asphalt. You can specify this using the `--api-key` argument, or the `ASPHALT_API_KEY` environment variable.
 
 You can get one from the [Creator Dashboard](https://create.roblox.com/dashboard/credentials). Make sure you select the correct group and Asset-related permissions.
 
