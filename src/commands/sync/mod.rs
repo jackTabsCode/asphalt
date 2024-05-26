@@ -1,5 +1,5 @@
 use self::state::SyncState;
-use crate::{cli::SyncArgs, FileEntry};
+use crate::{cli::SyncArgs, FileEntry, LockFile};
 use anyhow::{anyhow, Context};
 use blake3::Hasher;
 use codegen::{generate_lua, generate_ts};
@@ -110,7 +110,7 @@ async fn check_file(entry: &DirEntry, state: &SyncState) -> anyhow::Result<Optio
     Ok(Some(FileEntry { hash, asset_id }))
 }
 
-pub async fn sync(args: SyncArgs) -> anyhow::Result<()> {
+pub async fn sync(args: SyncArgs, existing_lockfile: LockFile) -> anyhow::Result<()> {
     let config: SyncConfig = {
         let file_contents = read_to_string("asphalt.toml")
             .await
@@ -118,7 +118,7 @@ pub async fn sync(args: SyncArgs) -> anyhow::Result<()> {
         toml::from_str(&file_contents).context("Failed to parse config")
     }?;
 
-    let mut state = SyncState::new(args, config)
+    let mut state = SyncState::new(args, config, existing_lockfile)
         .await
         .context("Failed to create state")?;
 

@@ -11,6 +11,9 @@ pub struct Cli {
 pub enum Commands {
     /// Sync assets to Roblox.
     Sync(SyncArgs),
+
+    /// List assets in the lockfile.
+    List,
 }
 
 #[derive(Args)]

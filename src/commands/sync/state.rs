@@ -7,7 +7,7 @@ use anyhow::Context;
 use rbxcloud::rbx::v1::assets::{AssetCreator, AssetGroupCreator, AssetUserCreator};
 use resvg::usvg::fontdb::Database;
 use std::{collections::HashMap, env, path::PathBuf};
-use tokio::fs::{create_dir_all, read_to_string};
+use tokio::fs::create_dir_all;
 
 use super::config::SyncConfig;
 
@@ -50,7 +50,11 @@ pub struct SyncState {
 }
 
 impl SyncState {
-    pub async fn new(args: SyncArgs, config: SyncConfig) -> anyhow::Result<Self> {
+    pub async fn new(
+        args: SyncArgs,
+        config: SyncConfig,
+        existing_lockfile: LockFile,
+    ) -> anyhow::Result<Self> {
         let api_key = get_api_key(args.api_key)?;
 
         let creator: AssetCreator = match config.creator.creator_type {
@@ -91,13 +95,6 @@ impl SyncState {
 
         let mut font_db = Database::new();
         font_db.load_system_fonts();
-
-        let existing_lockfile: LockFile = toml::from_str(
-            &read_to_string("asphalt.lock.toml")
-                .await
-                .unwrap_or_default(),
-        )
-        .unwrap_or_default();
 
         let new_lockfile: LockFile = Default::default();
 
