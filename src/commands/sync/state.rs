@@ -1,15 +1,10 @@
-use crate::{
-    cli::SyncArgs,
-    commands::sync::config::{CreatorType, ExistingAsset, StyleType},
-    LockFile,
-};
+use super::config::{CreatorType, ExistingAsset, StyleType, SyncConfig};
+use crate::{cli::SyncArgs, LockFile};
 use anyhow::Context;
 use rbxcloud::rbx::v1::assets::{AssetCreator, AssetGroupCreator, AssetUserCreator};
 use resvg::usvg::fontdb::Database;
 use std::{collections::HashMap, env, path::PathBuf};
 use tokio::fs::create_dir_all;
-
-use super::config::SyncConfig;
 
 fn add_trailing_slash(path: &str) -> String {
     if !path.ends_with('/') {
