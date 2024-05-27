@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use tokio::fs::read_to_string;
+use tokio::fs::{read_to_string, write};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct FileEntry {
@@ -26,7 +26,7 @@ impl LockFile {
 
     pub async fn write(&self) -> anyhow::Result<()> {
         let content = toml::to_string(self)?;
-        tokio::fs::write(FILE_NAME, content).await?;
+        write(FILE_NAME, content).await?;
 
         Ok(())
     }
