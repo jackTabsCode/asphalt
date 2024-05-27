@@ -93,14 +93,14 @@ pub async fn upload_asset(
         .context("The operation path was not prefixed with 'operations/'")?
         .to_string();
 
-    let create_params = GetAssetParams {
+    let get_params = GetAssetParams {
         api_key,
         operation_id: id,
     };
 
     let mut backoff = Duration::from_millis(100);
     loop {
-        match get_asset(&create_params).await {
+        match get_asset(&get_params).await {
             Ok(asset_operation) if asset_operation.done.unwrap_or(false) => {
                 if let Some(response) = asset_operation.response {
                     let id_str = response.asset_id;
