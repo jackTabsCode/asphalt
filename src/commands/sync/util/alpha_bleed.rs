@@ -4,6 +4,7 @@
 
 use std::collections::VecDeque;
 
+use bit_vec::BitVec;
 use image::{DynamicImage, GenericImage, GenericImageView, Rgba};
 
 pub(crate) fn alpha_bleed(img: &mut DynamicImage) {
@@ -116,28 +117,26 @@ const DIRECTIONS: &[(i32, i32)] = &[
     (1, -1),
 ];
 
-// TODO: We could use a more efficient bit vec here instead of Vec<bool> to cut
-// our memory cost by 8x.
 struct Mask2 {
     size: (u32, u32),
-    data: Vec<bool>,
+    data: BitVec,
 }
 
 impl Mask2 {
     fn new(w: u32, h: u32) -> Self {
         Self {
             size: (w, h),
-            data: vec![false; (w * h) as usize],
+            data: BitVec::from_elem((w * h) as usize, false),
         }
     }
 
     fn get(&self, x: u32, y: u32) -> bool {
         let index = x + y * self.size.0;
-        self.data[index as usize]
+        self.data.get(index as usize).unwrap_or(false)
     }
 
     fn set(&mut self, x: u32, y: u32) {
         let index = x + y * self.size.0;
-        self.data[index as usize] = true;
+        self.data.set(index as usize, true);
     }
 }
