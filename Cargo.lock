@@ -118,7 +118,6 @@ dependencies = [
  "console",
  "dotenv",
  "image",
- "log",
  "rbxcloud",
  "reqwest",
  "resvg",
