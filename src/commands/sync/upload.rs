@@ -8,6 +8,7 @@ use reqwest::Client;
 use serde::Deserialize;
 use serde_xml_rs::from_str;
 use std::time::Duration;
+use tokio::time::sleep;
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "PascalCase")]
@@ -120,7 +121,7 @@ pub async fn upload_asset(
             Err(e) => bail!("Failed to get asset: {:?}", e),
         }
 
-        tokio::time::sleep(backoff).await;
+        sleep(backoff).await;
         backoff = (backoff * 2).min(Duration::from_secs(10));
     }
 }
