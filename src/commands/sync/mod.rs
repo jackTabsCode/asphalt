@@ -163,12 +163,11 @@ pub async fn sync(args: SyncArgs, existing_lockfile: LockFile) -> anyhow::Result
         }
     }
 
-    write(
-        "asphalt.lock.toml",
-        toml::to_string(&state.new_lockfile).context("Failed to serialize lockfile")?,
-    )
-    .await
-    .context("Failed to write lockfile")?;
+    let _ = &state
+        .new_lockfile
+        .write()
+        .await
+        .context("Failed to write lockfile")?;
 
     let asset_dir_str = state
         .asset_dir
