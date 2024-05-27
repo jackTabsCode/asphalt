@@ -41,6 +41,9 @@ jobs:
             - name: Test
               run: cargo test --locked --verbose
 
+            - name: Machete
+              uses: bnjbvr/cargo-machete@main
+
     lint:
         name: Rustfmt & Clippy
         runs-on: ubuntu-latest
