@@ -18,7 +18,9 @@ async fn main() -> anyhow::Result<()> {
     let existing_lockfile = LockFile::read().await.context("Failed to read lockfile")?;
 
     match args.command {
-        Commands::Sync(sync_args) => sync(sync_args, existing_lockfile).await,
-        Commands::List => list(existing_lockfile).await,
+        Commands::Sync(sync_args) => sync(sync_args, existing_lockfile)
+            .await
+            .context("Failed to sync"),
+        Commands::List => list(existing_lockfile).await.context("Failed to list"),
     }
 }
