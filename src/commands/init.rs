@@ -1,6 +1,7 @@
 use std::{path::Path, process::exit};
 
 use anyhow::Context;
+use console::style;
 use inquire::{
     ui::RenderConfig,
     validator::{ErrorMessage, Validation},
@@ -65,7 +66,7 @@ pub async fn init() -> anyhow::Result<()> {
         .prompt()
         .unwrap_or_else(|_| exit(1));
 
-    let style = Select::new("Style", vec![CodegenStyle::Flat, CodegenStyle::Nested])
+    let codegen_style = Select::new("Style", vec![CodegenStyle::Flat, CodegenStyle::Nested])
         .with_help_message("The style to use for generated code.")
         .prompt()
         .unwrap_or_else(|_| exit(1));
@@ -84,13 +85,18 @@ pub async fn init() -> anyhow::Result<()> {
             output_name,
             typescript: Some(typescript),
             luau: Some(luau),
-            style: Some(style),
+            style: Some(codegen_style),
             strip_extension: Some(strip_extension),
         },
         existing: None,
     };
 
     config.write().await.context("Failed to write config")?;
+
+    eprintln!(
+        "You've successfully set up Asphalt. You can now run {} to upload your assets to Roblox.",
+        style("asphalt sync").green()
+    );
 
     Ok(())
 }

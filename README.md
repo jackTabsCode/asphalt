@@ -26,6 +26,20 @@ aftman add jacktabscode/asphalt
 cargo install asphalt
 ```
 
+## Commands
+
+### `asphalt init`
+
+Guides you through setting up a new Asphalt project in the current directory.
+
+### `asphalt sync`
+
+Uploads all assets in the `asset_dir` to Roblox. It will also generate a `asphalt.lock.toml` file which you should commit to source control.
+
+### `asphalt list`
+
+Lists asset paths from the lockfile and their corresponding Roblox asset IDs.
+
 ## Configuration
 
 Asphalt is configured with a project file called `asphalt.toml`. It is required for the program to run.
@@ -87,16 +101,6 @@ id = 9670971
 #### ExistingAsset
 
 -   `id`: number
-
-## Commands
-
-### `asphalt sync`
-
-Uploads all assets in the `asset_dir` to Roblox. It will also generate a `asphalt.lock.toml` file which you should commit to source control.
-
-### `asphalt list`
-
-Lists asset paths from the lockfile and their corresponding Roblox asset IDs.
 
 ## API Key
 
