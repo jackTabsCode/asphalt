@@ -1,13 +1,11 @@
-use std::{path::Path, process::exit};
-
+use super::sync::config::{CodegenConfig, CodegenStyle, Creator, CreatorType, SyncConfig};
 use anyhow::Context;
 use console::style;
 use inquire::{
     validator::{ErrorMessage, Validation},
     Confirm, CustomType, CustomUserError, Select, Text,
 };
-
-use super::sync::config::{CodegenConfig, CodegenStyle, Creator, CreatorType, SyncConfig};
+use std::{path::Path, process::exit};
 
 pub fn dir_validator(str: &str) -> Result<Validation, CustomUserError> {
     let path = Path::new(str);
