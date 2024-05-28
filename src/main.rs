@@ -1,7 +1,7 @@
 use anyhow::Context;
 use clap::Parser;
 use cli::{Cli, Commands};
-use commands::{list::list, sync::sync};
+use commands::{init::init, list::list, sync::sync};
 use dotenv::dotenv;
 pub use lockfile::{FileEntry, LockFile};
 
@@ -22,5 +22,6 @@ async fn main() -> anyhow::Result<()> {
             .await
             .context("Failed to sync"),
         Commands::List => list(existing_lockfile).await.context("Failed to list"),
+        Commands::Init => init().await.context("Failed to initialize"),
     }
 }

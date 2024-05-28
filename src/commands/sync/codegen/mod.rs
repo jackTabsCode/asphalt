@@ -1,16 +1,16 @@
-use crate::{commands::sync::config::StyleType, LockFile};
+use crate::{commands::sync::config::CodegenStyle, LockFile};
 mod flat;
 mod nested;
 
 pub fn generate_lua(
     lockfile: &LockFile,
     strip_dir: &str,
-    style: &StyleType,
+    style: &CodegenStyle,
     strip_extension: bool,
 ) -> anyhow::Result<String> {
     match style {
-        StyleType::Flat => flat::generate_lua(lockfile, strip_dir, strip_extension),
-        StyleType::Nested => nested::generate_lua(lockfile, strip_dir, strip_extension),
+        CodegenStyle::Flat => flat::generate_lua(lockfile, strip_dir, strip_extension),
+        CodegenStyle::Nested => nested::generate_lua(lockfile, strip_dir, strip_extension),
     }
 }
 
@@ -18,12 +18,14 @@ pub fn generate_ts(
     lockfile: &LockFile,
     strip_dir: &str,
     output_dir: &str,
-    style: &StyleType,
+    style: &CodegenStyle,
     strip_extension: bool,
 ) -> anyhow::Result<String> {
     match style {
-        StyleType::Flat => flat::generate_ts(lockfile, strip_dir, output_dir, strip_extension),
-        StyleType::Nested => nested::generate_ts(lockfile, strip_dir, output_dir, strip_extension),
+        CodegenStyle::Flat => flat::generate_ts(lockfile, strip_dir, output_dir, strip_extension),
+        CodegenStyle::Nested => {
+            nested::generate_ts(lockfile, strip_dir, output_dir, strip_extension)
+        }
     }
 }
 
