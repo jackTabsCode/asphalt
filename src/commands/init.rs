@@ -3,7 +3,6 @@ use std::{path::Path, process::exit};
 use anyhow::Context;
 use console::style;
 use inquire::{
-    ui::RenderConfig,
     validator::{ErrorMessage, Validation},
     Confirm, CustomType, CustomUserError, Select, Text,
 };
