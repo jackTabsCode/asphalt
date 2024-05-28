@@ -8,7 +8,7 @@ use console::style;
 use image::{DynamicImage, ImageFormat};
 use rbxcloud::rbx::v1::assets::AssetType;
 use std::{collections::VecDeque, io::Cursor, path::Path};
-use tokio::fs::{read, read_dir, read_to_string, write, DirEntry};
+use tokio::fs::{read, read_dir, write, DirEntry};
 use upload::upload_asset;
 use util::{alpha_bleed::alpha_bleed, svg::svg_to_png};
 
@@ -111,12 +111,7 @@ async fn check_file(entry: &DirEntry, state: &SyncState) -> anyhow::Result<Optio
 }
 
 pub async fn sync(args: SyncArgs, existing_lockfile: LockFile) -> anyhow::Result<()> {
-    let config: SyncConfig = {
-        let file_contents = read_to_string("asphalt.toml")
-            .await
-            .context("Failed to read asphalt.toml")?;
-        toml::from_str(&file_contents).context("Failed to parse config")
-    }?;
+    let config = SyncConfig::read().await.context("Failed to read config")?;
 
     let mut state = SyncState::new(args, config, existing_lockfile)
         .await

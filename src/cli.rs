@@ -14,6 +14,9 @@ pub enum Commands {
 
     /// List assets in the lockfile.
     List,
+
+    /// Initialize a new configuration.
+    Init,
 }
 
 #[derive(Args)]

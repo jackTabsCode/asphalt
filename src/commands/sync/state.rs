@@ -1,4 +1,4 @@
-use super::config::{CreatorType, ExistingAsset, StyleType, SyncConfig};
+use super::config::{CodegenStyle, CreatorType, ExistingAsset, SyncConfig};
 use crate::{cli::SyncArgs, LockFile};
 use anyhow::Context;
 use rbxcloud::rbx::v1::assets::{AssetCreator, AssetGroupCreator, AssetUserCreator};
@@ -33,7 +33,7 @@ pub struct SyncState {
     pub typescript: bool,
     pub output_name: String,
     pub lua_extension: String,
-    pub style: StyleType,
+    pub style: CodegenStyle,
     pub strip_extension: bool,
 
     pub font_db: Database,
@@ -78,7 +78,7 @@ impl SyncState {
             .to_string();
 
         let typescript = config.codegen.typescript.unwrap_or(false);
-        let style = config.codegen.style.unwrap_or(StyleType::Flat);
+        let style = config.codegen.style.unwrap_or(CodegenStyle::Flat);
 
         let lua_extension = String::from(if config.codegen.luau.unwrap_or(false) {
             "luau"
