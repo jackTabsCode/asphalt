@@ -4,7 +4,7 @@ use std::{
     collections::HashMap,
     fmt::{self, Display, Formatter},
 };
-use tokio::fs::{metadata, read_to_string, write};
+use tokio::fs::{read_to_string, write};
 
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
@@ -71,10 +71,6 @@ pub struct SyncConfig {
 static FILE_NAME: &str = "asphalt.toml";
 
 impl SyncConfig {
-    pub async fn exists() -> bool {
-        metadata(FILE_NAME).await.is_ok()
-    }
-
     pub async fn read() -> anyhow::Result<Self> {
         let content = read_to_string(FILE_NAME)
             .await
