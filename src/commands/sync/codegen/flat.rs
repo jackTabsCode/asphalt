@@ -9,7 +9,7 @@ fn asset_path(file_path: &str, strip_dir: &str, strip_extension: bool) -> anyhow
         PathBuf::from(file_path)
     }
     .to_str()
-    .context("Failed to convert path to string")?
+    .unwrap()
     .strip_prefix(strip_dir)
     .context("Failed to strip directory prefix")
     .map(|s| s.to_string())
