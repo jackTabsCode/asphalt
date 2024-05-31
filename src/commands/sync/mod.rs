@@ -24,7 +24,7 @@ fn fix_path(path: &str) -> String {
 
 async fn check_file(entry: &DirEntry, state: &SyncState) -> anyhow::Result<Option<FileEntry>> {
     let path = entry.path();
-    let path_str = path.to_str().context("Failed to convert path to string")?;
+    let path_str = path.to_str().unwrap();
     let fixed_path = fix_path(path_str);
 
     let mut bytes = read(&path)
@@ -93,7 +93,7 @@ async fn check_file(entry: &DirEntry, state: &SyncState) -> anyhow::Result<Optio
         .file_name()
         .with_context(|| format!("Failed to get file name of {}", fixed_path))?
         .to_str()
-        .with_context(|| format!("Failed to convert file name to string: {}", fixed_path))?;
+        .unwrap();
 
     let asset_id = upload_asset(
         bytes,
@@ -123,12 +123,9 @@ pub async fn sync(args: SyncArgs, existing_lockfile: LockFile) -> anyhow::Result
     remaining_items.push_back(state.asset_dir.clone());
 
     while let Some(path) = remaining_items.pop_front() {
-        let mut dir_entries = read_dir(path.clone()).await.with_context(|| {
-            format!(
-                "Failed to read directory: {}",
-                path.to_str().unwrap_or("???")
-            )
-        })?;
+        let mut dir_entries = read_dir(path.clone())
+            .await
+            .with_context(|| format!("Failed to read directory: {}", path.to_str().unwrap()))?;
 
         while let Some(entry) = dir_entries
             .next_entry()
@@ -148,9 +145,7 @@ pub async fn sync(args: SyncArgs, existing_lockfile: LockFile) -> anyhow::Result
                     }
                 };
 
-                let path_str = entry_path.to_str().with_context(|| {
-                    format!("Failed to convert path to string: {:?}", entry_path)
-                })?;
+                let path_str = entry_path.to_str().unwrap();
                 let fixed_path = fix_path(path_str);
 
                 state.new_lockfile.entries.insert(fixed_path, result);
@@ -164,10 +159,7 @@ pub async fn sync(args: SyncArgs, existing_lockfile: LockFile) -> anyhow::Result
         .await
         .context("Failed to write lockfile")?;
 
-    let asset_dir_str = state
-        .asset_dir
-        .to_str()
-        .context("Failed to convert asset directory to string")?;
+    let asset_dir_str = state.asset_dir.to_str().unwrap();
 
     state
         .new_lockfile
