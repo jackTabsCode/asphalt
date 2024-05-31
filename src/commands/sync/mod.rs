@@ -57,7 +57,7 @@ async fn check_file(entry: &DirEntry, state: &SyncState) -> anyhow::Result<Optio
 
     #[cfg(feature = "alpha_bleed")]
     match asset_type {
-        AssetType::DecalJpeg | AssetType::DecalBmp | AssetType::DecalPng => {
+        AssetType::DecalJpeg | AssetType::DecalBmp | AssetType::DecalPng | AssetType::DecalTga => {
             let mut image: DynamicImage = image::load_from_memory(&bytes)?;
             alpha_bleed(&mut image);
 
