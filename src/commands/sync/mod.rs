@@ -6,6 +6,7 @@ use codegen::{generate_lua, generate_ts};
 use config::SyncConfig;
 use console::style;
 use image::{DynamicImage, ImageFormat};
+use log::{error, info, warn};
 use rbxcloud::rbx::v1::assets::AssetType;
 use std::{collections::VecDeque, io::Cursor, path::Path};
 use tokio::fs::{read, read_dir, write, DirEntry};
@@ -45,11 +46,10 @@ async fn check_file(entry: &DirEntry, state: &SyncState) -> anyhow::Result<Optio
 
     let asset_type = match AssetType::try_from_extension(extension) {
         Ok(asset_type) => asset_type,
-        Err(e) => {
-            eprintln!(
-                "Skipping {} because it has an unsupported extension: {}",
+        Err(_) => {
+            warn!(
+                "Skipping {} because it has an unsupported extension",
                 style(fixed_path).yellow(),
-                e
             );
             return Ok(None);
         }
@@ -105,7 +105,7 @@ async fn check_file(entry: &DirEntry, state: &SyncState) -> anyhow::Result<Optio
     .await
     .with_context(|| format!("Failed to upload {}", fixed_path))?;
 
-    eprintln!("Uploaded {}", style(fixed_path).green());
+    info!("Uploaded {}", style(fixed_path).green());
 
     Ok(Some(FileEntry { hash, asset_id }))
 }
@@ -117,7 +117,7 @@ pub async fn sync(args: SyncArgs, existing_lockfile: LockFile) -> anyhow::Result
         .await
         .context("Failed to create state")?;
 
-    eprintln!("{}", style("Syncing...").dim());
+    info!("Syncing...");
 
     let mut remaining_items = VecDeque::new();
     remaining_items.push_back(state.asset_dir.clone());
@@ -140,7 +140,7 @@ pub async fn sync(args: SyncArgs, existing_lockfile: LockFile) -> anyhow::Result
                     Ok(Some(result)) => result,
                     Ok(None) => continue,
                     Err(e) => {
-                        eprintln!("{} {:?}", style("Error:").red(), e);
+                        error!("{}", e);
                         continue;
                     }
                 };
@@ -201,7 +201,7 @@ pub async fn sync(args: SyncArgs, existing_lockfile: LockFile) -> anyhow::Result
             .context("Failed to write output TypeScript file")?;
     }
 
-    eprintln!("{}", style("Synced!").dim());
+    info!("Synced!");
 
     Ok(())
 }

@@ -1,10 +1,14 @@
 use clap::{Args, Parser, Subcommand};
+use clap_verbosity_flag::{InfoLevel, Verbosity};
 
 #[derive(Parser)]
 #[command(version, about = "Upload and reference Roblox assets in code.")]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Commands,
+
+    #[command(flatten)]
+    pub verbose: Verbosity<InfoLevel>,
 }
 
 #[derive(Subcommand)]
