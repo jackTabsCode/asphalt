@@ -1,4 +1,5 @@
 use anyhow::{bail, Context};
+use log::debug;
 use rbxcloud::rbx::error::Error;
 use rbxcloud::rbx::v1::assets::{
     create_asset_with_contents, get_asset, AssetCreation, AssetCreationContext, AssetCreator,
@@ -116,9 +117,13 @@ pub async fn upload_asset(
                     };
                 }
             }
-            Ok(_) => {}
-            Err(Error::HttpStatusError { code: 404, .. }) => {}
-            Err(e) => bail!("Failed to get asset: {:?}", e),
+            Ok(_) => {
+                debug!("Asset operation not done, retrying...");
+            }
+            Err(Error::HttpStatusError { code: 404, .. }) => {
+                debug!("Asset not found, retrying...");
+            }
+            Err(e) => bail!("Failed to GET asset: {:?}", e),
         }
 
         sleep(backoff).await;
