@@ -5,6 +5,7 @@ use inquire::{
     validator::{ErrorMessage, Validation},
     Confirm, CustomType, CustomUserError, Select, Text,
 };
+use log::info;
 use std::{path::Path, process::exit};
 
 pub fn dir_validator(str: &str) -> Result<Validation, CustomUserError> {
@@ -90,7 +91,7 @@ pub async fn init() -> anyhow::Result<()> {
 
     config.write().await.context("Failed to write config")?;
 
-    eprintln!(
+    info!(
         "You've successfully set up Asphalt. You can now run {} to upload your assets to Roblox.",
         style("asphalt sync").green()
     );

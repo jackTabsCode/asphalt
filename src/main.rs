@@ -15,6 +15,12 @@ async fn main() -> anyhow::Result<()> {
 
     let args = Cli::parse();
 
+    env_logger::Builder::new()
+        .filter_level(args.verbose.log_level_filter())
+        .format_timestamp(None)
+        .format_module_path(false)
+        .init();
+
     let existing_lockfile = LockFile::read().await.context("Failed to read lockfile")?;
 
     match args.command {
