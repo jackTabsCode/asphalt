@@ -140,7 +140,7 @@ pub async fn sync(args: SyncArgs, existing_lockfile: LockFile) -> anyhow::Result
                     Ok(Some(result)) => result,
                     Ok(None) => continue,
                     Err(e) => {
-                        error!("{}", e);
+                        error!("{e:?}");
                         continue;
                     }
                 };
