@@ -50,8 +50,14 @@ fn verify_animation(data: Vec<u8>, format: ModelFileFormat) -> anyhow::Result<()
         ModelFileFormat::Xml => rbx_xml::from_reader(slice, DecodeOptions::new())?,
     };
 
-    let root = dom.root();
-    if root.class != "KeyframeSequence" {
+    let children = dom.root().children();
+
+    let first_ref = *children.first().context("No children found in root")?;
+    let first = dom
+        .get_by_ref(first_ref)
+        .context("Failed to get first child")?;
+
+    if first.class != "KeyframeSequence" {
         bail!("Root class name is not KeyframeSequence");
     }
 
@@ -103,7 +109,7 @@ impl Asset {
             let mut image: DynamicImage = image::load_from_memory(&data)?;
             alpha_bleed(&mut image);
 
-            let format = ImageFormat::from_extension(&ext)
+            let format = ImageFormat::from_extension(ext)
                 .context("Failed to get image format from extension")?;
 
             let mut new_bytes: Cursor<Vec<u8>> = Cursor::new(Vec::new());
@@ -136,7 +142,7 @@ impl Asset {
     }
 
     async fn upload_animation(self, creator: AssetCreator, api_key: String) -> anyhow::Result<u64> {
-        todo!()
+        Ok(0)
     }
 
     pub async fn upload(self, creator: AssetCreator, api_key: String) -> anyhow::Result<u64> {

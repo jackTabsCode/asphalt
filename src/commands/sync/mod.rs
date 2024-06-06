@@ -4,7 +4,7 @@ use anyhow::Context;
 use codegen::{generate_lua, generate_ts};
 use config::SyncConfig;
 use console::style;
-use log::{error, info};
+use log::{debug, error, info};
 use std::{collections::VecDeque, path::Path};
 use tokio::fs::{read, read_dir, write, DirEntry};
 
@@ -16,10 +16,12 @@ fn fix_path(path: &str) -> String {
     path.replace('\\', "/")
 }
 
-async fn check_file(entry: &DirEntry, state: &SyncState) -> anyhow::Result<Option<FileEntry>> {
+async fn process_file(entry: &DirEntry, state: &SyncState) -> anyhow::Result<Option<FileEntry>> {
     let path = entry.path();
     let path_str = path.to_str().unwrap();
     let fixed_path = fix_path(path_str);
+
+    debug!("Processing {fixed_path}");
 
     let file_name = path
         .file_name()
@@ -38,9 +40,7 @@ async fn check_file(entry: &DirEntry, state: &SyncState) -> anyhow::Result<Optio
     };
 
     if extension == "svg" {
-        bytes = svg_to_png(&bytes, &state.font_db)
-            .await
-            .with_context(|| format!("Failed to process SVG {}", fixed_path))?;
+        bytes = svg_to_png(&bytes, &state.font_db).await?;
         extension = "png";
     }
 
@@ -94,17 +94,17 @@ pub async fn sync(args: SyncArgs, existing_lockfile: LockFile) -> anyhow::Result
             if entry_path.is_dir() {
                 remaining_items.push_back(entry_path);
             } else {
-                let result = match check_file(&entry, &state).await {
+                let path_str = entry_path.to_str().unwrap();
+                let fixed_path = fix_path(path_str);
+
+                let result = match process_file(&entry, &state).await {
                     Ok(Some(result)) => result,
                     Ok(None) => continue,
                     Err(e) => {
-                        error!("{e:?}");
+                        error!("Failed to process file {fixed_path}: {e:?}");
                         continue;
                     }
                 };
-
-                let path_str = entry_path.to_str().unwrap();
-                let fixed_path = fix_path(path_str);
 
                 state.new_lockfile.entries.insert(fixed_path, result);
             }
