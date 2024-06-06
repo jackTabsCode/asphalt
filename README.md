@@ -4,7 +4,7 @@ Asphalt is a simple CLI tool used to upload assets to Roblox and easily referenc
 
 ## Features
 
--   Upload images, audio, and even SVGs!
+-   Upload images, SVGs, sounds, models, and animations to Roblox
 -   Generate Luau code to reference the uploaded assets
 -   Generate Typescript definitions for roblox-ts users
 -   Uses the Open Cloud API
@@ -107,6 +107,19 @@ id = 9670971
 You will need an API key to sync with Asphalt. You can specify this using the `--api-key` argument, or the `ASPHALT_API_KEY` environment variable.
 
 You can get one from the [Creator Dashboard](https://create.roblox.com/dashboard/credentials). Make sure you select the correct group and Asset-related permissions.
+
+## Cookie
+You will need a cookie to upload animations to Roblox. This is because the Open Cloud API does not support them. You can specify this using the `--cookie` argument, or the `ASPHALT_COOKIE` environment variable.
+
+You will probably want to [disable Session Protection](https://create.roblox.com/settings/advanced) if you are using Asphalt in an environment where your IP address changes frequently.
+
+## Animations
+
+**Warning:** This feature is experimental, and Roblox may break the API we use or change its behavior without notice.
+
+To upload animations, make sure you specify a cookie as noted above.
+
+Asphalt expects a single [KeyframeSequence](https://create.roblox.com/docs/reference/engine/classes/KeyframeSequence) to be saved as either a `.rbxm` or `.rbxmx` file.
 
 ## Attributions
 
