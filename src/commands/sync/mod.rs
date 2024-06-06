@@ -4,7 +4,7 @@ use anyhow::Context;
 use codegen::{generate_lua, generate_ts};
 use config::SyncConfig;
 use console::style;
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 use std::{collections::VecDeque, path::Path};
 use tokio::fs::{read, read_dir, write, DirEntry};
 
@@ -16,7 +16,10 @@ fn fix_path(path: &str) -> String {
     path.replace('\\', "/")
 }
 
-async fn process_file(entry: &DirEntry, state: &SyncState) -> anyhow::Result<Option<FileEntry>> {
+async fn process_file(
+    entry: &DirEntry,
+    state: &mut SyncState,
+) -> anyhow::Result<Option<FileEntry>> {
     let path = entry.path();
     let path_str = path.to_str().unwrap();
     let fixed_path = fix_path(path_str);
@@ -36,7 +39,10 @@ async fn process_file(entry: &DirEntry, state: &SyncState) -> anyhow::Result<Opt
 
     let mut extension = match path.extension().and_then(|s| s.to_str()) {
         Some(extension) => extension,
-        None => return Ok(None),
+        None => {
+            warn!("Failed to get extension of {fixed_path}");
+            return Ok(None);
+        }
     };
 
     if extension == "svg" {
@@ -58,14 +64,24 @@ async fn process_file(entry: &DirEntry, state: &SyncState) -> anyhow::Result<Opt
         }
     }
 
-    let asset_id = asset
-        .upload(state.creator.clone(), state.api_key.clone())
+    let result = asset
+        .upload(
+            state.creator.clone(),
+            state.api_key.clone(),
+            state.cookie.clone(),
+            None,
+        )
         .await
         .with_context(|| format!("Failed to upload {fixed_path}"))?;
 
+    let _ = &state.update_csrf(result.csrf);
+
     info!("Uploaded {}", style(fixed_path).green());
 
-    Ok(Some(FileEntry { hash, asset_id }))
+    Ok(Some(FileEntry {
+        hash,
+        asset_id: result.asset_id,
+    }))
 }
 
 pub async fn sync(args: SyncArgs, existing_lockfile: LockFile) -> anyhow::Result<()> {
@@ -97,11 +113,11 @@ pub async fn sync(args: SyncArgs, existing_lockfile: LockFile) -> anyhow::Result
                 let path_str = entry_path.to_str().unwrap();
                 let fixed_path = fix_path(path_str);
 
-                let result = match process_file(&entry, &state).await {
+                let result = match process_file(&entry, &mut state).await {
                     Ok(Some(result)) => result,
                     Ok(None) => continue,
                     Err(e) => {
-                        error!("Failed to process file {fixed_path}: {e:?}");
+                        warn!("Failed to process file {fixed_path}: {e:?}");
                         continue;
                     }
                 };

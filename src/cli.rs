@@ -29,4 +29,9 @@ pub struct SyncArgs {
     /// Can also be set with the ASPHALT_API_KEY environment variable.
     #[arg(short, long)]
     pub api_key: Option<String>,
+
+    /// Your cookie.
+    /// This is only required if you are uploading animations with Asphalt.
+    #[arg(long)]
+    pub cookie: Option<String>,
 }

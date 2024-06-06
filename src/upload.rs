@@ -130,3 +130,90 @@ pub async fn upload_cloud_asset(
         backoff = (backoff * 2).min(Duration::from_secs(10));
     }
 }
+
+const ANIMATION_URL: &str = "https://www.roblox.com/ide/publish/uploadnewanimation";
+
+pub struct AnimationResult {
+    pub asset_id: u64,
+    pub csrf: String,
+}
+
+pub async fn get_csrf_token(cookie: String) -> anyhow::Result<String> {
+    let client = Client::new();
+
+    let response = client
+        .post(ANIMATION_URL)
+        .header("Cookie", cookie)
+        .header("Content-Type", "application/xml")
+        .header("Requester", "Client")
+        .send()
+        .await
+        .context("Failed to get CSRF token")?;
+
+    let csrf = response
+        .headers()
+        .get("x-csrf-token")
+        .context("Failed to get CSRF token header")?
+        .to_str()
+        .context("Failed to convert CSRF token header to string")?;
+
+    Ok(csrf.to_string())
+}
+
+pub async fn upload_animation(
+    contents: Vec<u8>,
+    display_name: String,
+    cookie: String,
+    csrf: Option<String>,
+    creator: AssetCreator,
+) -> anyhow::Result<AnimationResult> {
+    let client = Client::new();
+
+    let csrf = if let Some(token) = csrf {
+        token
+    } else {
+        get_csrf_token(cookie.clone()).await?
+    };
+
+    let group_id = if let AssetCreator::Group(group) = creator {
+        group.group_id
+    } else {
+        bail!("Creator must be a group to upload animations")
+    };
+
+    let response = client
+        .post(ANIMATION_URL)
+        .header("Cookie", cookie)
+        .header("x-csrf-token", &csrf)
+        .header("Content-Type", "application/xml")
+        .header(
+            "User-Agent",
+            "RobloxStudio/WinInet RobloxApp/0.483.1.425021 (GlobalDist; RobloxDirectDownload)",
+        )
+        .header("Requester", "Client")
+        .query(&[
+            ("name", display_name),
+            ("description", "Uploaded with Asphalt".to_string()),
+            ("isGamesAsset", "false".to_string()),
+            ("groupId", group_id),
+            ("ispublic", "false".to_string()),
+            ("assetTypeName", "animation".to_string()),
+            ("AllID", "1".to_string()),
+            ("allowComments", "false".to_string()),
+        ])
+        .body(contents)
+        .send()
+        .await
+        .context("Failed to upload animation")?;
+
+    let body = response
+        .text()
+        .await
+        .context("Failed to parse request body to text")?;
+
+    let id = body
+        .parse::<u64>()
+        .context("Failed to parse animation ID")?;
+
+    Ok(AnimationResult { asset_id: id, csrf })
+}

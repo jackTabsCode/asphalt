@@ -1,11 +1,13 @@
+use crate::{
+    upload::{upload_animation, upload_cloud_asset},
+    util::alpha_bleed::alpha_bleed,
+};
 use anyhow::{bail, Context};
 use blake3::Hasher;
 use image::{DynamicImage, ImageFormat};
 use rbx_xml::DecodeOptions;
 use rbxcloud::rbx::v1::assets::{AssetCreator, AssetType as CloudAssetType};
 use std::io::Cursor;
-
-use crate::{upload::upload_cloud_asset, util::alpha_bleed::alpha_bleed};
 
 enum AudioKind {
     Mp3,
@@ -43,7 +45,7 @@ enum ModelFileFormat {
     Xml,
 }
 
-fn verify_animation(data: Vec<u8>, format: ModelFileFormat) -> anyhow::Result<()> {
+fn verify_animation(data: Vec<u8>, format: ModelFileFormat) -> anyhow::Result<Vec<u8>> {
     let slice = data.as_slice();
     let dom = match format {
         ModelFileFormat::Binary => rbx_binary::from_reader(slice)?,
@@ -61,7 +63,15 @@ fn verify_animation(data: Vec<u8>, format: ModelFileFormat) -> anyhow::Result<()
         bail!("Root class name is not KeyframeSequence");
     }
 
-    Ok(())
+    let mut writer = Cursor::new(Vec::new());
+    rbx_binary::to_writer(&mut writer, &dom, &[first_ref])?;
+
+    Ok(writer.into_inner())
+}
+
+pub struct UploadResult {
+    pub asset_id: u64,
+    pub csrf: Option<String>,
 }
 
 impl Asset {
@@ -137,23 +147,52 @@ impl Asset {
         creator: AssetCreator,
         api_key: String,
         cloud_type: CloudAssetType,
-    ) -> anyhow::Result<u64> {
-        upload_cloud_asset(self.data, self.name, cloud_type, api_key, creator).await
+    ) -> anyhow::Result<UploadResult> {
+        let asset_id =
+            upload_cloud_asset(self.data, self.name, cloud_type, api_key, creator).await?;
+
+        Ok(UploadResult {
+            asset_id,
+            csrf: None,
+        })
     }
 
-    async fn upload_animation(self, creator: AssetCreator, api_key: String) -> anyhow::Result<u64> {
-        Ok(0)
+    async fn upload_animation(
+        self,
+        creator: AssetCreator,
+        cookie: String,
+        csrf: Option<String>,
+    ) -> anyhow::Result<UploadResult> {
+        let result = upload_animation(self.data, self.name, cookie, csrf, creator).await?;
+
+        Ok(UploadResult {
+            asset_id: result.asset_id,
+            csrf: Some(result.csrf),
+        })
     }
 
-    pub async fn upload(self, creator: AssetCreator, api_key: String) -> anyhow::Result<u64> {
+    pub async fn upload(
+        self,
+        creator: AssetCreator,
+        api_key: String,
+        cookie: Option<String>,
+        csrf: Option<String>,
+    ) -> anyhow::Result<UploadResult> {
         match &self.kind {
             AssetKind::Decal(_) | AssetKind::Audio(_) | AssetKind::Model(ModelKind::Model) => {
                 let cloud_type = self
                     .cloud_type
                     .ok_or_else(|| anyhow::anyhow!("Invalid cloud type"))?;
+
                 self.upload_cloud(creator, api_key, cloud_type).await
             }
-            AssetKind::Model(ModelKind::Animation) => self.upload_animation(creator, api_key).await,
+            AssetKind::Model(ModelKind::Animation) => {
+                if let Some(cookie) = cookie {
+                    self.upload_animation(creator, cookie, csrf).await
+                } else {
+                    bail!("Cookie required for uploading animations")
+                }
+            }
         }
     }
 }
