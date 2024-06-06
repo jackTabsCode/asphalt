@@ -4,7 +4,7 @@ use anyhow::Context;
 use codegen::{generate_lua, generate_ts};
 use config::SyncConfig;
 use console::style;
-use log::{debug, error, info, warn};
+use log::{debug, info, warn};
 use std::{collections::VecDeque, path::Path};
 use tokio::fs::{read, read_dir, write, DirEntry};
 
