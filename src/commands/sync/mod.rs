@@ -3,7 +3,6 @@ use crate::{asset::Asset, cli::SyncArgs, util::svg::svg_to_png, FileEntry, LockF
 use anyhow::Context;
 use codegen::{generate_lua, generate_ts};
 use config::SyncConfig;
-use console::style;
 use log::{debug, info, warn};
 use std::{collections::VecDeque, path::Path};
 use tokio::fs::{read, read_dir, write, DirEntry};
@@ -76,7 +75,7 @@ async fn process_file(
 
     let _ = &state.update_csrf(result.csrf);
 
-    info!("Uploaded {}", style(fixed_path).green());
+    info!("Uploaded {fixed_path}");
 
     Ok(Some(FileEntry {
         hash,
