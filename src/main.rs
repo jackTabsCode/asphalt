@@ -6,9 +6,12 @@ use dotenv::dotenv;
 pub use lockfile::{FileEntry, LockFile};
 use log::LevelFilter;
 
+pub mod asset;
 pub mod cli;
 mod commands;
 pub mod lockfile;
+pub mod upload;
+pub mod util;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

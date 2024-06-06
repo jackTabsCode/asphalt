@@ -1,6 +1,7 @@
 use super::config::{CodegenStyle, CreatorType, ExistingAsset, SyncConfig};
 use crate::{cli::SyncArgs, LockFile};
 use anyhow::Context;
+use cookie::Cookie;
 use rbxcloud::rbx::v1::assets::{AssetCreator, AssetGroupCreator, AssetUserCreator};
 use resvg::usvg::fontdb::Database;
 use std::{collections::HashMap, env, path::PathBuf};
@@ -23,11 +24,30 @@ fn get_api_key(arg_key: Option<String>) -> anyhow::Result<String> {
     }
 }
 
+fn get_cookie(arg_cookie: Option<String>) -> anyhow::Result<Option<String>> {
+    let env_cookie = env::var("ASPHALT_COOKIE").ok();
+    let cookie_str = arg_cookie.or(env_cookie);
+
+    if let Some(cookie) = cookie_str {
+        Ok(Some(
+            Cookie::build(".ROBLOSECURITY", cookie)
+                .domain(".roblox.com")
+                .finish()
+                .to_string(),
+        ))
+    } else {
+        Ok(None)
+    }
+}
+
 pub struct SyncState {
     pub asset_dir: PathBuf,
     pub write_dir: PathBuf,
 
     pub api_key: String,
+    pub cookie: Option<String>,
+    pub csrf: Option<String>,
+
     pub creator: AssetCreator,
 
     pub typescript: bool,
@@ -51,6 +71,7 @@ impl SyncState {
         existing_lockfile: LockFile,
     ) -> anyhow::Result<Self> {
         let api_key = get_api_key(args.api_key)?;
+        let cookie = get_cookie(args.cookie)?;
 
         let creator: AssetCreator = match config.creator.creator_type {
             CreatorType::User => AssetCreator::User(AssetUserCreator {
@@ -109,6 +130,12 @@ impl SyncState {
             existing_lockfile,
             new_lockfile,
             existing: manual,
+            cookie,
+            csrf: None,
         })
+    }
+
+    pub fn update_csrf(&mut self, csrf: Option<String>) {
+        self.csrf = csrf;
     }
 }

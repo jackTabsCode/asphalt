@@ -1,32 +1,36 @@
 use self::state::SyncState;
-use crate::{cli::SyncArgs, FileEntry, LockFile};
-use anyhow::{anyhow, Context};
-use blake3::Hasher;
+use crate::{asset::Asset, cli::SyncArgs, util::svg::svg_to_png, FileEntry, LockFile};
+use anyhow::Context;
 use codegen::{generate_lua, generate_ts};
 use config::SyncConfig;
-use console::style;
-use image::{DynamicImage, ImageFormat};
-use log::{error, info, warn};
-use rbxcloud::rbx::v1::assets::AssetType;
-use std::{collections::VecDeque, io::Cursor, path::Path};
+use log::{debug, info, warn};
+use std::{collections::VecDeque, path::Path};
 use tokio::fs::{read, read_dir, write, DirEntry};
-use upload::upload_asset;
-use util::{alpha_bleed::alpha_bleed, svg::svg_to_png};
 
 mod codegen;
 pub mod config;
 mod state;
-mod upload;
-mod util;
 
 fn fix_path(path: &str) -> String {
     path.replace('\\', "/")
 }
 
-async fn check_file(entry: &DirEntry, state: &SyncState) -> anyhow::Result<Option<FileEntry>> {
+async fn process_file(
+    entry: &DirEntry,
+    state: &mut SyncState,
+) -> anyhow::Result<Option<FileEntry>> {
     let path = entry.path();
     let path_str = path.to_str().unwrap();
     let fixed_path = fix_path(path_str);
+
+    debug!("Processing {fixed_path}");
+
+    let file_name = path
+        .file_name()
+        .with_context(|| format!("Failed to get file name of {}", fixed_path))?
+        .to_str()
+        .unwrap()
+        .to_string();
 
     let mut bytes = read(&path)
         .await
@@ -34,49 +38,19 @@ async fn check_file(entry: &DirEntry, state: &SyncState) -> anyhow::Result<Optio
 
     let mut extension = match path.extension().and_then(|s| s.to_str()) {
         Some(extension) => extension,
-        None => return Ok(None),
-    };
-
-    if extension == "svg" {
-        bytes = svg_to_png(&bytes, &state.font_db)
-            .await
-            .with_context(|| format!("Failed to convert SVG to PNG: {}", fixed_path))?;
-        extension = "png";
-    }
-
-    let asset_type = match AssetType::try_from_extension(extension) {
-        Ok(asset_type) => asset_type,
-        Err(_) => {
-            warn!(
-                "Skipping {} because it has an unsupported extension",
-                style(fixed_path).yellow(),
-            );
+        None => {
+            warn!("Failed to get extension of {fixed_path}");
             return Ok(None);
         }
     };
 
-    #[cfg(feature = "alpha_bleed")]
-    match asset_type {
-        AssetType::DecalJpeg | AssetType::DecalBmp | AssetType::DecalPng | AssetType::DecalTga => {
-            let mut image: DynamicImage = image::load_from_memory(&bytes)?;
-            alpha_bleed(&mut image);
-
-            let format = ImageFormat::from_extension(extension).ok_or(anyhow!(
-                "Failed to get image format from extension: {}",
-                extension
-            ))?;
-
-            let mut new_bytes: Cursor<Vec<u8>> = Cursor::new(Vec::new());
-            image.write_to(&mut new_bytes, format)?;
-
-            bytes = new_bytes.into_inner();
-        }
-        _ => {}
+    if extension == "svg" {
+        bytes = svg_to_png(&bytes, &state.font_db).await?;
+        extension = "png";
     }
 
-    let mut hasher = Hasher::new();
-    hasher.update(&bytes);
-    let hash = hasher.finalize().to_string();
+    let asset = Asset::new(file_name, bytes, extension)?;
+    let hash = asset.hash();
 
     let existing = state.existing_lockfile.entries.get(fixed_path.as_str());
 
@@ -89,25 +63,24 @@ async fn check_file(entry: &DirEntry, state: &SyncState) -> anyhow::Result<Optio
         }
     }
 
-    let file_name = path
-        .file_name()
-        .with_context(|| format!("Failed to get file name of {}", fixed_path))?
-        .to_str()
-        .unwrap();
+    let result = asset
+        .upload(
+            state.creator.clone(),
+            state.api_key.clone(),
+            state.cookie.clone(),
+            None,
+        )
+        .await
+        .with_context(|| format!("Failed to upload {fixed_path}"))?;
 
-    let asset_id = upload_asset(
-        bytes,
-        file_name,
-        asset_type,
-        state.api_key.clone(),
-        state.creator.clone(),
-    )
-    .await
-    .with_context(|| format!("Failed to upload {}", fixed_path))?;
+    let _ = &state.update_csrf(result.csrf);
 
-    info!("Uploaded {}", style(fixed_path).green());
+    info!("Uploaded {fixed_path}");
 
-    Ok(Some(FileEntry { hash, asset_id }))
+    Ok(Some(FileEntry {
+        hash,
+        asset_id: result.asset_id,
+    }))
 }
 
 pub async fn sync(args: SyncArgs, existing_lockfile: LockFile) -> anyhow::Result<()> {
@@ -136,17 +109,17 @@ pub async fn sync(args: SyncArgs, existing_lockfile: LockFile) -> anyhow::Result
             if entry_path.is_dir() {
                 remaining_items.push_back(entry_path);
             } else {
-                let result = match check_file(&entry, &state).await {
+                let path_str = entry_path.to_str().unwrap();
+                let fixed_path = fix_path(path_str);
+
+                let result = match process_file(&entry, &mut state).await {
                     Ok(Some(result)) => result,
                     Ok(None) => continue,
                     Err(e) => {
-                        error!("{e:?}");
+                        warn!("Failed to process file {fixed_path}: {e:?}");
                         continue;
                     }
                 };
-
-                let path_str = entry_path.to_str().unwrap();
-                let fixed_path = fix_path(path_str);
 
                 state.new_lockfile.entries.insert(fixed_path, result);
             }
