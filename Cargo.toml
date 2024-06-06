@@ -16,11 +16,14 @@ blake3 = "1.5.0"
 clap = { version = "4.5.2", features = ["derive"] }
 clap-verbosity-flag = "2.2.0"
 console = { version = "0.15.8", features = ["ansi-parsing"] }
+cookie = "0.15.1"
 dotenv = "0.15.0"
 env_logger = "0.11.3"
 image = "0.25.1"
 inquire = "0.7.5"
 log = "0.4.21"
+rbx_binary = { version = "0.7.4", features = ["serde"] }
+rbx_xml = "0.13.3"
 rbxcloud = "0.10.0"
 reqwest = { version = "0.12.4", default-features = false, features = [
     "rustls-tls",
@@ -31,10 +34,6 @@ serde = { version = "1.0.202", features = ["derive"] }
 serde-xml-rs = "0.6.0"
 tokio = { version = "1.37.0" }
 toml = "0.8.13"
-
-[features]
-default = ["alpha_bleed"]
-alpha_bleed = []
 
 # The profile that 'cargo dist' will build with
 [profile.dist]
