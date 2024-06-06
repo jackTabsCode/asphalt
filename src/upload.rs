@@ -64,9 +64,9 @@ async fn get_image_id(asset_id: u64) -> anyhow::Result<u64> {
     id_str.parse::<u64>().context("Failed to parse image ID")
 }
 
-pub async fn upload_asset(
+pub async fn upload_cloud_asset(
     contents: Vec<u8>,
-    name: &str,
+    display_name: String,
     asset_type: AssetType,
     api_key: String,
     creator: AssetCreator,
@@ -76,7 +76,7 @@ pub async fn upload_asset(
         api_key: api_key.clone(),
         asset: AssetCreation {
             asset_type,
-            display_name: name.to_string(),
+            display_name,
             creation_context: AssetCreationContext {
                 creator,
                 expected_price: None,

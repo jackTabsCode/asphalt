@@ -131,6 +131,8 @@ dependencies = [
  "image",
  "inquire",
  "log",
+ "rbx_binary",
+ "rbx_xml",
  "rbxcloud",
  "reqwest",
  "resvg",
@@ -196,6 +198,12 @@ dependencies = [
  "object",
  "rustc-demangle",
 ]
+
+[[package]]
+name = "base64"
+version = "0.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9e1b586273c5702936fe7b7d6896644d8be71e6314cfe09d3167c95f712589e8"
 
 [[package]]
 name = "base64"
@@ -1093,6 +1101,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "lz4"
+version = "1.24.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7e9e2dd86df36ce760a60f6ff6ad526f7ba1f14ba0356f8254fb6905e6494df1"
+dependencies = [
+ "libc",
+ "lz4-sys",
+]
+
+[[package]]
+name = "lz4-sys"
+version = "1.9.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "57d27b317e207b10f69f5e75494119e391a96f48861ae870d1da6edac98ca900"
+dependencies = [
+ "cc",
+ "libc",
+]
+
+[[package]]
 name = "maybe-rayon"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1530,13 +1558,91 @@ dependencies = [
 ]
 
 [[package]]
+name = "rbx_binary"
+version = "0.7.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6314dd6bf5c21d0598cdb53cf5d241aa643ba41da8b8abf7402b4a35096f03f6"
+dependencies = [
+ "log",
+ "lz4",
+ "profiling",
+ "rbx_dom_weak",
+ "rbx_reflection",
+ "rbx_reflection_database",
+ "serde",
+ "thiserror",
+]
+
+[[package]]
+name = "rbx_dom_weak"
+version = "2.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9b67b56bac99849c2e3c57547b036927f71c57cf7f4d900d04e3e4ee774ec316"
+dependencies = [
+ "rbx_types",
+ "serde",
+]
+
+[[package]]
+name = "rbx_reflection"
+version = "4.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0d41509c991b53a7276a746a795eae2b9204f398164920f61976995b47fe1722"
+dependencies = [
+ "rbx_types",
+ "serde",
+ "thiserror",
+]
+
+[[package]]
+name = "rbx_reflection_database"
+version = "0.2.10+roblox-607"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "12e20c06fa41f7aadc79005c8354f592b2c2f4d0c61e1080ed5718dafc30aea0"
+dependencies = [
+ "lazy_static",
+ "rbx_reflection",
+ "rmp-serde",
+ "serde",
+]
+
+[[package]]
+name = "rbx_types"
+version = "1.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7ca23bfd469d067d81ef14f65fe09aeddc25abcf576a889d1a7664fe021cf18c"
+dependencies = [
+ "base64 0.13.1",
+ "bitflags 1.3.2",
+ "blake3",
+ "lazy_static",
+ "rand",
+ "serde",
+ "thiserror",
+]
+
+[[package]]
+name = "rbx_xml"
+version = "0.13.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f8c03f95500961c32340791d1fabd4587f6873bdbff077ecca6ae32db7960dea"
+dependencies = [
+ "base64 0.13.1",
+ "log",
+ "rbx_dom_weak",
+ "rbx_reflection",
+ "rbx_reflection_database",
+ "xml-rs",
+]
+
+[[package]]
 name = "rbxcloud"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c355917020211267a9295c53f98a1a06fc6b20fee3ecade4c80c386360a44fe1"
 dependencies = [
  "anyhow",
- "base64",
+ "base64 0.22.1",
  "clap",
  "md-5",
  "reqwest",
@@ -1590,7 +1696,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "566cafdd92868e0939d3fb961bd0dc25fcfaaed179291093b3d43e6b3150ea10"
 dependencies = [
  "async-compression",
- "base64",
+ "base64 0.22.1",
  "bytes",
  "encoding_rs",
  "futures-core",
@@ -1671,6 +1777,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "rmp"
+version = "0.8.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "228ed7c16fa39782c3b3468e974aec2795e9089153cd08ee2e9aefb3613334c4"
+dependencies = [
+ "byteorder",
+ "num-traits",
+ "paste",
+]
+
+[[package]]
+name = "rmp-serde"
+version = "1.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "52e599a477cf9840e92f2cde9a7189e67b42c57532749bf90aea6ec10facd4db"
+dependencies = [
+ "byteorder",
+ "rmp",
+ "serde",
+]
+
+[[package]]
 name = "roxmltree"
 version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1702,7 +1830,7 @@ version = "2.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "29993a25686778eb88d4189742cd713c9bce943bc54251a33509dc63cbacf73d"
 dependencies = [
- "base64",
+ "base64 0.22.1",
  "rustls-pki-types",
 ]
 
@@ -2317,7 +2445,7 @@ version = "0.41.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5c704361d822337cfc00387672c7b59eaa72a1f0744f62b2a68aa228a0c6927d"
 dependencies = [
- "base64",
+ "base64 0.22.1",
  "data-url",
  "flate2",
  "fontdb",

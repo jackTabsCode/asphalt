@@ -1,23 +1,16 @@
 use self::state::SyncState;
-use crate::{cli::SyncArgs, FileEntry, LockFile};
-use anyhow::{anyhow, Context};
-use blake3::Hasher;
+use crate::{asset::Asset, cli::SyncArgs, util::svg::svg_to_png, FileEntry, LockFile};
+use anyhow::Context;
 use codegen::{generate_lua, generate_ts};
 use config::SyncConfig;
 use console::style;
-use image::{DynamicImage, ImageFormat};
-use log::{error, info, warn};
-use rbxcloud::rbx::v1::assets::AssetType;
-use std::{collections::VecDeque, io::Cursor, path::Path};
+use log::{error, info};
+use std::{collections::VecDeque, path::Path};
 use tokio::fs::{read, read_dir, write, DirEntry};
-use upload::upload_asset;
-use util::{alpha_bleed::alpha_bleed, svg::svg_to_png};
 
 mod codegen;
 pub mod config;
 mod state;
-mod upload;
-mod util;
 
 fn fix_path(path: &str) -> String {
     path.replace('\\', "/")
@@ -27,6 +20,13 @@ async fn check_file(entry: &DirEntry, state: &SyncState) -> anyhow::Result<Optio
     let path = entry.path();
     let path_str = path.to_str().unwrap();
     let fixed_path = fix_path(path_str);
+
+    let file_name = path
+        .file_name()
+        .with_context(|| format!("Failed to get file name of {}", fixed_path))?
+        .to_str()
+        .unwrap()
+        .to_string();
 
     let mut bytes = read(&path)
         .await
@@ -40,43 +40,12 @@ async fn check_file(entry: &DirEntry, state: &SyncState) -> anyhow::Result<Optio
     if extension == "svg" {
         bytes = svg_to_png(&bytes, &state.font_db)
             .await
-            .with_context(|| format!("Failed to convert SVG to PNG: {}", fixed_path))?;
+            .with_context(|| format!("Failed to process SVG {}", fixed_path))?;
         extension = "png";
     }
 
-    let asset_type = match AssetType::try_from_extension(extension) {
-        Ok(asset_type) => asset_type,
-        Err(_) => {
-            warn!(
-                "Skipping {} because it has an unsupported extension",
-                style(fixed_path).yellow(),
-            );
-            return Ok(None);
-        }
-    };
-
-    #[cfg(feature = "alpha_bleed")]
-    match asset_type {
-        AssetType::DecalJpeg | AssetType::DecalBmp | AssetType::DecalPng | AssetType::DecalTga => {
-            let mut image: DynamicImage = image::load_from_memory(&bytes)?;
-            alpha_bleed(&mut image);
-
-            let format = ImageFormat::from_extension(extension).ok_or(anyhow!(
-                "Failed to get image format from extension: {}",
-                extension
-            ))?;
-
-            let mut new_bytes: Cursor<Vec<u8>> = Cursor::new(Vec::new());
-            image.write_to(&mut new_bytes, format)?;
-
-            bytes = new_bytes.into_inner();
-        }
-        _ => {}
-    }
-
-    let mut hasher = Hasher::new();
-    hasher.update(&bytes);
-    let hash = hasher.finalize().to_string();
+    let asset = Asset::new(file_name, bytes, extension)?;
+    let hash = asset.hash();
 
     let existing = state.existing_lockfile.entries.get(fixed_path.as_str());
 
@@ -89,21 +58,10 @@ async fn check_file(entry: &DirEntry, state: &SyncState) -> anyhow::Result<Optio
         }
     }
 
-    let file_name = path
-        .file_name()
-        .with_context(|| format!("Failed to get file name of {}", fixed_path))?
-        .to_str()
-        .unwrap();
-
-    let asset_id = upload_asset(
-        bytes,
-        file_name,
-        asset_type,
-        state.api_key.clone(),
-        state.creator.clone(),
-    )
-    .await
-    .with_context(|| format!("Failed to upload {}", fixed_path))?;
+    let asset_id = asset
+        .upload(state.creator.clone(), state.api_key.clone())
+        .await
+        .with_context(|| format!("Failed to upload {fixed_path}"))?;
 
     info!("Uploaded {}", style(fixed_path).green());
 
