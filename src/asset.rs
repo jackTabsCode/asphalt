@@ -82,7 +82,7 @@ impl Asset {
             _ => bail!("Unknown extension .{ext}"),
         };
 
-        let cloud_asset_type = match &kind {
+        let cloud_type = match &kind {
             AssetKind::Decal(kind) => match kind {
                 DecalKind::Png => Some(CloudAssetType::DecalPng),
                 DecalKind::Jpg => Some(CloudAssetType::DecalJpeg),
@@ -116,7 +116,7 @@ impl Asset {
             name,
             data,
             kind,
-            cloud_type: cloud_asset_type,
+            cloud_type,
         })
     }
 
