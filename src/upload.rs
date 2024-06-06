@@ -175,10 +175,9 @@ pub async fn upload_animation(
         get_csrf_token(cookie.clone()).await?
     };
 
-    let group_id = if let AssetCreator::Group(group) = creator {
-        group.group_id
-    } else {
-        bail!("Creator must be a group to upload animations")
+    let creator = match creator {
+        AssetCreator::User(c) => ("userId", c.user_id.to_string()),
+        AssetCreator::Group(c) => ("groupId", c.group_id.to_string()),
     };
 
     let response = client
@@ -195,7 +194,7 @@ pub async fn upload_animation(
             ("name", display_name),
             ("description", "Uploaded with Asphalt".to_string()),
             ("isGamesAsset", "false".to_string()),
-            ("groupId", group_id),
+            creator,
             ("ispublic", "false".to_string()),
             ("assetTypeName", "animation".to_string()),
             ("AllID", "1".to_string()),
