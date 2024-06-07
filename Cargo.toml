@@ -33,7 +33,7 @@ resvg = "0.41.0"
 serde = { version = "1.0.203", features = ["derive"] }
 serde-xml-rs = "0.6.0"
 tokio = { version = "1.38.0" }
-toml = "0.8.13"
+toml = "0.8.14"
 
 # The profile that 'cargo dist' will build with
 [profile.dist]
