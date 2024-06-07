@@ -48,8 +48,8 @@ Asphalt is configured with a project file called `asphalt.toml`. It is required 
 <summary>Example</summary>
 
 ```toml
-asset_dir = "test/"
-write_dir = "output/"
+asset_dir = "assets/"
+write_dir = "src/shared/"
 
 [codegen]
 typescript = true
