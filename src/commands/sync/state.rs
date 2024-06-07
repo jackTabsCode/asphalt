@@ -26,7 +26,7 @@ fn get_api_key(arg_key: Option<String>) -> anyhow::Result<String> {
 
 fn get_cookie(arg_cookie: Option<String>) -> anyhow::Result<Option<String>> {
     let env_cookie = env::var("ASPHALT_COOKIE").ok();
-    let cookie_str = arg_cookie.or(env_cookie);
+    let cookie_str = arg_cookie.or(env_cookie).or(rbx_cookie::get_value());
 
     if let Some(cookie) = cookie_str {
         Ok(Some(

@@ -109,7 +109,7 @@ You will need an API key to sync with Asphalt. You can specify this using the `-
 You can get one from the [Creator Dashboard](https://create.roblox.com/dashboard/credentials). Make sure you select the correct group and Asset-related permissions.
 
 ## Cookie
-You will need a cookie to upload animations to Roblox. This is because the Open Cloud API does not support them. You can specify this using the `--cookie` argument, or the `ASPHALT_COOKIE` environment variable.
+You will need a cookie to upload animations to Roblox. This is because the Open Cloud API does not support them. It will automatically detected from the current Roblox Studio installation. Otherwise, you can specify this using the `--cookie` argument, or the `ASPHALT_COOKIE` environment variable.
 
 You will probably want to [disable Session Protection](https://create.roblox.com/settings/advanced) if you are using Asphalt in an environment where your IP address changes frequently.
 
