@@ -24,20 +24,16 @@ fn get_api_key(arg_key: Option<String>) -> anyhow::Result<String> {
     }
 }
 
-fn get_cookie(arg_cookie: Option<String>) -> anyhow::Result<Option<String>> {
+fn get_cookie(arg_cookie: Option<String>) -> Option<String> {
     let env_cookie = env::var("ASPHALT_COOKIE").ok();
     let cookie_str = arg_cookie.or(env_cookie).or(rbx_cookie::get_value());
 
-    if let Some(cookie) = cookie_str {
-        Ok(Some(
-            Cookie::build(".ROBLOSECURITY", cookie)
-                .domain(".roblox.com")
-                .finish()
-                .to_string(),
-        ))
-    } else {
-        Ok(None)
-    }
+    cookie_str.map(|cookie| {
+        Cookie::build(".ROBLOSECURITY", cookie)
+            .domain(".roblox.com")
+            .finish()
+            .to_string()
+    })
 }
 
 pub struct SyncState {
@@ -71,7 +67,7 @@ impl SyncState {
         existing_lockfile: LockFile,
     ) -> anyhow::Result<Self> {
         let api_key = get_api_key(args.api_key)?;
-        let cookie = get_cookie(args.cookie)?;
+        let cookie = get_cookie(args.cookie);
 
         let creator: AssetCreator = match config.creator.creator_type {
             CreatorType::User => AssetCreator::User(AssetUserCreator {
