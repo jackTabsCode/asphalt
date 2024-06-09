@@ -52,8 +52,6 @@ pub struct SyncState {
     pub style: CodegenStyle,
     pub strip_extension: bool,
 
-    pub font_db: Database,
-
     pub existing_lockfile: LockFile,
     pub new_lockfile: LockFile,
 
@@ -122,7 +120,6 @@ impl SyncState {
             lua_extension,
             style,
             strip_extension,
-            font_db,
             existing_lockfile,
             new_lockfile,
             existing: manual,

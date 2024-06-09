@@ -45,7 +45,7 @@ async fn process_file(
     };
 
     if extension == "svg" {
-        bytes = svg_to_png(&bytes, &state.font_db).await?;
+        bytes = svg_to_png(&bytes).await?;
         extension = "png";
     }
 
