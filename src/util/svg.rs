@@ -1,13 +1,13 @@
 use anyhow::Context;
 use resvg::{
     tiny_skia::Pixmap,
-    usvg::{Options, Transform, Tree},
+    usvg::{fontdb::Database, Options, Transform, Tree},
 };
 
-pub async fn svg_to_png(bytes: &[u8]) -> anyhow::Result<Vec<u8>> {
+pub async fn svg_to_png(bytes: &[u8], font_db: &Database) -> anyhow::Result<Vec<u8>> {
     let opt = Options::default();
 
-    let rtree = Tree::from_data(bytes, &opt).context("Failed to parse SVG file")?;
+    let rtree = Tree::from_data(bytes, &opt, font_db).context("Failed to parse SVG file")?;
     let pixmap_size = rtree.size();
 
     let mut pixmap = Pixmap::new(pixmap_size.width() as u32, pixmap_size.height() as u32)
