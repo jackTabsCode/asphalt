@@ -1,6 +1,6 @@
 [package]
 name = "asphalt"
-version = "0.7.1"
+version = "0.7.2"
 edition = "2021"
 license = "MIT"
 authors = ["Jack T <jack@jackt.space>"]
