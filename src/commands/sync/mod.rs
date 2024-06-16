@@ -112,6 +112,10 @@ pub async fn sync(args: SyncArgs, existing_lockfile: LockFile) -> anyhow::Result
                 let path_str = entry_path.to_str().unwrap();
                 let fixed_path = fix_path(path_str);
 
+                if state.exclude_assets_matcher.is_match(path_str) {
+                    continue;
+                }
+
                 let result = match process_file(&entry, &mut state).await {
                     Ok(Some(result)) => result,
                     Ok(None) => continue,

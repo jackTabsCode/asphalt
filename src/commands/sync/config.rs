@@ -62,6 +62,8 @@ pub struct CodegenConfig {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct SyncConfig {
     pub asset_dir: String,
+    #[serde(default)]
+    pub exclude_assets: Vec<String>,
     pub write_dir: String,
     pub creator: Creator,
     pub codegen: CodegenConfig,

@@ -2,6 +2,7 @@ use super::config::{CodegenStyle, CreatorType, ExistingAsset, SyncConfig};
 use crate::{cli::SyncArgs, LockFile};
 use anyhow::Context;
 use cookie::Cookie;
+use globset::{Glob, GlobSet, GlobSetBuilder};
 use rbxcloud::rbx::v1::assets::{AssetCreator, AssetGroupCreator, AssetUserCreator};
 use resvg::usvg::fontdb::Database;
 use std::{collections::HashMap, env, path::PathBuf};
@@ -39,6 +40,7 @@ fn get_cookie(arg_cookie: Option<String>) -> Option<String> {
 pub struct SyncState {
     pub asset_dir: PathBuf,
     pub write_dir: PathBuf,
+    pub exclude_assets_matcher: GlobSet,
 
     pub api_key: String,
     pub cookie: Option<String>,
@@ -112,9 +114,17 @@ impl SyncState {
 
         let manual = config.existing.unwrap_or_default();
 
+        let mut exclude_assets_matcher_builder = GlobSetBuilder::new();
+        for glob in config.exclude_assets {
+            let glob = Glob::new(&glob)?;
+            exclude_assets_matcher_builder.add(glob);
+        }
+        let exclude_assets_matcher = exclude_assets_matcher_builder.build()?;
+
         Ok(Self {
             asset_dir,
             write_dir,
+            exclude_assets_matcher,
             api_key,
             creator,
             typescript,

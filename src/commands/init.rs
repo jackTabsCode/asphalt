@@ -78,6 +78,7 @@ pub async fn init() -> anyhow::Result<()> {
     let config: SyncConfig = SyncConfig {
         asset_dir,
         write_dir,
+        exclude_assets: Vec::new(),
         creator: Creator { creator_type, id },
         codegen: CodegenConfig {
             output_name,

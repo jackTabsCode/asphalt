@@ -49,6 +49,8 @@ Asphalt is configured with a project file called `asphalt.toml`. It is required 
 
 ```toml
 asset_dir = "assets/"
+exclude_assets = ["**/*.txt", "**/*.DS_Store"]
+
 write_dir = "src/shared/"
 
 [codegen]
@@ -72,6 +74,8 @@ id = 9670971
 
 -   `asset_dir`: path
     -   The directory of assets to upload to Roblox.
+-	`exclude_assets`: array<string> (optional)
+	-	An array of glob patterns to exclude when processing the assets directory.
 -   `write_dir`: path
     -   The directory to output the generated code to. This should probably be somewhere in your game's source folder.
 -   `creator`: Creator
