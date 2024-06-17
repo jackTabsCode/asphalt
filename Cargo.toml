@@ -26,7 +26,7 @@ log = "0.4.21"
 rbx_binary = { version = "0.7.4", features = ["serde"] }
 rbx_cookie = { version = "0.1.4", default-features = false }
 rbx_xml = "0.13.3"
-rbxcloud = "0.11.0"
+rbxcloud = "0.13.0"
 reqwest = { version = "0.12.5", default-features = false, features = [
     "rustls-tls",
     "gzip",
