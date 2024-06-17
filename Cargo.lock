@@ -132,7 +132,7 @@ dependencies = [
  "clap",
  "clap-verbosity-flag",
  "console",
- "cookie",
+ "cookie 0.18.1",
  "dotenv",
  "env_logger",
  "globset",
@@ -474,6 +474,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc6e25dfc584d06a3dbf775d207ff00d7de98d824c952dd2233dfbb261889a42"
 dependencies = [
  "time 0.2.27",
+ "version_check",
+]
+
+[[package]]
+name = "cookie"
+version = "0.18.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4ddef33a339a91ea89fb53151bd0a4689cfce27055c291dfa69945475d22c747"
+dependencies = [
+ "time 0.3.36",
  "version_check",
 ]
 
@@ -1795,7 +1805,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d8a61b073240f4c13b1e780a8999a113dfa28bc93f2cf9fc41c6f36e7aceb5bf"
 dependencies = [
  "byteorder 0.5.3",
- "cookie",
+ "cookie 0.15.2",
  "dirs",
  "log",
  "plist",
