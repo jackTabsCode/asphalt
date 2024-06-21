@@ -34,6 +34,8 @@ struct Content {
     url: String,
 }
 
+const ASSET_DESCRIPTION: &str = "Uploaded by Asphalt";
+
 async fn get_image_id(asset_id: u64) -> anyhow::Result<u64> {
     let client = Client::new();
     let url = format!("https://assetdelivery.roblox.com/v1/asset?id={}", asset_id);
@@ -81,7 +83,7 @@ pub async fn upload_cloud_asset(
                 creator,
                 expected_price: None,
             },
-            description: "Uploaded by Asphalt".to_string(),
+            description: ASSET_DESCRIPTION.to_string(),
         },
     };
     let operation = create_asset_with_contents(&create_params)
@@ -192,7 +194,7 @@ pub async fn upload_animation(
         .header("Requester", "Client")
         .query(&[
             ("name", display_name),
-            ("description", "Uploaded with Asphalt".to_string()),
+            ("description", ASSET_DESCRIPTION.to_string()),
             ("isGamesAsset", "false".to_string()),
             creator,
             ("ispublic", "false".to_string()),
