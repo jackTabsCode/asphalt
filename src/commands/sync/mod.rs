@@ -1,5 +1,5 @@
 use self::state::SyncState;
-use crate::{asset::Asset, cli::SyncArgs, util::svg::svg_to_png, FileEntry, LockFile};
+use crate::{asset::Asset, cli::SyncArgs, FileEntry, LockFile};
 use anyhow::Context;
 use codegen::{generate_lua, generate_ts};
 use config::SyncConfig;
@@ -32,11 +32,11 @@ async fn process_file(
         .unwrap()
         .to_string();
 
-    let mut bytes = read(&path)
+    let data = read(&path)
         .await
         .with_context(|| format!("Failed to read {}", fixed_path))?;
 
-    let mut extension = match path.extension().and_then(|s| s.to_str()) {
+    let ext = match path.extension().and_then(|s| s.to_str()) {
         Some(extension) => extension,
         None => {
             warn!("Failed to get extension of {fixed_path}");
@@ -44,12 +44,7 @@ async fn process_file(
         }
     };
 
-    if extension == "svg" {
-        bytes = svg_to_png(&bytes, &state.font_db).await?;
-        extension = "png";
-    }
-
-    let asset = Asset::new(file_name, bytes, extension)?;
+    let asset = Asset::new(file_name, data, ext, &state.font_db).await?;
     let hash = asset.hash();
 
     let existing = state.existing_lockfile.entries.get(fixed_path.as_str());
