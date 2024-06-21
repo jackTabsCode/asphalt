@@ -1,12 +1,13 @@
 use crate::{
     upload::{upload_animation, upload_cloud_asset},
-    util::alpha_bleed::alpha_bleed,
+    util::{alpha_bleed::alpha_bleed, svg::svg_to_png},
 };
 use anyhow::{bail, Context};
 use blake3::Hasher;
 use image::{DynamicImage, ImageFormat};
 use rbx_xml::DecodeOptions;
 use rbxcloud::rbx::v1::assets::{AssetCreator, AssetType as CloudAssetType};
+use resvg::usvg::fontdb::Database;
 use std::io::Cursor;
 
 enum AudioKind {
@@ -75,7 +76,12 @@ pub struct UploadResult {
 }
 
 impl Asset {
-    pub fn new(name: String, mut data: Vec<u8>, ext: &str) -> anyhow::Result<Self> {
+    pub async fn new(
+        name: String,
+        mut data: Vec<u8>,
+        mut ext: &str,
+        font_db: &Database,
+    ) -> anyhow::Result<Self> {
         let kind = match ext {
             "mp3" => AssetKind::Audio(AudioKind::Mp3),
             "ogg" => AssetKind::Audio(AudioKind::Ogg),
@@ -83,6 +89,11 @@ impl Asset {
             "jpg" => AssetKind::Decal(DecalKind::Jpg),
             "bmp" => AssetKind::Decal(DecalKind::Bmp),
             "tga" => AssetKind::Decal(DecalKind::Tga),
+            "svg" => {
+                data = svg_to_png(&data, font_db).await?;
+                ext = "png";
+                AssetKind::Decal(DecalKind::Png)
+            }
             "fbx" => AssetKind::Model(ModelKind::Model),
             "rbxm" | "rbxmx" => {
                 let format = if ext == "rbxm" {
@@ -122,10 +133,10 @@ impl Asset {
             let format = ImageFormat::from_extension(ext)
                 .context("Failed to get image format from extension")?;
 
-            let mut new_bytes: Cursor<Vec<u8>> = Cursor::new(Vec::new());
-            image.write_to(&mut new_bytes, format)?;
+            let mut new_data: Cursor<Vec<u8>> = Cursor::new(Vec::new());
+            image.write_to(&mut new_data, format)?;
 
-            data = new_bytes.into_inner();
+            data = new_data.into_inner();
         }
 
         Ok(Self {
