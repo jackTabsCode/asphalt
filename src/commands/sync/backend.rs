@@ -1,3 +1,5 @@
+use std::{env, path::Path};
+
 use anyhow::Context;
 use log::{info, warn};
 
@@ -21,6 +23,28 @@ pub trait SyncBackend {
         path: &str,
         asset: Asset,
     ) -> anyhow::Result<SyncResult>;
+}
+
+fn normalize_path(state: &SyncState, path: &str) -> anyhow::Result<String> {
+    path.strip_prefix(state.asset_dir.to_str().unwrap())
+        .context("Failed to strip asset directory prefix")
+        .map(|s| s.to_string())
+}
+
+async fn sync_to_path(write_path: &Path, asset_path: &str, asset: Asset) -> anyhow::Result<()> {
+    let asset_path = write_path.join(asset_path);
+    let parent_path = asset_path
+        .parent()
+        .context("Asset should have a parent path")?;
+
+    create_dir_all(parent_path)
+        .await
+        .with_context(|| format!("Failed to create asset folder {}", parent_path.display()))?;
+
+    asset
+        .write(&asset_path)
+        .await
+        .with_context(|| format!("Failed to write asset to {}", asset_path.display()))
 }
 
 pub struct RobloxBackend;
@@ -65,28 +89,16 @@ impl SyncBackend for LocalBackend {
             }
         }
 
-        let relative_path = path
-            .strip_prefix(state.asset_dir.to_str().unwrap())
-            .context("Failed to strip asset directory prefix")?;
-        let asset_path = studio.content_path().join(".asphalt").join(relative_path);
-
-        let parent_path = asset_path
-            .parent()
-            .context("Asset should have a parent path")?;
-
-        create_dir_all(parent_path)
+        let content_path = studio.content_path().join(".asphalt");
+        let asset_path = normalize_path(state, path).context("Failed to normalize asset path")?;
+        sync_to_path(&content_path, &asset_path, asset)
             .await
-            .with_context(|| format!("Failed to create asset folder {}", parent_path.display()))?;
-
-        asset
-            .write(&asset_path)
-            .await
-            .with_context(|| format!("Failed to write asset to {}", asset_path.display()))?;
+            .context("Failed to sync asset to Roblox Studio")?;
 
         info!("Synced {path}");
         Ok(SyncResult::Local(format!(
             "rbxasset://.asphalt/{}",
-            relative_path
+            asset_path
         )))
     }
 }
@@ -95,6 +107,26 @@ pub struct NoneBackend;
 
 impl SyncBackend for NoneBackend {
     async fn sync(self, _: &mut SyncState, path: &str, _: Asset) -> anyhow::Result<SyncResult> {
+        info!("Synced {path}");
+        Ok(SyncResult::None)
+    }
+}
+
+pub struct DebugBackend;
+
+impl SyncBackend for DebugBackend {
+    async fn sync(
+        self,
+        state: &mut SyncState,
+        path: &str,
+        asset: Asset,
+    ) -> anyhow::Result<SyncResult> {
+        let debug_path = env::current_dir()?.join(".asphalt-debug");
+        let asset_path = normalize_path(state, path).context("Failed to normalize asset path")?;
+        sync_to_path(&debug_path, &asset_path, asset)
+            .await
+            .context("Failed to sync asset")?;
+
         info!("Synced {path}");
         Ok(SyncResult::None)
     }

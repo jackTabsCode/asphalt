@@ -5,7 +5,7 @@ use crate::{
     FileEntry, LockFile,
 };
 use anyhow::Context;
-use backend::{LocalBackend, NoneBackend, RobloxBackend, SyncBackend, SyncResult};
+use backend::{DebugBackend, LocalBackend, NoneBackend, RobloxBackend, SyncBackend, SyncResult};
 use codegen::{generate_lua, generate_ts};
 use config::SyncConfig;
 use log::{debug, info, warn};
@@ -84,6 +84,7 @@ async fn process_file(
         SyncTarget::Roblox => RobloxBackend.sync(state, &fixed_path, asset).await,
         SyncTarget::Local => LocalBackend.sync(state, &fixed_path, asset).await,
         SyncTarget::None => NoneBackend.sync(state, &fixed_path, asset).await,
+        SyncTarget::Debug => DebugBackend.sync(state, &fixed_path, asset).await,
     }
     .with_context(|| format!("Failed to sync {fixed_path}"))?;
 

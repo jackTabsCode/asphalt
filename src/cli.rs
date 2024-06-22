@@ -28,6 +28,7 @@ pub enum SyncTarget {
     Roblox,
     Local,
     None,
+    Debug,
 }
 
 #[derive(Args)]
