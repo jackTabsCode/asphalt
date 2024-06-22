@@ -1,4 +1,4 @@
-use clap::{Args, Parser, Subcommand};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 use clap_verbosity_flag::{InfoLevel, Verbosity};
 
 #[derive(Parser)]
@@ -23,6 +23,13 @@ pub enum Commands {
     Init,
 }
 
+#[derive(ValueEnum, Clone)]
+pub enum SyncTarget {
+    Roblox,
+    Local,
+    None,
+}
+
 #[derive(Args)]
 pub struct SyncArgs {
     /// Your Open Cloud API key.
@@ -34,4 +41,8 @@ pub struct SyncArgs {
     /// This is only required if you are uploading animations with Asphalt.
     #[arg(long)]
     pub cookie: Option<String>,
+
+    /// Where Asphalt should sync assets to.
+    #[arg(short, long)]
+    pub target: Option<SyncTarget>,
 }

@@ -1,5 +1,4 @@
 use self::types::NestedTable;
-use crate::LockFile;
 use anyhow::{bail, Context};
 use ast::{AstTarget, Expression, ReturnStatement};
 use std::collections::BTreeMap;
@@ -12,12 +11,10 @@ mod ast;
 pub(crate) mod types {
     use std::collections::BTreeMap;
 
-    use crate::FileEntry;
-
     #[derive(Debug)]
     pub enum NestedTable<'a> {
         Folder(BTreeMap<String, NestedTable<'a>>),
-        File(&'a FileEntry),
+        File(&'a String),
     }
 }
 
@@ -30,7 +27,7 @@ fn build_table(entry: &NestedTable) -> Expression {
                 .map(|(component, entry)| (component.into(), build_table(entry)))
                 .collect(),
         ),
-        NestedTable::File(file) => Expression::String(format!("rbxassetid://{}", file.asset_id)),
+        NestedTable::File(asset_id) => Expression::String(asset_id.to_string()),
     }
 }
 
@@ -39,13 +36,13 @@ fn build_table(entry: &NestedTable) -> Expression {
  * and iterate through every file entry and build a table for code generation.
 */
 fn generate_expressions(
-    lockfile: &LockFile,
+    assets: &BTreeMap<String, String>,
     strip_dir: &str,
     strip_extension: bool,
 ) -> anyhow::Result<Expression> {
     let mut root: BTreeMap<String, NestedTable<'_>> = BTreeMap::new();
 
-    for (file_path, file_entry) in lockfile.entries.iter() {
+    for (file_path, asset_id) in assets.iter() {
         let mut components = vec![];
         let full_path = if strip_extension {
             Path::new(file_path).with_extension("")
@@ -80,7 +77,7 @@ fn generate_expressions(
             // last component is assumed to be a file.
             if index == components.len() - 1 {
                 if current_directory.get_mut(component).is_none() {
-                    current_directory.insert(component.to_owned(), NestedTable::File(file_entry));
+                    current_directory.insert(component.to_owned(), NestedTable::File(asset_id));
                 };
             } else if let NestedTable::Folder(entries) = current_directory
                 .entry(component.to_owned())
@@ -97,25 +94,25 @@ fn generate_expressions(
 }
 
 pub fn generate_lua(
-    lockfile: &LockFile,
+    assets: &BTreeMap<String, String>,
     strip_dir: &str,
     strip_extension: bool,
 ) -> anyhow::Result<String> {
     generate_code(
-        generate_expressions(lockfile, strip_dir, strip_extension)
+        generate_expressions(assets, strip_dir, strip_extension)
             .context("Failed to create nested expressions")?,
         AstTarget::Lua,
     )
 }
 
 pub fn generate_ts(
-    lockfile: &LockFile,
+    assets: &BTreeMap<String, String>,
     strip_dir: &str,
     output_dir: &str,
     strip_extension: bool,
 ) -> anyhow::Result<String> {
     generate_code(
-        generate_expressions(lockfile, strip_dir, strip_extension)
+        generate_expressions(assets, strip_dir, strip_extension)
             .context("Failed to create nested expressions")?,
         AstTarget::Typescript {
             output_dir: output_dir.to_owned(),

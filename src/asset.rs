@@ -10,24 +10,24 @@ use rbxcloud::rbx::v1::assets::{AssetCreator, AssetType as CloudAssetType};
 use resvg::usvg::fontdb::Database;
 use std::io::Cursor;
 
-enum AudioKind {
+pub enum AudioKind {
     Mp3,
     Ogg,
 }
 
-enum DecalKind {
+pub enum DecalKind {
     Png,
     Jpg,
     Bmp,
     Tga,
 }
 
-enum ModelKind {
+pub enum ModelKind {
     Model,
     Animation, // not uploadable with Open Cloud!
 }
 
-enum AssetKind {
+pub enum AssetKind {
     Decal(DecalKind),
     Audio(AudioKind),
     Model(ModelKind),
@@ -35,9 +35,9 @@ enum AssetKind {
 
 pub struct Asset {
     name: String,
-    data: Vec<u8>,
+    pub data: Vec<u8>,
 
-    kind: AssetKind,
+    pub kind: AssetKind,
     cloud_type: Option<CloudAssetType>,
 }
 

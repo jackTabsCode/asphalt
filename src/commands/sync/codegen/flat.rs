@@ -1,6 +1,8 @@
-use crate::lockfile::LockFile;
 use anyhow::Context;
-use std::path::{Path, PathBuf};
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+};
 
 fn asset_path(file_path: &str, strip_dir: &str, strip_extension: bool) -> anyhow::Result<String> {
     if strip_extension {
@@ -16,19 +18,15 @@ fn asset_path(file_path: &str, strip_dir: &str, strip_extension: bool) -> anyhow
 }
 
 pub fn generate_lua(
-    lockfile: &LockFile,
+    assets: &BTreeMap<String, String>,
     strip_dir: &str,
     strip_extension: bool,
 ) -> anyhow::Result<String> {
-    let table = lockfile
-        .entries
+    let table = assets
         .iter()
-        .map(|(file_path, file_entry)| {
+        .map(|(file_path, asset_id)| {
             let file_stem = asset_path(file_path, strip_dir, strip_extension)?;
-            Ok(format!(
-                "\t[\"{}\"] = \"rbxassetid://{}\"",
-                file_stem, file_entry.asset_id
-            ))
+            Ok(format!("\t[\"{}\"] = \"{}\"", file_stem, asset_id))
         })
         .collect::<Result<Vec<String>, anyhow::Error>>()?
         .join(",\n");
@@ -37,13 +35,12 @@ pub fn generate_lua(
 }
 
 pub fn generate_ts(
-    lockfile: &LockFile,
+    assets: &BTreeMap<String, String>,
     strip_dir: &str,
     output_dir: &str,
     strip_extension: bool,
 ) -> anyhow::Result<String> {
-    let interface = lockfile
-        .entries
+    let interface = assets
         .keys()
         .map(|file_path| {
             let file_stem = asset_path(file_path, strip_dir, strip_extension)?;

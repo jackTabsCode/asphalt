@@ -1,5 +1,8 @@
 use super::config::{CodegenStyle, CreatorType, ExistingAsset, SyncConfig};
-use crate::{cli::SyncArgs, LockFile};
+use crate::{
+    cli::{SyncArgs, SyncTarget},
+    LockFile,
+};
 use anyhow::Context;
 use cookie::Cookie;
 use globset::{Glob, GlobSet, GlobSetBuilder};
@@ -44,6 +47,7 @@ pub struct SyncState {
 
     pub api_key: String,
     pub cookie: Option<String>,
+    pub target: SyncTarget,
     pub csrf: Option<String>,
 
     pub creator: AssetCreator,
@@ -70,6 +74,7 @@ impl SyncState {
     ) -> anyhow::Result<Self> {
         let api_key = get_api_key(args.api_key)?;
         let cookie = get_cookie(args.cookie);
+        let target = args.target.unwrap_or(SyncTarget::Roblox);
 
         let creator: AssetCreator = match config.creator.creator_type {
             CreatorType::User => AssetCreator::User(AssetUserCreator {
@@ -137,6 +142,7 @@ impl SyncState {
             new_lockfile,
             existing: manual,
             cookie,
+            target,
             csrf: None,
         })
     }

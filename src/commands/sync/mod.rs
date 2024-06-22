@@ -1,12 +1,22 @@
 use self::state::SyncState;
-use crate::{asset::Asset, cli::SyncArgs, FileEntry, LockFile};
+use crate::{
+    asset::Asset,
+    cli::{SyncArgs, SyncTarget},
+    FileEntry, LockFile,
+};
 use anyhow::Context;
+use backend::{LocalBackend, NoneBackend, RobloxBackend, SyncBackend, SyncResult};
 use codegen::{generate_lua, generate_ts};
 use config::SyncConfig;
 use log::{debug, info, warn};
-use std::{collections::VecDeque, path::Path};
+use roblox_install::RobloxStudio;
+use std::{
+    collections::{BTreeMap, VecDeque},
+    path::Path,
+};
 use tokio::fs::{read, read_dir, write, DirEntry};
 
+mod backend;
 mod codegen;
 pub mod config;
 mod state;
@@ -15,10 +25,19 @@ fn fix_path(path: &str) -> String {
     path.replace('\\', "/")
 }
 
+fn format_asset_id(asset_id: u64) -> String {
+    format!("rbxassetid://{}", asset_id)
+}
+
+struct ProcessResult {
+    asset_id: String,
+    file_entry: Option<FileEntry>,
+}
+
 async fn process_file(
     entry: &DirEntry,
     state: &mut SyncState,
-) -> anyhow::Result<Option<FileEntry>> {
+) -> anyhow::Result<Option<ProcessResult>> {
     let path = entry.path();
     let path_str = path.to_str().unwrap();
     let fixed_path = fix_path(path_str);
@@ -51,31 +70,34 @@ async fn process_file(
 
     if let Some(existing_value) = existing {
         if existing_value.hash == hash {
-            return Ok(Some(FileEntry {
-                hash,
-                asset_id: existing_value.asset_id,
+            return Ok(Some(ProcessResult {
+                asset_id: format_asset_id(existing_value.asset_id),
+                file_entry: Some(FileEntry {
+                    hash,
+                    asset_id: existing_value.asset_id,
+                }),
             }));
         }
     }
 
-    let result = asset
-        .upload(
-            state.creator.clone(),
-            state.api_key.clone(),
-            state.cookie.clone(),
-            None,
-        )
-        .await
-        .with_context(|| format!("Failed to upload {fixed_path}"))?;
+    let sync_result = match state.target {
+        SyncTarget::Roblox => RobloxBackend.sync(state, &fixed_path, asset).await,
+        SyncTarget::Local => LocalBackend.sync(state, &fixed_path, asset).await,
+        SyncTarget::None => NoneBackend.sync(state, &fixed_path, asset).await,
+    }
+    .with_context(|| format!("Failed to sync {fixed_path}"))?;
 
-    let _ = &state.update_csrf(result.csrf);
-
-    info!("Uploaded {fixed_path}");
-
-    Ok(Some(FileEntry {
-        hash,
-        asset_id: result.asset_id,
-    }))
+    match sync_result {
+        SyncResult::Upload(asset_id) => Ok(Some(ProcessResult {
+            asset_id: format_asset_id(asset_id),
+            file_entry: Some(FileEntry { hash, asset_id }),
+        })),
+        SyncResult::Local(asset_id) => Ok(Some(ProcessResult {
+            asset_id,
+            file_entry: None,
+        })),
+        SyncResult::None => Ok(None),
+    }
 }
 
 pub async fn sync(args: SyncArgs, existing_lockfile: LockFile) -> anyhow::Result<()> {
@@ -87,8 +109,13 @@ pub async fn sync(args: SyncArgs, existing_lockfile: LockFile) -> anyhow::Result
 
     info!("Syncing...");
 
+    let mut assets = BTreeMap::<String, String>::new();
     let mut remaining_items = VecDeque::new();
     remaining_items.push_back(state.asset_dir.clone());
+
+    if let SyncTarget::Local = state.target {
+        let _ = RobloxStudio::locate().context("Failed to get Roblox Studio path")?;
+    }
 
     while let Some(path) = remaining_items.pop_front() {
         let mut dir_entries = read_dir(path.clone())
@@ -120,39 +147,32 @@ pub async fn sync(args: SyncArgs, existing_lockfile: LockFile) -> anyhow::Result
                     }
                 };
 
-                state.new_lockfile.entries.insert(fixed_path, result);
+                assets.insert(fixed_path.clone(), result.asset_id);
+                if let Some(file_entry) = result.file_entry {
+                    state.new_lockfile.entries.insert(fixed_path, file_entry);
+                }
             }
         }
     }
 
-    let _ = &state
-        .new_lockfile
-        .write()
-        .await
-        .context("Failed to write lockfile")?;
+    if let SyncTarget::Roblox = state.target {
+        let _ = &state
+            .new_lockfile
+            .write()
+            .await
+            .context("Failed to write lockfile")?;
+    }
+
+    assets.extend(
+        state
+            .existing
+            .into_iter()
+            .map(|(path, asset)| (path, format_asset_id(asset.id))),
+    );
 
     let asset_dir_str = state.asset_dir.to_str().unwrap();
-
-    state
-        .new_lockfile
-        .entries
-        .extend(state.existing.into_iter().map(|(path, asset)| {
-            (
-                path,
-                FileEntry {
-                    hash: "".to_string(),
-                    asset_id: asset.id,
-                },
-            )
-        }));
-
     let lua_filename = format!("{}.{}", state.output_name, state.lua_extension);
-    let lua_output = generate_lua(
-        &state.new_lockfile,
-        asset_dir_str,
-        &state.style,
-        state.strip_extension,
-    );
+    let lua_output = generate_lua(&assets, asset_dir_str, &state.style, state.strip_extension);
 
     write(Path::new(&state.write_dir).join(lua_filename), lua_output?)
         .await
@@ -161,7 +181,7 @@ pub async fn sync(args: SyncArgs, existing_lockfile: LockFile) -> anyhow::Result
     if state.typescript {
         let ts_filename = format!("{}.d.ts", state.output_name);
         let ts_output = generate_ts(
-            &state.new_lockfile,
+            &assets,
             asset_dir_str,
             state.output_name.as_str(),
             &state.style,
