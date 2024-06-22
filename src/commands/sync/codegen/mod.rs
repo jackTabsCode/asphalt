@@ -38,7 +38,7 @@ mod tests {
         entries.insert("assets/foo.png".to_string(), "rbxassetid://1".to_string());
         entries.insert(
             "assets/bar/baz.png".to_string(),
-            "rbxasset://.asphalt/2.png".to_string(),
+            "rbxasset://.asphalt/bar/baz.png".to_string(),
         );
         entries
     }
@@ -48,12 +48,12 @@ mod tests {
         let lockfile = test_assets();
 
         let lua = super::flat::generate_lua(&lockfile, "assets", false).unwrap();
-        assert_eq!(lua, "return {\n\t[\"/bar/baz.png\"] = \"rbxasset://.asphalt/2.png\",\n\t[\"/foo.png\"] = \"rbxassetid://1\"\n}");
+        assert_eq!(lua, "return {\n\t[\"/bar/baz.png\"] = \"rbxasset://.asphalt/bar/baz.png\",\n\t[\"/foo.png\"] = \"rbxassetid://1\"\n}");
 
         let lua = super::flat::generate_lua(&lockfile, "assets", true).unwrap();
         assert_eq!(
             lua,
-            "return {\n\t[\"/bar/baz\"] = \"rbxasset://.asphalt/2.png\",\n\t[\"/foo\"] = \"rbxassetid://1\"\n}"
+            "return {\n\t[\"/bar/baz\"] = \"rbxasset://.asphalt/bar/baz.png\",\n\t[\"/foo\"] = \"rbxassetid://1\"\n}"
         );
     }
 
@@ -75,12 +75,12 @@ mod tests {
         let lua = super::nested::generate_lua(&lockfile, "assets", false).unwrap();
         assert_eq!(
             lua,
-            "return {\n    bar = {\n        [\"baz.png\"] = \"rbxasset://.asphalt/2.png\",\n    },\n    [\"foo.png\"] = \"rbxassetid://1\",\n}");
+            "return {\n    bar = {\n        [\"baz.png\"] = \"rbxasset://.asphalt/bar/baz.png\",\n    },\n    [\"foo.png\"] = \"rbxassetid://1\",\n}");
 
         let lua = super::nested::generate_lua(&lockfile, "assets", true).unwrap();
         assert_eq!(
             lua,
-            "return {\n    bar = {\n        baz = \"rbxasset://.asphalt/2.png\",\n    },\n    foo = \"rbxassetid://1\",\n}");
+            "return {\n    bar = {\n        baz = \"rbxasset://.asphalt/bar/baz.png\",\n    },\n    foo = \"rbxassetid://1\",\n}");
     }
 
     #[test]
@@ -90,11 +90,11 @@ mod tests {
         let ts = super::nested::generate_ts(&lockfile, "assets", "assets", false).unwrap();
         assert_eq!(
             ts,
-            "declare const assets: {\n    bar: {\n        \"baz.png\": \"rbxasset://.asphalt/2.png\",\n    },\n    \"foo.png\": \"rbxassetid://1\",\n}\nexport = assets");
+            "declare const assets: {\n    bar: {\n        \"baz.png\": \"rbxasset://.asphalt/bar/baz.png\",\n    },\n    \"foo.png\": \"rbxassetid://1\",\n}\nexport = assets");
 
         let ts = super::nested::generate_ts(&lockfile, "assets", "assets", true).unwrap();
         assert_eq!(
             ts,
-            "declare const assets: {\n    bar: {\n        baz: \"rbxasset://.asphalt/2.png\",\n    },\n    foo: \"rbxassetid://1\",\n}\nexport = assets");
+            "declare const assets: {\n    bar: {\n        baz: \"rbxasset://.asphalt/bar/baz.png\",\n    },\n    foo: \"rbxassetid://1\",\n}\nexport = assets");
     }
 }
