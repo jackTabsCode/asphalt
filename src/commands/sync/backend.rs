@@ -1,8 +1,8 @@
 use anyhow::Context;
 use log::{info, warn};
-use tokio::fs::{create_dir_all, write};
 
 use roblox_install::RobloxStudio;
+use tokio::fs::create_dir_all;
 
 use crate::asset::{Asset, AssetKind, ModelKind};
 
@@ -58,7 +58,7 @@ impl SyncBackend for LocalBackend {
     ) -> anyhow::Result<SyncResult> {
         let studio = RobloxStudio::locate().context("Failed to get Roblox Studio path")?;
 
-        if let AssetKind::Model(kind) = asset.kind {
+        if let AssetKind::Model(kind) = asset.kind() {
             if let ModelKind::Animation = kind {
                 warn!("Animations cannot be synced locally, skipping {path}");
                 return Ok(SyncResult::None);
@@ -78,7 +78,8 @@ impl SyncBackend for LocalBackend {
             .await
             .with_context(|| format!("Failed to create asset folder {}", parent_path.display()))?;
 
-        write(&asset_path, asset.data)
+        asset
+            .write(&asset_path)
             .await
             .with_context(|| format!("Failed to write asset to {}", asset_path.display()))?;
 

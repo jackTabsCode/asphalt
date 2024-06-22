@@ -8,7 +8,8 @@ use image::{DynamicImage, ImageFormat};
 use rbx_xml::DecodeOptions;
 use rbxcloud::rbx::v1::assets::{AssetCreator, AssetType as CloudAssetType};
 use resvg::usvg::fontdb::Database;
-use std::io::Cursor;
+use std::{io::Cursor, path::Path};
+use tokio::fs::write;
 
 pub enum AudioKind {
     Mp3,
@@ -35,9 +36,9 @@ pub enum AssetKind {
 
 pub struct Asset {
     name: String,
-    pub data: Vec<u8>,
+    data: Vec<u8>,
 
-    pub kind: AssetKind,
+    kind: AssetKind,
     cloud_type: Option<CloudAssetType>,
 }
 
@@ -153,6 +154,10 @@ impl Asset {
         hasher.finalize().to_string()
     }
 
+    pub fn kind(&self) -> &AssetKind {
+        &self.kind
+    }
+
     async fn upload_cloud(
         self,
         creator: AssetCreator,
@@ -205,5 +210,11 @@ impl Asset {
                 }
             }
         }
+    }
+
+    pub async fn write(self, path: &Path) -> anyhow::Result<()> {
+        write(path, self.data)
+            .await
+            .with_context(|| format!("Failed to write asset to {}", path.display()))
     }
 }
