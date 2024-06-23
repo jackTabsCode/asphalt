@@ -69,7 +69,12 @@ async fn process_file(
     let existing = state.existing_lockfile.entries.get(fixed_path.as_str());
 
     if let Some(existing_value) = existing {
-        if existing_value.hash == hash {
+        let check_lockfile = match state.target {
+            SyncTarget::Roblox | SyncTarget::None => true,
+            _ => false,
+        };
+
+        if check_lockfile && existing_value.hash == hash {
             return Ok(Some(ProcessResult {
                 asset_id: format_asset_id(existing_value.asset_id),
                 file_entry: Some(FileEntry {
