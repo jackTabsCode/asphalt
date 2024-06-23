@@ -36,7 +36,7 @@ pub enum AssetKind {
 
 pub struct Asset {
     name: String,
-    extension: String,
+    ext: String,
     data: Vec<u8>,
 
     kind: AssetKind,
@@ -143,7 +143,7 @@ impl Asset {
 
         Ok(Self {
             name,
-            extension: ext.to_string(),
+            ext: ext.to_string(),
             data,
             kind,
             cloud_type,
@@ -157,7 +157,7 @@ impl Asset {
     }
 
     pub fn extension(&self) -> &str {
-        &self.extension
+        &self.ext
     }
 
     pub fn kind(&self) -> &AssetKind {
