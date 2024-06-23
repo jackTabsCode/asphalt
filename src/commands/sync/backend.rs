@@ -105,15 +105,6 @@ impl SyncBackend for LocalBackend {
     }
 }
 
-pub struct NoneBackend;
-
-impl SyncBackend for NoneBackend {
-    async fn sync(self, _: &mut SyncState, path: &str, _: Asset) -> anyhow::Result<SyncResult> {
-        info!("Synced {path}");
-        Ok(SyncResult::None)
-    }
-}
-
 pub struct DebugBackend;
 
 impl SyncBackend for DebugBackend {

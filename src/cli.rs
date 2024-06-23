@@ -27,7 +27,6 @@ pub enum Commands {
 pub enum SyncTarget {
     Roblox,
     Local,
-    None,
     Debug,
 }
 
@@ -46,4 +45,8 @@ pub struct SyncArgs {
     /// Where Asphalt should sync assets to.
     #[arg(short, long)]
     pub target: Option<SyncTarget>,
+
+    /// Skip asset syncing and only display what assets will be synced.
+    #[arg(long, action)]
+    pub dry_run: bool,
 }

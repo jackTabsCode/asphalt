@@ -48,6 +48,7 @@ pub struct SyncState {
     pub api_key: String,
     pub cookie: Option<String>,
     pub target: SyncTarget,
+    pub dry_run: bool,
     pub csrf: Option<String>,
 
     pub creator: AssetCreator,
@@ -143,6 +144,7 @@ impl SyncState {
             existing: manual,
             cookie,
             target,
+            dry_run: args.dry_run,
             csrf: None,
         })
     }
