@@ -32,7 +32,9 @@ fn normalize_path(state: &SyncState, path: &str) -> anyhow::Result<String> {
 }
 
 async fn sync_to_path(write_path: &Path, asset_path: &str, asset: Asset) -> anyhow::Result<()> {
-    let asset_path = write_path.join(asset_path);
+    let mut asset_path = write_path.join(asset_path);
+    asset_path.set_extension(asset.extension());
+
     let parent_path = asset_path
         .parent()
         .context("Asset should have a parent path")?;

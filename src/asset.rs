@@ -36,6 +36,7 @@ pub enum AssetKind {
 
 pub struct Asset {
     name: String,
+    extension: String,
     data: Vec<u8>,
 
     kind: AssetKind,
@@ -142,6 +143,7 @@ impl Asset {
 
         Ok(Self {
             name,
+            extension: ext.to_string(),
             data,
             kind,
             cloud_type,
@@ -152,6 +154,10 @@ impl Asset {
         let mut hasher = Hasher::new();
         hasher.update(&self.data);
         hasher.finalize().to_string()
+    }
+
+    pub fn extension(&self) -> &str {
+        &self.extension
     }
 
     pub fn kind(&self) -> &AssetKind {
