@@ -1,4 +1,7 @@
-use std::{env, path::Path};
+use std::{
+    env,
+    path::{Path, PathBuf},
+};
 
 use anyhow::Context;
 use log::{info, warn};
@@ -18,7 +21,7 @@ pub enum SyncResult {
 
 pub trait SyncBackend {
     async fn sync(
-        self,
+        &self,
         state: &mut SyncState,
         path: &str,
         asset: Asset,
@@ -53,7 +56,7 @@ pub struct RobloxBackend;
 
 impl SyncBackend for RobloxBackend {
     async fn sync(
-        self,
+        &self,
         state: &mut SyncState,
         path: &str,
         asset: Asset,
@@ -73,27 +76,33 @@ impl SyncBackend for RobloxBackend {
     }
 }
 
-pub struct LocalBackend;
+pub struct LocalBackend {
+    sync_path: PathBuf,
+}
+
+impl LocalBackend {
+    pub fn new() -> anyhow::Result<Self> {
+        let studio = RobloxStudio::locate().context("Failed to get Roblox Studio path")?;
+        let sync_path = studio.content_path().join(".asphalt");
+        info!("Assets will be synced to: {}", sync_path.display());
+        Ok(Self { sync_path })
+    }
+}
 
 impl SyncBackend for LocalBackend {
     async fn sync(
-        self,
+        &self,
         state: &mut SyncState,
         path: &str,
         asset: Asset,
     ) -> anyhow::Result<SyncResult> {
-        let studio = RobloxStudio::locate().context("Failed to get Roblox Studio path")?;
-
-        if let AssetKind::Model(kind) = asset.kind() {
-            if let ModelKind::Animation = kind {
-                warn!("Animations cannot be synced locally, skipping {path}");
-                return Ok(SyncResult::None);
-            }
+        if let AssetKind::Model(ModelKind::Animation) = asset.kind() {
+            warn!("Animations cannot be synced locally, skipping {path}");
+            return Ok(SyncResult::None);
         }
 
-        let content_path = studio.content_path().join(".asphalt");
         let asset_path = normalize_path(state, path).context("Failed to normalize asset path")?;
-        sync_to_path(&content_path, &asset_path, asset)
+        sync_to_path(&self.sync_path, &asset_path, asset)
             .await
             .context("Failed to sync asset to Roblox Studio")?;
 
@@ -109,7 +118,7 @@ pub struct DebugBackend;
 
 impl SyncBackend for DebugBackend {
     async fn sync(
-        self,
+        &self,
         state: &mut SyncState,
         path: &str,
         asset: Asset,

@@ -9,7 +9,6 @@ use backend::{DebugBackend, LocalBackend, RobloxBackend, SyncBackend, SyncResult
 use codegen::{generate_lua, generate_ts};
 use config::SyncConfig;
 use log::{debug, info, warn};
-use roblox_install::RobloxStudio;
 use std::{
     collections::{BTreeMap, VecDeque},
     path::Path,
@@ -29,6 +28,12 @@ fn format_asset_id(asset_id: u64) -> String {
     format!("rbxassetid://{}", asset_id)
 }
 
+enum TargetBackend {
+    Roblox(RobloxBackend),
+    Local(LocalBackend),
+    Debug(DebugBackend),
+}
+
 struct ProcessResult {
     asset_id: String,
     file_entry: Option<FileEntry>,
@@ -37,6 +42,7 @@ struct ProcessResult {
 async fn process_file(
     entry: &DirEntry,
     state: &mut SyncState,
+    backend: &TargetBackend,
 ) -> anyhow::Result<Option<ProcessResult>> {
     let path = entry.path();
     let path_str = path.to_str().unwrap();
@@ -69,12 +75,7 @@ async fn process_file(
     let existing = state.existing_lockfile.entries.get(fixed_path.as_str());
 
     if let Some(existing_value) = existing {
-        let check_lockfile = match state.target {
-            SyncTarget::Roblox => true,
-            _ => false,
-        };
-
-        if check_lockfile && existing_value.hash == hash {
+        if matches!(state.target, SyncTarget::Roblox) && existing_value.hash == hash {
             return Ok(Some(ProcessResult {
                 asset_id: format_asset_id(existing_value.asset_id),
                 file_entry: Some(FileEntry {
@@ -90,10 +91,10 @@ async fn process_file(
         return Ok(None);
     }
 
-    let sync_result = match state.target {
-        SyncTarget::Roblox => RobloxBackend.sync(state, &fixed_path, asset).await,
-        SyncTarget::Local => LocalBackend.sync(state, &fixed_path, asset).await,
-        SyncTarget::Debug => DebugBackend.sync(state, &fixed_path, asset).await,
+    let sync_result = match &backend {
+        TargetBackend::Roblox(backend) => backend.sync(state, &fixed_path, asset).await,
+        TargetBackend::Local(backend) => backend.sync(state, &fixed_path, asset).await,
+        TargetBackend::Debug(backend) => backend.sync(state, &fixed_path, asset).await,
     }
     .with_context(|| format!("Failed to sync {fixed_path}"))?;
 
@@ -123,9 +124,11 @@ pub async fn sync(args: SyncArgs, existing_lockfile: LockFile) -> anyhow::Result
     let mut remaining_items = VecDeque::new();
     remaining_items.push_back(state.asset_dir.clone());
 
-    if let SyncTarget::Local = state.target {
-        let _ = RobloxStudio::locate().context("Failed to get Roblox Studio path")?;
-    }
+    let backend = match state.target {
+        SyncTarget::Roblox => TargetBackend::Roblox(RobloxBackend),
+        SyncTarget::Local => TargetBackend::Local(LocalBackend::new()?),
+        SyncTarget::Debug => TargetBackend::Debug(DebugBackend),
+    };
 
     while let Some(path) = remaining_items.pop_front() {
         let mut dir_entries = read_dir(path.clone())
@@ -148,7 +151,7 @@ pub async fn sync(args: SyncArgs, existing_lockfile: LockFile) -> anyhow::Result
                     continue;
                 }
 
-                let result = match process_file(&entry, &mut state).await {
+                let result = match process_file(&entry, &mut state, &backend).await {
                     Ok(Some(result)) => result,
                     Ok(None) => continue,
                     Err(e) => {
@@ -165,7 +168,7 @@ pub async fn sync(args: SyncArgs, existing_lockfile: LockFile) -> anyhow::Result
         }
     }
 
-    if let SyncTarget::Roblox = state.target {
+    if !state.new_lockfile.entries.is_empty() {
         let _ = &state
             .new_lockfile
             .write()
