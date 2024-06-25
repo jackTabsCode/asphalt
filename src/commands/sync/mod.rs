@@ -168,8 +168,13 @@ pub async fn sync(args: SyncArgs, existing_lockfile: LockFile) -> anyhow::Result
         }
     }
 
-    if !state.new_lockfile.entries.is_empty() {
-        let _ = &state
+    if state.dry_run || matches!(state.target, SyncTarget::Debug) {
+        info!("Synced!");
+        return Ok(());
+    }
+
+    if let SyncTarget::Roblox = state.target {
+        state
             .new_lockfile
             .write()
             .await
