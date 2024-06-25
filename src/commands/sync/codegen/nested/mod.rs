@@ -96,7 +96,7 @@ fn generate_expressions(
     Ok(build_table(&NestedTable::Folder(root)))
 }
 
-pub fn generate_lua(
+pub fn generate_luau(
     lockfile: &LockFile,
     strip_dir: &str,
     strip_extension: bool,
@@ -104,7 +104,7 @@ pub fn generate_lua(
     generate_code(
         generate_expressions(lockfile, strip_dir, strip_extension)
             .context("Failed to create nested expressions")?,
-        AstTarget::Lua,
+        AstTarget::Luau,
     )
 }
 

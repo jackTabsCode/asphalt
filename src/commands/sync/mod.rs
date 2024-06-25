@@ -1,7 +1,7 @@
 use self::state::SyncState;
 use crate::{asset::Asset, cli::SyncArgs, FileEntry, LockFile};
 use anyhow::Context;
-use codegen::{generate_lua, generate_ts};
+use codegen::{generate_luau, generate_ts};
 use config::SyncConfig;
 use log::{debug, info, warn};
 use std::{collections::VecDeque, path::Path};
@@ -146,17 +146,20 @@ pub async fn sync(args: SyncArgs, existing_lockfile: LockFile) -> anyhow::Result
             )
         }));
 
-    let lua_filename = format!("{}.{}", state.output_name, "luau");
-    let lua_output = generate_lua(
+    let luau_filename = format!("{}.{}", state.output_name, "luau");
+    let luau_output = generate_luau(
         &state.new_lockfile,
         asset_dir_str,
         &state.style,
         state.strip_extension,
     );
 
-    write(Path::new(&state.write_dir).join(lua_filename), lua_output?)
-        .await
-        .context("Failed to write output Luau file")?;
+    write(
+        Path::new(&state.write_dir).join(luau_filename),
+        luau_output?,
+    )
+    .await
+    .context("Failed to write output Luau file")?;
 
     if state.typescript {
         let ts_filename = format!("{}.d.ts", state.output_name);
