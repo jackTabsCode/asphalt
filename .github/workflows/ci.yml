@@ -47,6 +47,8 @@ jobs:
     lint:
         name: Rustfmt & Clippy
         runs-on: ubuntu-latest
+        env:
+          RUSTFLAGS: "-Dwarnings"
 
         steps:
             - uses: actions/checkout@v3
