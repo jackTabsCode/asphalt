@@ -15,7 +15,7 @@ fn asset_path(file_path: &str, strip_dir: &str, strip_extension: bool) -> anyhow
     .map(|s| s.to_string())
 }
 
-pub fn generate_lua(
+pub fn generate_luau(
     lockfile: &LockFile,
     strip_dir: &str,
     strip_extension: bool,
