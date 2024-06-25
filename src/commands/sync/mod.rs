@@ -146,7 +146,7 @@ pub async fn sync(args: SyncArgs, existing_lockfile: LockFile) -> anyhow::Result
             )
         }));
 
-    let lua_filename = format!("{}.{}", state.output_name, state.lua_extension);
+    let lua_filename = format!("{}.{}", state.output_name, "luau");
     let lua_output = generate_lua(
         &state.new_lockfile,
         asset_dir_str,
@@ -156,7 +156,7 @@ pub async fn sync(args: SyncArgs, existing_lockfile: LockFile) -> anyhow::Result
 
     write(Path::new(&state.write_dir).join(lua_filename), lua_output?)
         .await
-        .context("Failed to write output Lua file")?;
+        .context("Failed to write output Luau file")?;
 
     if state.typescript {
         let ts_filename = format!("{}.d.ts", state.output_name);

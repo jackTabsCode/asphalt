@@ -54,7 +54,6 @@ pub struct ExistingAsset {
 pub struct CodegenConfig {
     pub output_name: Option<String>,
     pub typescript: Option<bool>,
-    pub luau: Option<bool>,
     pub style: Option<CodegenStyle>,
     pub strip_extension: Option<bool>,
 }
