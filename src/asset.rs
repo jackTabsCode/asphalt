@@ -1,15 +1,11 @@
-use crate::{
-    upload::{upload_animation, upload_cloud_asset},
-    util::{alpha_bleed::alpha_bleed, svg::svg_to_png},
-};
+use crate::util::{alpha_bleed::alpha_bleed, svg::svg_to_png};
 use anyhow::{bail, Context};
 use blake3::Hasher;
 use image::{DynamicImage, ImageFormat};
 use rbx_xml::DecodeOptions;
-use rbxcloud::rbx::v1::assets::{AssetCreator, AssetType as CloudAssetType};
+use rbxcloud::rbx::v1::assets::AssetType as CloudAssetType;
 use resvg::usvg::fontdb::Database;
-use std::{io::Cursor, path::Path};
-use tokio::fs::write;
+use std::io::Cursor;
 
 pub enum AudioKind {
     Mp3,
@@ -156,71 +152,23 @@ impl Asset {
         hasher.finalize().to_string()
     }
 
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
     pub fn extension(&self) -> &str {
         &self.ext
+    }
+
+    pub fn data(&self) -> &Vec<u8> {
+        &self.data
     }
 
     pub fn kind(&self) -> &AssetKind {
         &self.kind
     }
 
-    async fn upload_cloud(
-        self,
-        creator: AssetCreator,
-        api_key: String,
-        cloud_type: CloudAssetType,
-    ) -> anyhow::Result<UploadResult> {
-        let asset_id =
-            upload_cloud_asset(self.data, self.name, cloud_type, api_key, creator).await?;
-
-        Ok(UploadResult {
-            asset_id,
-            csrf: None,
-        })
-    }
-
-    async fn upload_animation(
-        self,
-        creator: AssetCreator,
-        cookie: String,
-        csrf: Option<String>,
-    ) -> anyhow::Result<UploadResult> {
-        let result = upload_animation(self.data, self.name, cookie, csrf, creator).await?;
-
-        Ok(UploadResult {
-            asset_id: result.asset_id,
-            csrf: Some(result.csrf),
-        })
-    }
-
-    pub async fn upload(
-        self,
-        creator: AssetCreator,
-        api_key: String,
-        cookie: Option<String>,
-        csrf: Option<String>,
-    ) -> anyhow::Result<UploadResult> {
-        match &self.kind {
-            AssetKind::Decal(_) | AssetKind::Audio(_) | AssetKind::Model(ModelKind::Model) => {
-                let cloud_type = self
-                    .cloud_type
-                    .ok_or_else(|| anyhow::anyhow!("Invalid cloud type"))?;
-
-                self.upload_cloud(creator, api_key, cloud_type).await
-            }
-            AssetKind::Model(ModelKind::Animation) => {
-                if let Some(cookie) = cookie {
-                    self.upload_animation(creator, cookie, csrf).await
-                } else {
-                    bail!("Cookie required for uploading animations")
-                }
-            }
-        }
-    }
-
-    pub async fn write(self, path: &Path) -> anyhow::Result<()> {
-        write(path, self.data)
-            .await
-            .with_context(|| format!("Failed to write asset to {}", path.display()))
+    pub fn cloud_type(&self) -> Option<CloudAssetType> {
+        self.cloud_type
     }
 }

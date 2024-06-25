@@ -5,7 +5,9 @@ use crate::{
     FileEntry, LockFile,
 };
 use anyhow::Context;
-use backend::{CloudBackend, DebugBackend, StudioBackend, SyncBackend, SyncResult};
+use backend::{
+    cloud::CloudBackend, debug::DebugBackend, studio::StudioBackend, SyncBackend, SyncResult,
+};
 use codegen::{generate_lua, generate_ts};
 use config::SyncConfig;
 use log::{debug, info, warn};
