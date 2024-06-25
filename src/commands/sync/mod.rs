@@ -5,7 +5,7 @@ use crate::{
     FileEntry, LockFile,
 };
 use anyhow::Context;
-use backend::{DebugBackend, LocalBackend, RobloxBackend, SyncBackend, SyncResult};
+use backend::{CloudBackend, DebugBackend, StudioBackend, SyncBackend, SyncResult};
 use codegen::{generate_lua, generate_ts};
 use config::SyncConfig;
 use log::{debug, info, warn};
@@ -29,8 +29,8 @@ fn format_asset_id(asset_id: u64) -> String {
 }
 
 enum TargetBackend {
-    Roblox(RobloxBackend),
-    Local(LocalBackend),
+    Cloud(CloudBackend),
+    Studio(StudioBackend),
     Debug(DebugBackend),
 }
 
@@ -75,7 +75,7 @@ async fn process_file(
     let existing = state.existing_lockfile.entries.get(fixed_path.as_str());
 
     if let Some(existing_value) = existing {
-        if matches!(state.target, SyncTarget::Roblox) && existing_value.hash == hash {
+        if matches!(state.target, SyncTarget::Cloud) && existing_value.hash == hash {
             return Ok(Some(ProcessResult {
                 asset_id: format_asset_id(existing_value.asset_id),
                 file_entry: Some(FileEntry {
@@ -92,18 +92,18 @@ async fn process_file(
     }
 
     let sync_result = match &backend {
-        TargetBackend::Roblox(backend) => backend.sync(state, &fixed_path, asset).await,
-        TargetBackend::Local(backend) => backend.sync(state, &fixed_path, asset).await,
+        TargetBackend::Cloud(backend) => backend.sync(state, &fixed_path, asset).await,
+        TargetBackend::Studio(backend) => backend.sync(state, &fixed_path, asset).await,
         TargetBackend::Debug(backend) => backend.sync(state, &fixed_path, asset).await,
     }
     .with_context(|| format!("Failed to sync {fixed_path}"))?;
 
     match sync_result {
-        SyncResult::Upload(asset_id) => Ok(Some(ProcessResult {
+        SyncResult::Cloud(asset_id) => Ok(Some(ProcessResult {
             asset_id: format_asset_id(asset_id),
             file_entry: Some(FileEntry { hash, asset_id }),
         })),
-        SyncResult::Local(asset_id) => Ok(Some(ProcessResult {
+        SyncResult::Studio(asset_id) => Ok(Some(ProcessResult {
             asset_id,
             file_entry: None,
         })),
@@ -125,8 +125,8 @@ pub async fn sync(args: SyncArgs, existing_lockfile: LockFile) -> anyhow::Result
     remaining_items.push_back(state.asset_dir.clone());
 
     let backend = match state.target {
-        SyncTarget::Roblox => TargetBackend::Roblox(RobloxBackend),
-        SyncTarget::Local => TargetBackend::Local(LocalBackend::new()?),
+        SyncTarget::Cloud => TargetBackend::Cloud(CloudBackend),
+        SyncTarget::Studio => TargetBackend::Studio(StudioBackend::new()?),
         SyncTarget::Debug => TargetBackend::Debug(DebugBackend),
     };
 
@@ -173,7 +173,7 @@ pub async fn sync(args: SyncArgs, existing_lockfile: LockFile) -> anyhow::Result
         return Ok(());
     }
 
-    if let SyncTarget::Roblox = state.target {
+    if let SyncTarget::Cloud = state.target {
         state
             .new_lockfile
             .write()

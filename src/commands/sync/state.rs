@@ -75,7 +75,7 @@ impl SyncState {
     ) -> anyhow::Result<Self> {
         let api_key = get_api_key(args.api_key)?;
         let cookie = get_cookie(args.cookie);
-        let target = args.target.unwrap_or(SyncTarget::Roblox);
+        let target = args.target.unwrap_or(SyncTarget::Cloud);
 
         let creator: AssetCreator = match config.creator.creator_type {
             CreatorType::User => AssetCreator::User(AssetUserCreator {

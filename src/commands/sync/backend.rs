@@ -14,8 +14,8 @@ use crate::asset::{Asset, AssetKind, ModelKind};
 use super::state::SyncState;
 
 pub enum SyncResult {
-    Upload(u64),
-    Local(String),
+    Cloud(u64),
+    Studio(String),
     None,
 }
 
@@ -52,9 +52,9 @@ async fn sync_to_path(write_path: &Path, asset_path: &str, asset: Asset) -> anyh
         .with_context(|| format!("Failed to write asset to {}", asset_path.display()))
 }
 
-pub struct RobloxBackend;
+pub struct CloudBackend;
 
-impl SyncBackend for RobloxBackend {
+impl SyncBackend for CloudBackend {
     async fn sync(
         &self,
         state: &mut SyncState,
@@ -72,15 +72,15 @@ impl SyncBackend for RobloxBackend {
         state.update_csrf(result.csrf);
 
         info!("Uploaded {path}");
-        Ok(SyncResult::Upload(result.asset_id))
+        Ok(SyncResult::Cloud(result.asset_id))
     }
 }
 
-pub struct LocalBackend {
+pub struct StudioBackend {
     sync_path: PathBuf,
 }
 
-impl LocalBackend {
+impl StudioBackend {
     pub fn new() -> anyhow::Result<Self> {
         let studio = RobloxStudio::locate().context("Failed to get Roblox Studio path")?;
         let sync_path = studio.content_path().join(".asphalt");
@@ -89,7 +89,7 @@ impl LocalBackend {
     }
 }
 
-impl SyncBackend for LocalBackend {
+impl SyncBackend for StudioBackend {
     async fn sync(
         &self,
         state: &mut SyncState,
@@ -97,7 +97,7 @@ impl SyncBackend for LocalBackend {
         asset: Asset,
     ) -> anyhow::Result<SyncResult> {
         if let AssetKind::Model(ModelKind::Animation) = asset.kind() {
-            warn!("Animations cannot be synced locally, skipping {path}");
+            warn!("Animations cannot be synced to Roblox Studio, skipping {path}");
             return Ok(SyncResult::None);
         }
 
@@ -107,7 +107,7 @@ impl SyncBackend for LocalBackend {
             .context("Failed to sync asset to Roblox Studio")?;
 
         info!("Synced {path}");
-        Ok(SyncResult::Local(format!(
+        Ok(SyncResult::Studio(format!(
             "rbxasset://.asphalt/{}",
             asset_path
         )))

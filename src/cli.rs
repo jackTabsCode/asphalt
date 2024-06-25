@@ -25,8 +25,8 @@ pub enum Commands {
 
 #[derive(ValueEnum, Clone)]
 pub enum SyncTarget {
-    Roblox,
-    Local,
+    Cloud,
+    Studio,
     Debug,
 }
 
