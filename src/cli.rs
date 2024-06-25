@@ -13,7 +13,7 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
-    /// Sync assets to Roblox.
+    /// Sync assets.
     Sync(SyncArgs),
 
     /// List assets in the lockfile.
