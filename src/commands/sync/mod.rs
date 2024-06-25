@@ -138,7 +138,7 @@ pub async fn sync(args: SyncArgs, existing_lockfile: LockFile) -> anyhow::Result
         .entries
         .extend(state.existing.into_iter().map(|(path, asset)| {
             (
-                path,
+                asset_dir_str.to_string() + path.as_str(),
                 FileEntry {
                     hash: "".to_string(),
                     asset_id: asset.id,
