@@ -50,7 +50,6 @@ pub struct SyncState {
 
     pub typescript: bool,
     pub output_name: String,
-    pub lua_extension: String,
     pub style: CodegenStyle,
     pub strip_extension: bool,
 
@@ -99,12 +98,6 @@ impl SyncState {
         let typescript = config.codegen.typescript.unwrap_or(false);
         let style = config.codegen.style.unwrap_or(CodegenStyle::Flat);
 
-        let lua_extension = String::from(if config.codegen.luau.unwrap_or(false) {
-            "luau"
-        } else {
-            "lua"
-        });
-
         let strip_extension = config.codegen.strip_extension.unwrap_or(false);
 
         let mut font_db = Database::new();
@@ -129,7 +122,6 @@ impl SyncState {
             creator,
             typescript,
             output_name,
-            lua_extension,
             style,
             strip_extension,
             font_db,

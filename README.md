@@ -55,7 +55,6 @@ write_dir = "src/shared/"
 
 [codegen]
 typescript = true
-luau = true
 style = "flat"
 output_name = "assets"
 
@@ -93,8 +92,6 @@ id = 9670971
 
 -   `typescript`: boolean (optional)
     -   Generate a Typescript definition file.
--   `luau`: boolean (optional)
-    -   Use the `luau` file extension.
 -   `style`: "flat" | "nested" (optional)
     -   The code-generation style to use. Defaults to `flat`. If you would like to have an experience similar to [Tarmac](https://github.com/rojo-rbx/tarmac), use `nested`.
 -   `output_name`: string (optional)
