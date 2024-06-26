@@ -80,7 +80,7 @@ impl SyncBackend for StudioBackend {
                 )));
             }
 
-            warn!("Animations cannot be synced locally, please upload it first using the 'cloud' target");
+            warn!("Animations cannot be synced as a file, please upload it first using the 'cloud' target");
             return Ok(SyncResult::None);
         }
 
