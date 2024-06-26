@@ -22,7 +22,7 @@ trait AstFormat {
 
 #[derive(Debug)]
 pub(crate) enum AstTarget {
-    Lua,
+    Luau,
     Typescript { output_dir: String },
 }
 
@@ -98,7 +98,7 @@ pub(crate) struct ReturnStatement(pub Expression, pub AstTarget);
 impl AstFormat for ReturnStatement {
     fn fmt_ast(&self, output: &mut AstStream) -> fmt::Result {
         match output.target {
-            AstTarget::Lua => {
+            AstTarget::Luau => {
                 write!(output, "return ")
             }
             AstTarget::Typescript { output_dir } => {
@@ -150,7 +150,7 @@ pub(crate) struct Table {
 impl AstFormat for Table {
     fn fmt_ast(&self, output: &mut AstStream<'_, '_>) -> fmt::Result {
         let assignment = match output.target {
-            AstTarget::Lua => " = ",
+            AstTarget::Luau => " = ",
             AstTarget::Typescript { .. } => ": ",
         };
 
@@ -179,7 +179,7 @@ impl AstFormat for String {
             write!(output, "{}", self)
         } else {
             match output.target {
-                AstTarget::Lua => write!(output, "[\"{}\"]", self),
+                AstTarget::Luau => write!(output, "[\"{}\"]", self),
                 AstTarget::Typescript { .. } => write!(output, "\"{}\"", self),
             }
         }

@@ -58,12 +58,6 @@ pub async fn init() -> anyhow::Result<()> {
         .prompt()
         .unwrap_or_else(|_| exit(1));
 
-    let luau = Confirm::new(".luau extension")
-        .with_help_message("Use .luau extension for Lua files.")
-        .with_default(false)
-        .prompt()
-        .unwrap_or_else(|_| exit(1));
-
     let codegen_style = Select::new("Style", vec![CodegenStyle::Flat, CodegenStyle::Nested])
         .with_help_message("The style to use for generated code.")
         .prompt()
@@ -83,7 +77,6 @@ pub async fn init() -> anyhow::Result<()> {
         codegen: CodegenConfig {
             output_name,
             typescript: Some(typescript),
-            luau: Some(luau),
             style: Some(codegen_style),
             strip_extension: Some(strip_extension),
         },

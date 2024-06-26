@@ -8,7 +8,7 @@ use anyhow::Context;
 use backend::{
     cloud::CloudBackend, debug::DebugBackend, studio::StudioBackend, SyncBackend, SyncResult,
 };
-use codegen::{generate_lua, generate_ts};
+use codegen::{generate_luau, generate_ts};
 use config::SyncConfig;
 use log::{debug, info, warn};
 use std::{
@@ -183,20 +183,23 @@ pub async fn sync(args: SyncArgs, existing_lockfile: LockFile) -> anyhow::Result
             .context("Failed to write lockfile")?;
     }
 
-    assets.extend(
-        state
-            .existing
-            .into_iter()
-            .map(|(path, asset)| (path, format_asset_id(asset.id))),
-    );
-
     let asset_dir_str = state.asset_dir.to_str().unwrap();
-    let lua_filename = format!("{}.{}", state.output_name, state.lua_extension);
-    let lua_output = generate_lua(&assets, asset_dir_str, &state.style, state.strip_extension);
+    assets.extend(state.existing.into_iter().map(|(path, asset)| {
+        (
+            asset_dir_str.to_string() + path.as_str(),
+            format_asset_id(asset.id),
+        )
+    }));
 
-    write(Path::new(&state.write_dir).join(lua_filename), lua_output?)
-        .await
-        .context("Failed to write output Lua file")?;
+    let luau_filename = format!("{}.{}", state.output_name, "luau");
+    let luau_output = generate_luau(&assets, asset_dir_str, &state.style, state.strip_extension);
+
+    write(
+        Path::new(&state.write_dir).join(luau_filename),
+        luau_output?,
+    )
+    .await
+    .context("Failed to write output Luau file")?;
 
     if state.typescript {
         let ts_filename = format!("{}.d.ts", state.output_name);

@@ -4,15 +4,15 @@ use crate::commands::sync::config::CodegenStyle;
 mod flat;
 mod nested;
 
-pub fn generate_lua(
+pub fn generate_luau(
     assets: &BTreeMap<String, String>,
     strip_dir: &str,
     style: &CodegenStyle,
     strip_extension: bool,
 ) -> anyhow::Result<String> {
     match style {
-        CodegenStyle::Flat => flat::generate_lua(assets, strip_dir, strip_extension),
-        CodegenStyle::Nested => nested::generate_lua(assets, strip_dir, strip_extension),
+        CodegenStyle::Flat => flat::generate_luau(assets, strip_dir, strip_extension),
+        CodegenStyle::Nested => nested::generate_luau(assets, strip_dir, strip_extension),
     }
 }
 
@@ -44,13 +44,13 @@ mod tests {
     }
 
     #[test]
-    fn generate_lua() {
+    fn generate_luau() {
         let lockfile = test_assets();
 
-        let lua = super::flat::generate_lua(&lockfile, "assets", false).unwrap();
+        let lua = super::flat::generate_luau(&lockfile, "assets", false).unwrap();
         assert_eq!(lua, "return {\n\t[\"/bar/baz.png\"] = \"rbxasset://.asphalt/bar/baz.png\",\n\t[\"/foo.png\"] = \"rbxassetid://1\"\n}");
 
-        let lua = super::flat::generate_lua(&lockfile, "assets", true).unwrap();
+        let lua = super::flat::generate_luau(&lockfile, "assets", true).unwrap();
         assert_eq!(
             lua,
             "return {\n\t[\"/bar/baz\"] = \"rbxasset://.asphalt/bar/baz.png\",\n\t[\"/foo\"] = \"rbxassetid://1\"\n}"
@@ -69,15 +69,15 @@ mod tests {
     }
 
     #[test]
-    fn generate_lua_nested() {
+    fn generate_luau_nested() {
         let lockfile = test_assets();
 
-        let lua = super::nested::generate_lua(&lockfile, "assets", false).unwrap();
+        let lua = super::nested::generate_luau(&lockfile, "assets", false).unwrap();
         assert_eq!(
             lua,
             "return {\n    bar = {\n        [\"baz.png\"] = \"rbxasset://.asphalt/bar/baz.png\",\n    },\n    [\"foo.png\"] = \"rbxassetid://1\",\n}");
 
-        let lua = super::nested::generate_lua(&lockfile, "assets", true).unwrap();
+        let lua = super::nested::generate_luau(&lockfile, "assets", true).unwrap();
         assert_eq!(
             lua,
             "return {\n    bar = {\n        baz = \"rbxasset://.asphalt/bar/baz.png\",\n    },\n    foo = \"rbxassetid://1\",\n}");
