@@ -1,8 +1,9 @@
-use std::path::PathBuf;
+use std::{env, path::PathBuf};
 
 use anyhow::Context;
-use log::{info, warn};
+use log::{debug, info, warn};
 use roblox_install::RobloxStudio;
+use tokio::fs::remove_dir_all;
 
 use crate::{
     asset::{Asset, AssetKind, ModelKind},
@@ -15,15 +16,44 @@ use crate::{
 use super::{SyncBackend, SyncResult};
 
 pub struct StudioBackend {
+    identifier: String,
     sync_path: PathBuf,
 }
 
 impl StudioBackend {
-    pub fn new() -> anyhow::Result<Self> {
+    pub async fn new() -> anyhow::Result<Self> {
         let studio = RobloxStudio::locate().context("Failed to get Roblox Studio path")?;
-        let sync_path = studio.content_path().join(".asphalt");
+
+        // Get current directory name and convert to kebab-case
+        let current_dir = env::current_dir().context("Failed to get current directory")?;
+        let name = current_dir
+            .file_name()
+            .and_then(|s| s.to_str())
+            .context("Failed to get current directory name")?;
+
+        let mut project_name = String::with_capacity(name.len());
+        name.to_lowercase().split_whitespace().for_each(|w| {
+            if !w.is_empty() {
+                project_name.push('-');
+            }
+            project_name.push_str(w);
+        });
+
+        let identifier = format!(".asphalt-{}", project_name);
+        let sync_path = studio.content_path().join(&identifier);
         info!("Assets will be synced to: {}", sync_path.display());
-        Ok(Self { sync_path })
+
+        if sync_path.exists() {
+            debug!("Removing existing folder...");
+            remove_dir_all(&sync_path)
+                .await
+                .context("Failed to remove existing folder")?;
+        }
+
+        Ok(Self {
+            identifier,
+            sync_path,
+        })
     }
 }
 
@@ -47,8 +77,8 @@ impl SyncBackend for StudioBackend {
 
         info!("Synced {path}");
         Ok(SyncResult::Studio(format!(
-            "rbxasset://.asphalt/{}",
-            asset_path
+            "rbxasset://{}/{}",
+            self.identifier, asset_path
         )))
     }
 }

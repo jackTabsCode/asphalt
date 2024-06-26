@@ -128,8 +128,8 @@ pub async fn sync(args: SyncArgs, existing_lockfile: LockFile) -> anyhow::Result
 
     let backend = match state.target {
         SyncTarget::Cloud => TargetBackend::Cloud(CloudBackend),
-        SyncTarget::Studio => TargetBackend::Studio(StudioBackend::new()?),
-        SyncTarget::Debug => TargetBackend::Debug(DebugBackend),
+        SyncTarget::Studio => TargetBackend::Studio(StudioBackend::new().await?),
+        SyncTarget::Debug => TargetBackend::Debug(DebugBackend::new().await?),
     };
 
     while let Some(path) = remaining_items.pop_front() {
