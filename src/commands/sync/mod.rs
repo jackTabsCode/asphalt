@@ -74,20 +74,6 @@ async fn process_file(
     let asset = Asset::new(file_name, data, ext, &state.font_db).await?;
     let hash = asset.hash();
 
-    let existing = state.existing_lockfile.entries.get(fixed_path.as_str());
-
-    if let Some(existing_value) = existing {
-        if matches!(state.target, SyncTarget::Cloud) && existing_value.hash == hash {
-            return Ok(Some(ProcessResult {
-                asset_id: format_asset_id(existing_value.asset_id),
-                file_entry: Some(FileEntry {
-                    hash,
-                    asset_id: existing_value.asset_id,
-                }),
-            }));
-        }
-    }
-
     if state.dry_run {
         info!("Sync {fixed_path}");
         return Ok(None);

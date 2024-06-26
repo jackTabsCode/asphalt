@@ -65,7 +65,22 @@ impl SyncBackend for StudioBackend {
         asset: Asset,
     ) -> anyhow::Result<SyncResult> {
         if let AssetKind::Model(ModelKind::Animation) = asset.kind() {
-            warn!("Animations cannot be synced to Roblox Studio, skipping {path}");
+            let existing = state.existing_lockfile.entries.get(path).and_then(|entry| {
+                if entry.hash == asset.hash() {
+                    Some(entry)
+                } else {
+                    None
+                }
+            });
+
+            if let Some(existing_value) = existing {
+                return Ok(SyncResult::Studio(format!(
+                    "rbxassetid://{}",
+                    existing_value.asset_id
+                )));
+            }
+
+            warn!("Animations cannot be synced locally, please upload it first using the 'cloud' target");
             return Ok(SyncResult::None);
         }
 

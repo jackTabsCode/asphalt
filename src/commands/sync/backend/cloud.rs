@@ -18,6 +18,13 @@ impl SyncBackend for CloudBackend {
         path: &str,
         asset: Asset,
     ) -> anyhow::Result<SyncResult> {
+        let existing = state.existing_lockfile.entries.get(path);
+        if let Some(existing_value) = existing {
+            if existing_value.hash == asset.hash() {
+                return Ok(SyncResult::Cloud(existing_value.asset_id));
+            }
+        }
+
         let asset_id = match asset.kind() {
             AssetKind::Decal(_) | AssetKind::Audio(_) | AssetKind::Model(ModelKind::Model) => {
                 let cloud_type = asset
