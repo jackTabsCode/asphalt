@@ -183,16 +183,17 @@ pub async fn sync(args: SyncArgs, existing_lockfile: LockFile) -> anyhow::Result
             .context("Failed to write lockfile")?;
     }
 
-    let asset_dir_str = state.asset_dir.to_str().unwrap();
-    assets.extend(state.existing.into_iter().map(|(path, asset)| {
-        (
-            asset_dir_str.to_string() + path.as_str(),
-            format_asset_id(asset.id),
-        )
-    }));
+    let asset_dir = state.asset_dir.to_str().unwrap();
+
+    assets.extend(
+        state
+            .existing
+            .into_iter()
+            .map(|(path, asset)| (path, format_asset_id(asset.id))),
+    );
 
     let luau_filename = format!("{}.{}", state.output_name, "luau");
-    let luau_output = generate_luau(&assets, asset_dir_str, &state.style, state.strip_extension);
+    let luau_output = generate_luau(&assets, asset_dir, &state.style, state.strip_extension);
 
     write(
         Path::new(&state.write_dir).join(luau_filename),
@@ -205,7 +206,7 @@ pub async fn sync(args: SyncArgs, existing_lockfile: LockFile) -> anyhow::Result
         let ts_filename = format!("{}.d.ts", state.output_name);
         let ts_output = generate_ts(
             &assets,
-            asset_dir_str,
+            asset_dir,
             state.output_name.as_str(),
             &state.style,
             state.strip_extension,
