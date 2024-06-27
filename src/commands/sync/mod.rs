@@ -110,6 +110,7 @@ pub async fn sync(args: SyncArgs, existing_lockfile: LockFile) -> anyhow::Result
 
     let mut assets = BTreeMap::<String, String>::new();
     let mut remaining_items = VecDeque::new();
+    let mut synced = 0;
     remaining_items.push_back(state.asset_dir.clone());
 
     let backend = match state.target {
@@ -140,8 +141,14 @@ pub async fn sync(args: SyncArgs, existing_lockfile: LockFile) -> anyhow::Result
                 }
 
                 let result = match process_file(&entry, &mut state, &backend).await {
-                    Ok(Some(result)) => result,
-                    Ok(None) => continue,
+                    Ok(Some(result)) => {
+                        synced += 1;
+                        result
+                    }
+                    Ok(None) => {
+                        synced += 1;
+                        continue;
+                    }
                     Err(e) => {
                         warn!("Failed to process file {fixed_path}: {e:?}");
                         continue;
@@ -157,7 +164,11 @@ pub async fn sync(args: SyncArgs, existing_lockfile: LockFile) -> anyhow::Result
     }
 
     if state.dry_run || matches!(state.target, SyncTarget::Debug) {
-        info!("Synced!");
+        info!(
+            "Synced {} asset{}!",
+            synced,
+            if synced == 1 { "" } else { "s" }
+        );
         return Ok(());
     }
 
@@ -203,7 +214,11 @@ pub async fn sync(args: SyncArgs, existing_lockfile: LockFile) -> anyhow::Result
             .context("Failed to write output TypeScript file")?;
     }
 
-    info!("Synced!");
+    info!(
+        "Synced {} asset{}!",
+        synced,
+        if synced == 1 { "" } else { "s" }
+    );
 
     Ok(())
 }
