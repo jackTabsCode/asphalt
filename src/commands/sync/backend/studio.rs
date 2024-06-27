@@ -22,7 +22,10 @@ pub struct StudioBackend {
 
 impl StudioBackend {
     pub async fn new() -> anyhow::Result<Self> {
-        let studio = RobloxStudio::locate().context("Failed to get Roblox Studio path")?;
+        let studio = RobloxStudio::locate().context(
+            "Failed to locate Roblox Studio, please set the ROBLOX_STUDIO_PATH \
+            environment variable",
+        )?;
 
         // Get current directory name and convert to kebab-case
         let current_dir = env::current_dir().context("Failed to get current directory")?;
