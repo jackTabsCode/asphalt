@@ -14,7 +14,7 @@ pub(crate) mod types {
     #[derive(Debug)]
     pub enum NestedTable<'a> {
         Folder(BTreeMap<String, NestedTable<'a>>),
-        File(&'a String),
+        Asset(&'a String),
     }
 }
 
@@ -27,13 +27,12 @@ fn build_table(entry: &NestedTable) -> Expression {
                 .map(|(component, entry)| (component.into(), build_table(entry)))
                 .collect(),
         ),
-        NestedTable::File(asset_id) => Expression::String(asset_id.to_string()),
+        NestedTable::Asset(asset_id) => Expression::String(asset_id.to_string()),
     }
 }
 
 /**
- * Creates expressions based on the **[`LockFile`]**, and will strip the prefix
- * and iterate through every file entry and build a table for code generation.
+ * Creates expressions based on a map of assets and builds a table for code generation.
 */
 fn generate_expressions(
     assets: &BTreeMap<String, String>,
@@ -77,7 +76,7 @@ fn generate_expressions(
             // last component is assumed to be a file.
             if index == components.len() - 1 {
                 if current_directory.get_mut(component).is_none() {
-                    current_directory.insert(component.to_owned(), NestedTable::File(asset_id));
+                    current_directory.insert(component.to_owned(), NestedTable::Asset(asset_id));
                 };
             } else if let NestedTable::Folder(entries) = current_directory
                 .entry(component.to_owned())
