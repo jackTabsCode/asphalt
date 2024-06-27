@@ -34,13 +34,11 @@ impl StudioBackend {
             .and_then(|s| s.to_str())
             .context("Failed to get current directory name")?;
 
-        let mut project_name = String::with_capacity(name.len());
-        name.to_lowercase().split_whitespace().for_each(|w| {
-            if !w.is_empty() {
-                project_name.push('-');
-            }
-            project_name.push_str(w);
-        });
+        let project_name = name
+            .to_lowercase()
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join("-");
 
         let identifier = format!(".asphalt-{}", project_name);
         let sync_path = studio.content_path().join(&identifier);
