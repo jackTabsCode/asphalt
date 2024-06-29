@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::Context;
 use tokio::fs::{create_dir_all, write};
@@ -26,13 +26,14 @@ pub trait SyncBackend {
     ) -> anyhow::Result<SyncResult>;
 }
 
-fn normalize_asset_path(state: &SyncState, path: &str) -> anyhow::Result<String> {
-    path.strip_prefix(state.asset_dir.to_str().unwrap())
-        .context("Failed to strip asset directory prefix")
-        .map(|s| s.to_string())
+fn asset_path(asset_dir: &str, path: &str, ext: &str) -> anyhow::Result<PathBuf> {
+    let stripped_path_str = path
+        .strip_prefix(asset_dir)
+        .context("Failed to strip asset directory prefix")?;
+    Ok(PathBuf::from(stripped_path_str).with_extension(ext))
 }
 
-async fn sync_to_path(write_path: &Path, asset_path: &str, asset: Asset) -> anyhow::Result<()> {
+async fn sync_to_path(write_path: &Path, asset_path: &Path, asset: Asset) -> anyhow::Result<()> {
     let mut asset_path = write_path.join(asset_path);
     asset_path.set_extension(asset.extension());
 

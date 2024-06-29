@@ -8,7 +8,7 @@ use tokio::fs::remove_dir_all;
 use crate::{
     asset::{Asset, AssetKind, ModelKind},
     commands::sync::{
-        backend::{normalize_asset_path, sync_to_path},
+        backend::{asset_path, sync_to_path},
         state::SyncState,
     },
 };
@@ -85,8 +85,8 @@ impl SyncBackend for StudioBackend {
             return Ok(SyncResult::None);
         }
 
-        let asset_path =
-            normalize_asset_path(state, path).context("Failed to normalize asset path")?;
+        let asset_path = asset_path(state.asset_dir.to_str().unwrap(), path, asset.extension())
+            .context("Failed to normalize asset path")?;
         sync_to_path(&self.sync_path, &asset_path, asset)
             .await
             .context("Failed to sync asset to Roblox Studio")?;
@@ -94,7 +94,8 @@ impl SyncBackend for StudioBackend {
         info!("Synced {path}");
         Ok(SyncResult::Studio(format!(
             "rbxasset://{}/{}",
-            self.identifier, asset_path
+            self.identifier,
+            asset_path.display()
         )))
     }
 }
