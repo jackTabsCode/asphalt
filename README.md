@@ -34,7 +34,27 @@ Guides you through setting up a new Asphalt project in the current directory.
 
 ### `asphalt sync`
 
-Uploads all assets in the `asset_dir` to Roblox. It will also generate a `asphalt.lock.toml` file which you should commit to source control.
+Syncs all assets in `asset_dir`.
+
+There are three targets you can use to sync assets:
+
+-   `cloud`: Uploads your assets to Roblox. This will generate a `asphalt.lock.toml` file which you should commit to source control. This is the default target.
+
+-   `studio`: Syncs assets locally to Roblox Studio. This is useful for testing assets in Studio before uploading them to Roblox.
+
+-   `debug`: Syncs assets to an `.asphalt-debug` folder in the current directory.
+
+```bash
+asphalt sync # Equivalent to --target cloud
+asphalt sync --target studio
+asphalt sync --target debug
+```
+
+You can also perform a dry run to verify which assets will be synced. This displays the assets that would be synced without syncing them.
+
+```bash
+asphalt sync --dry-run
+```
 
 ### `asphalt list`
 

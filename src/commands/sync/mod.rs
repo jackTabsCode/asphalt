@@ -1,12 +1,23 @@
 use self::state::SyncState;
-use crate::{asset::Asset, cli::SyncArgs, FileEntry, LockFile};
+use crate::{
+    asset::Asset,
+    cli::{SyncArgs, SyncTarget},
+    FileEntry, LockFile,
+};
 use anyhow::Context;
+use backend::{
+    cloud::CloudBackend, debug::DebugBackend, studio::StudioBackend, SyncBackend, SyncResult,
+};
 use codegen::{generate_luau, generate_ts};
 use config::SyncConfig;
 use log::{debug, info, warn};
-use std::{collections::VecDeque, path::Path};
+use std::{
+    collections::{BTreeMap, VecDeque},
+    path::Path,
+};
 use tokio::fs::{read, read_dir, write, DirEntry};
 
+mod backend;
 mod codegen;
 pub mod config;
 mod state;
@@ -15,10 +26,26 @@ fn fix_path(path: &str) -> String {
     path.replace('\\', "/")
 }
 
+fn format_asset_id(asset_id: u64) -> String {
+    format!("rbxassetid://{}", asset_id)
+}
+
+enum TargetBackend {
+    Cloud(CloudBackend),
+    Studio(StudioBackend),
+    Debug(DebugBackend),
+}
+
+struct ProcessResult {
+    asset_id: String,
+    file_entry: Option<FileEntry>,
+}
+
 async fn process_file(
     entry: &DirEntry,
     state: &mut SyncState,
-) -> anyhow::Result<Option<FileEntry>> {
+    backend: &TargetBackend,
+) -> anyhow::Result<Option<ProcessResult>> {
     let path = entry.path();
     let path_str = path.to_str().unwrap();
     let fixed_path = fix_path(path_str);
@@ -47,35 +74,29 @@ async fn process_file(
     let asset = Asset::new(file_name, data, ext, &state.font_db).await?;
     let hash = asset.hash();
 
-    let existing = state.existing_lockfile.entries.get(fixed_path.as_str());
-
-    if let Some(existing_value) = existing {
-        if existing_value.hash == hash {
-            return Ok(Some(FileEntry {
-                hash,
-                asset_id: existing_value.asset_id,
-            }));
-        }
+    if state.dry_run {
+        info!("Sync {fixed_path}");
+        return Ok(None);
     }
 
-    let result = asset
-        .upload(
-            state.creator.clone(),
-            state.api_key.clone(),
-            state.cookie.clone(),
-            None,
-        )
-        .await
-        .with_context(|| format!("Failed to upload {fixed_path}"))?;
+    let sync_result = match &backend {
+        TargetBackend::Cloud(backend) => backend.sync(state, &fixed_path, asset).await,
+        TargetBackend::Studio(backend) => backend.sync(state, &fixed_path, asset).await,
+        TargetBackend::Debug(backend) => backend.sync(state, &fixed_path, asset).await,
+    }
+    .with_context(|| format!("Failed to sync {fixed_path}"))?;
 
-    let _ = &state.update_csrf(result.csrf);
-
-    info!("Uploaded {fixed_path}");
-
-    Ok(Some(FileEntry {
-        hash,
-        asset_id: result.asset_id,
-    }))
+    match sync_result {
+        SyncResult::Cloud(asset_id) => Ok(Some(ProcessResult {
+            asset_id: format_asset_id(asset_id),
+            file_entry: Some(FileEntry { hash, asset_id }),
+        })),
+        SyncResult::Studio(asset_id) => Ok(Some(ProcessResult {
+            asset_id,
+            file_entry: None,
+        })),
+        SyncResult::None => Ok(None),
+    }
 }
 
 pub async fn sync(args: SyncArgs, existing_lockfile: LockFile) -> anyhow::Result<()> {
@@ -87,8 +108,16 @@ pub async fn sync(args: SyncArgs, existing_lockfile: LockFile) -> anyhow::Result
 
     info!("Syncing...");
 
+    let mut assets = BTreeMap::<String, String>::new();
     let mut remaining_items = VecDeque::new();
+    let mut synced = 0;
     remaining_items.push_back(state.asset_dir.clone());
+
+    let backend = match state.target {
+        SyncTarget::Cloud => TargetBackend::Cloud(CloudBackend),
+        SyncTarget::Studio => TargetBackend::Studio(StudioBackend::new().await?),
+        SyncTarget::Debug => TargetBackend::Debug(DebugBackend::new().await?),
+    };
 
     while let Some(path) = remaining_items.pop_front() {
         let mut dir_entries = read_dir(path.clone())
@@ -111,48 +140,57 @@ pub async fn sync(args: SyncArgs, existing_lockfile: LockFile) -> anyhow::Result
                     continue;
                 }
 
-                let result = match process_file(&entry, &mut state).await {
-                    Ok(Some(result)) => result,
-                    Ok(None) => continue,
+                let result = match process_file(&entry, &mut state, &backend).await {
+                    Ok(Some(result)) => {
+                        synced += 1;
+                        result
+                    }
+                    Ok(None) => {
+                        synced += 1;
+                        continue;
+                    }
                     Err(e) => {
                         warn!("Failed to process file {fixed_path}: {e:?}");
                         continue;
                     }
                 };
 
-                state.new_lockfile.entries.insert(fixed_path, result);
+                assets.insert(fixed_path.clone(), result.asset_id);
+                if let Some(file_entry) = result.file_entry {
+                    state.new_lockfile.entries.insert(fixed_path, file_entry);
+                }
             }
         }
     }
 
-    let _ = &state
-        .new_lockfile
-        .write()
-        .await
-        .context("Failed to write lockfile")?;
+    if state.dry_run || matches!(state.target, SyncTarget::Debug) {
+        info!(
+            "Synced {} asset{}!",
+            synced,
+            if synced == 1 { "" } else { "s" }
+        );
+        return Ok(());
+    }
 
-    let asset_dir_str = state.asset_dir.to_str().unwrap();
+    if let SyncTarget::Cloud = state.target {
+        state
+            .new_lockfile
+            .write()
+            .await
+            .context("Failed to write lockfile")?;
+    }
 
-    state
-        .new_lockfile
-        .entries
-        .extend(state.existing.into_iter().map(|(path, asset)| {
-            (
-                path,
-                FileEntry {
-                    hash: "".to_string(),
-                    asset_id: asset.id,
-                },
-            )
-        }));
+    let asset_dir = state.asset_dir.to_str().unwrap();
+
+    assets.extend(
+        state
+            .existing
+            .into_iter()
+            .map(|(path, asset)| (path, format_asset_id(asset.id))),
+    );
 
     let luau_filename = format!("{}.{}", state.output_name, "luau");
-    let luau_output = generate_luau(
-        &state.new_lockfile,
-        asset_dir_str,
-        &state.style,
-        state.strip_extension,
-    );
+    let luau_output = generate_luau(&assets, asset_dir, &state.style, state.strip_extension);
 
     write(
         Path::new(&state.write_dir).join(luau_filename),
@@ -164,8 +202,8 @@ pub async fn sync(args: SyncArgs, existing_lockfile: LockFile) -> anyhow::Result
     if state.typescript {
         let ts_filename = format!("{}.d.ts", state.output_name);
         let ts_output = generate_ts(
-            &state.new_lockfile,
-            asset_dir_str,
+            &assets,
+            asset_dir,
             state.output_name.as_str(),
             &state.style,
             state.strip_extension,
@@ -176,7 +214,11 @@ pub async fn sync(args: SyncArgs, existing_lockfile: LockFile) -> anyhow::Result
             .context("Failed to write output TypeScript file")?;
     }
 
-    info!("Synced!");
+    info!(
+        "Synced {} asset{}!",
+        synced,
+        if synced == 1 { "" } else { "s" }
+    );
 
     Ok(())
 }
