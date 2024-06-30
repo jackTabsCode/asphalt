@@ -33,11 +33,9 @@ fn asset_path(asset_dir: &str, path: &str, ext: &str) -> anyhow::Result<PathBuf>
     Ok(PathBuf::from(stripped_path_str).with_extension(ext))
 }
 
-async fn sync_to_path(write_path: &Path, asset_path: &Path, asset: Asset) -> anyhow::Result<()> {
-    let mut asset_path = write_path.join(asset_path);
-    asset_path.set_extension(asset.extension());
-
-    let parent_path = asset_path
+async fn write_to_path(dest_path: &Path, asset_path: &Path, data: &[u8]) -> anyhow::Result<()> {
+    let write_path = dest_path.join(asset_path);
+    let parent_path = write_path
         .parent()
         .context("Asset should have a parent path")?;
 
@@ -45,7 +43,7 @@ async fn sync_to_path(write_path: &Path, asset_path: &Path, asset: Asset) -> any
         .await
         .with_context(|| format!("Failed to create asset folder {}", parent_path.display()))?;
 
-    write(&asset_path, asset.data())
+    write(&write_path, data)
         .await
         .with_context(|| format!("Failed to write asset to {}", asset_path.display()))
 }
