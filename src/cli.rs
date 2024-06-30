@@ -1,4 +1,4 @@
-use clap::{Args, Parser, Subcommand};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 use clap_verbosity_flag::{InfoLevel, Verbosity};
 
 #[derive(Parser)]
@@ -13,7 +13,7 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
-    /// Sync assets to Roblox.
+    /// Sync assets.
     Sync(SyncArgs),
 
     /// List assets in the lockfile.
@@ -21,6 +21,13 @@ pub enum Commands {
 
     /// Initialize a new configuration.
     Init,
+}
+
+#[derive(ValueEnum, Clone)]
+pub enum SyncTarget {
+    Cloud,
+    Studio,
+    Debug,
 }
 
 #[derive(Args)]
@@ -34,4 +41,12 @@ pub struct SyncArgs {
     /// This is only required if you are uploading animations with Asphalt.
     #[arg(long)]
     pub cookie: Option<String>,
+
+    /// Where Asphalt should sync assets to.
+    #[arg(short, long)]
+    pub target: Option<SyncTarget>,
+
+    /// Skip asset syncing and only display what assets will be synced.
+    #[arg(long, action)]
+    pub dry_run: bool,
 }
