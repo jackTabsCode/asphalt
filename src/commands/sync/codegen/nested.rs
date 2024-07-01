@@ -1,12 +1,10 @@
 use self::types::NestedTable;
+use super::ast::{AstTarget, Expression};
+use super::generate_code;
 use anyhow::{bail, Context};
-use ast::{AstTarget, Expression, ReturnStatement};
 use std::collections::BTreeMap;
-use std::fmt::Write;
 use std::path::PathBuf;
 use std::{path::Component as PathComponent, path::Path};
-
-mod ast;
 
 pub(crate) mod types {
     use std::collections::BTreeMap;
@@ -99,7 +97,7 @@ pub fn generate_luau(
 ) -> anyhow::Result<String> {
     generate_code(
         generate_expressions(assets, strip_dir, strip_extension)
-            .context("Failed to create nested expressions")?,
+            .context("Failed to generate nested table")?,
         AstTarget::Luau,
     )
 }
@@ -112,15 +110,9 @@ pub fn generate_ts(
 ) -> anyhow::Result<String> {
     generate_code(
         generate_expressions(assets, strip_dir, strip_extension)
-            .context("Failed to create nested expressions")?,
+            .context("Failed to generate nested table")?,
         AstTarget::Typescript {
             output_dir: output_dir.to_owned(),
         },
     )
-}
-
-fn generate_code(expression: Expression, target: AstTarget) -> anyhow::Result<String> {
-    let mut buffer = String::new();
-    write!(buffer, "{}", ReturnStatement(expression, target))?;
-    Ok(buffer)
 }

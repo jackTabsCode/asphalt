@@ -27,7 +27,6 @@ pub(crate) enum AstTarget {
 }
 
 pub(crate) struct AstStream<'a, 'b> {
-    number_of_spaces: usize,
     indents: usize,
     is_start_of_line: bool,
     writer: &'a mut (dyn Write),
@@ -37,7 +36,6 @@ pub(crate) struct AstStream<'a, 'b> {
 impl<'a, 'b> AstStream<'a, 'b> {
     pub fn new(writer: &'a mut (dyn fmt::Write + 'a), target: &'b AstTarget) -> Self {
         Self {
-            number_of_spaces: 4,
             indents: 0,
             is_start_of_line: true,
             writer,
@@ -75,11 +73,8 @@ impl Write for AstStream<'_, '_> {
             if !line.is_empty() {
                 if self.is_start_of_line {
                     self.is_start_of_line = false;
-                    self.writer.write_str(&format!(
-                        "{: >1$}",
-                        "",
-                        self.number_of_spaces * self.indents
-                    ))?;
+                    self.writer
+                        .write_str(&format!("{:\t>1$}", "", self.indents))?;
                 }
 
                 self.writer.write_str(line)?;
@@ -108,7 +103,9 @@ impl AstFormat for ReturnStatement {
 
         let result = self.0.fmt_ast(output);
         if let AstTarget::Typescript { output_dir } = output.target {
-            write!(output, "\nexport = {output_dir}")?
+            write!(output, "\nexport = {output_dir};\n")?
+        } else {
+            writeln!(output)?;
         }
         result
     }
@@ -149,9 +146,11 @@ pub(crate) struct Table {
 
 impl AstFormat for Table {
     fn fmt_ast(&self, output: &mut AstStream<'_, '_>) -> fmt::Result {
-        let assignment = match output.target {
-            AstTarget::Luau => " = ",
-            AstTarget::Typescript { .. } => ": ",
+        let typescript = matches!(output.target, AstTarget::Typescript { .. });
+        let (assignment, ending) = if typescript {
+            (": ", ";")
+        } else {
+            (" = ", ",")
         };
 
         writeln!(output, "{{")?;
@@ -161,11 +160,25 @@ impl AstFormat for Table {
             key.fmt_key(output)?;
             write!(output, "{assignment}")?;
             value.fmt_ast(output)?;
-            writeln!(output, ",")?;
+
+            // If the value is a table and the target is TypeScript, we don't need the ending
+            // as it will be added after - this avoids double semi-colons for nested tables.
+            if let Expression::Table(_) = value {
+                if typescript {
+                    writeln!(output)?;
+                    continue;
+                }
+            }
+
+            writeln!(output, "{ending}")?;
         }
 
         output.unindent();
-        write!(output, "}}")
+        if typescript {
+            write!(output, "}};")
+        } else {
+            write!(output, "}}")
+        }
     }
 }
 
