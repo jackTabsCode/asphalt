@@ -26,7 +26,7 @@ aftman add jacktabscode/asphalt
 rokit add jacktabscode/asphalt
 ```
 
-### [Cargo](https://crates.io/crates/asphalt)
+### [Cargo](https://crates.io/crates/asphalt) (build from source)
 
 ```sh
 cargo install asphalt
