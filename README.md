@@ -129,6 +129,15 @@ id = 9670971
 
 -   `id`: number
 
+## Code Generation
+The formatting of code generation (such as spaces, tabs, width, and semicolons) is not guaranteed by Asphalt and may change between releases without being noted as a breaking change.
+
+Therefore, it is recommended to add Asphalt's generated files to your linter/formatter's "ignore" list. Here are instructions for the most commonly used tools:
+
+- [Stylua](https://github.com/JohnnyMorganz/StyLua?tab=readme-ov-file#glob-filtering)
+- [Biome](https://biomejs.dev/guides/configure-biome/#ignore-files)
+- [ESLint](https://eslint.org/docs/latest/use/configure/ignore)
+
 ## API Key
 
 You will need an API key to sync with Asphalt. You can specify this using the `--api-key` argument, or the `ASPHALT_API_KEY` environment variable.
