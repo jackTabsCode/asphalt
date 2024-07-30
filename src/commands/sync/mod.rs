@@ -8,7 +8,7 @@ use anyhow::Context;
 use backend::{
     cloud::CloudBackend, debug::DebugBackend, studio::StudioBackend, SyncBackend, SyncResult,
 };
-use codegen::{generate_luau, generate_ts};
+use codegen::generate_file;
 use config::SyncConfig;
 use log::{debug, info, warn};
 use std::{
@@ -189,30 +189,22 @@ pub async fn sync(args: SyncArgs, existing_lockfile: LockFile) -> anyhow::Result
             .map(|(path, asset)| (path, format_asset_id(asset.id))),
     );
 
-    let luau_filename = format!("{}.{}", state.output_name, "luau");
-    let luau_output = generate_luau(&assets, asset_dir, &state.style, state.strip_extension);
+    let codegen_output = generate_file(
+        &assets,
+        asset_dir,
+        &state.output_name,
+        &state.language,
+        &state.style,
+        state.strip_extension,
+    )?;
+    let codegen_filename = format!("{}.{}", state.output_name, state.language.extension());
 
     write(
-        Path::new(&state.write_dir).join(luau_filename),
-        luau_output?,
+        Path::new(&state.write_dir).join(codegen_filename),
+        codegen_output,
     )
     .await
-    .context("Failed to write output Luau file")?;
-
-    if state.typescript {
-        let ts_filename = format!("{}.d.ts", state.output_name);
-        let ts_output = generate_ts(
-            &assets,
-            asset_dir,
-            state.output_name.as_str(),
-            &state.style,
-            state.strip_extension,
-        );
-
-        write(Path::new(&state.write_dir).join(ts_filename), ts_output?)
-            .await
-            .context("Failed to write output TypeScript file")?;
-    }
+    .context("Failed to write output file")?;
 
     info!(
         "Synced {} asset{}!",

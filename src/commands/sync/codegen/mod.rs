@@ -5,32 +5,33 @@ use ast::{AstTarget, Expression, ReturnStatement};
 
 use crate::commands::sync::config::CodegenStyle;
 
+use super::config::CodegenLanguage;
+
 mod ast;
 mod flat;
 mod nested;
 
-pub fn generate_luau(
-    assets: &BTreeMap<String, String>,
-    strip_dir: &str,
-    style: &CodegenStyle,
-    strip_extension: bool,
-) -> anyhow::Result<String> {
-    match style {
-        CodegenStyle::Flat => flat::generate_luau(assets, strip_dir, strip_extension),
-        CodegenStyle::Nested => nested::generate_luau(assets, strip_dir, strip_extension),
-    }
-}
-
-pub fn generate_ts(
+pub fn generate_file(
     assets: &BTreeMap<String, String>,
     strip_dir: &str,
     output_dir: &str,
+    language: &CodegenLanguage,
     style: &CodegenStyle,
     strip_extension: bool,
 ) -> anyhow::Result<String> {
-    match style {
-        CodegenStyle::Flat => flat::generate_ts(assets, strip_dir, output_dir, strip_extension),
-        CodegenStyle::Nested => nested::generate_ts(assets, strip_dir, output_dir, strip_extension),
+    match (language, style) {
+        (CodegenLanguage::Luau, CodegenStyle::Flat) => {
+            flat::generate_luau(assets, strip_dir, strip_extension)
+        }
+        (CodegenLanguage::TypeScript, CodegenStyle::Flat) => {
+            flat::generate_ts(assets, strip_dir, output_dir, strip_extension)
+        }
+        (CodegenLanguage::Luau, CodegenStyle::Nested) => {
+            nested::generate_luau(assets, strip_dir, strip_extension)
+        }
+        (CodegenLanguage::TypeScript, CodegenStyle::Nested) => {
+            nested::generate_ts(assets, strip_dir, output_dir, strip_extension)
+        }
     }
 }
 
@@ -73,10 +74,10 @@ mod tests {
         let lockfile = test_assets();
 
         let ts = super::flat::generate_ts(&lockfile, "assets", "assets", false).unwrap();
-        assert_eq!(ts, "declare const assets: {\n\t\"/bar/baz.png\": \"rbxasset://.asphalt/bar/baz.png\";\n\t\"/foo.png\": \"rbxassetid://1\";\n};\nexport = assets;\n");
+        assert_eq!(ts, "const assets = {\n\t\"/bar/baz.png\": \"rbxasset://.asphalt/bar/baz.png\";\n\t\"/foo.png\": \"rbxassetid://1\";\n};\nexport = assets;\n");
 
         let ts = super::flat::generate_ts(&lockfile, "assets", "assets", true).unwrap();
-        assert_eq!(ts, "declare const assets: {\n\t\"/bar/baz\": \"rbxasset://.asphalt/bar/baz.png\";\n\t\"/foo\": \"rbxassetid://1\";\n};\nexport = assets;\n");
+        assert_eq!(ts, "const assets = {\n\t\"/bar/baz\": \"rbxasset://.asphalt/bar/baz.png\";\n\t\"/foo\": \"rbxassetid://1\";\n};\nexport = assets;\n");
     }
 
     #[test]
@@ -103,13 +104,13 @@ mod tests {
         let ts = super::nested::generate_ts(&lockfile, "assets", "assets", false).unwrap();
         assert_eq!(
             ts,
-            "declare const assets: {\n\tbar: {\n\t\t\"baz.png\": \"rbxasset://.asphalt/bar/baz.png\";\n\t};\n\t\"foo.png\": \"rbxassetid://1\";\n};\nexport = assets;\n"
+            "const assets = {\n\tbar: {\n\t\t\"baz.png\": \"rbxasset://.asphalt/bar/baz.png\";\n\t};\n\t\"foo.png\": \"rbxassetid://1\";\n};\nexport = assets;\n"
         );
 
         let ts = super::nested::generate_ts(&lockfile, "assets", "assets", true).unwrap();
         assert_eq!(
             ts,
-            "declare const assets: {\n\tbar: {\n\t\tbaz: \"rbxasset://.asphalt/bar/baz.png\";\n\t};\n\tfoo: \"rbxassetid://1\";\n};\nexport = assets;\n"
+            "const assets = {\n\tbar: {\n\t\tbaz: \"rbxasset://.asphalt/bar/baz.png\";\n\t};\n\tfoo: \"rbxassetid://1\";\n};\nexport = assets;\n"
         );
     }
 }

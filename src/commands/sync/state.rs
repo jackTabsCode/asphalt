@@ -1,4 +1,4 @@
-use super::config::{CodegenStyle, CreatorType, ExistingAsset, SyncConfig};
+use super::config::{CodegenLanguage, CodegenStyle, CreatorType, ExistingAsset, SyncConfig};
 use crate::{
     cli::{SyncArgs, SyncTarget},
     LockFile,
@@ -53,7 +53,7 @@ pub struct SyncState {
 
     pub creator: AssetCreator,
 
-    pub typescript: bool,
+    pub language: CodegenLanguage,
     pub output_name: String,
     pub style: CodegenStyle,
     pub strip_extension: bool,
@@ -101,7 +101,7 @@ impl SyncState {
             .unwrap_or(&"assets".to_string())
             .to_string();
 
-        let typescript = config.codegen.typescript.unwrap_or(false);
+        let language = config.codegen.language.unwrap_or(CodegenLanguage::Luau);
         let style = config.codegen.style.unwrap_or(CodegenStyle::Flat);
 
         let strip_extension = config.codegen.strip_extension.unwrap_or(false);
@@ -126,7 +126,7 @@ impl SyncState {
             exclude_assets_matcher,
             api_key,
             creator,
-            typescript,
+            language,
             output_name,
             style,
             strip_extension,

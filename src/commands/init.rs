@@ -1,3 +1,5 @@
+use crate::commands::sync::config::CodegenLanguage;
+
 use super::sync::config::{CodegenConfig, CodegenStyle, Creator, CreatorType, SyncConfig};
 use anyhow::Context;
 use console::style;
@@ -52,11 +54,13 @@ pub async fn init() -> anyhow::Result<()> {
         .prompt_skippable()
         .unwrap_or_else(|_| exit(1));
 
-    let typescript = Confirm::new("TypeScript support")
-        .with_help_message("Generate TypeScript definition files.")
-        .with_default(false)
-        .prompt()
-        .unwrap_or_else(|_| exit(1));
+    let codegen_language = Select::new(
+        "Language",
+        vec![CodegenLanguage::Luau, CodegenLanguage::TypeScript],
+    )
+    .with_help_message("The language to generate code in.")
+    .prompt()
+    .unwrap_or_else(|_| exit(1));
 
     let codegen_style = Select::new("Style", vec![CodegenStyle::Flat, CodegenStyle::Nested])
         .with_help_message("The style to use for generated code.")
@@ -76,7 +80,7 @@ pub async fn init() -> anyhow::Result<()> {
         creator: Creator { creator_type, id },
         codegen: CodegenConfig {
             output_name,
-            typescript: Some(typescript),
+            language: Some(codegen_language),
             style: Some(codegen_style),
             strip_extension: Some(strip_extension),
         },
