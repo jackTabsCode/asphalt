@@ -74,10 +74,10 @@ mod tests {
         let lockfile = test_assets();
 
         let ts = super::flat::generate_ts(&lockfile, "assets", "assets", false).unwrap();
-        assert_eq!(ts, "const assets = {\n\t\"/bar/baz.png\": \"rbxasset://.asphalt/bar/baz.png\";\n\t\"/foo.png\": \"rbxassetid://1\";\n};\nexport = assets;\n");
+        assert_eq!(ts, "const assets = {\n\t\"/bar/baz.png\": \"rbxasset://.asphalt/bar/baz.png\",\n\t\"/foo.png\": \"rbxassetid://1\",\n};\nexport = assets;\n");
 
         let ts = super::flat::generate_ts(&lockfile, "assets", "assets", true).unwrap();
-        assert_eq!(ts, "const assets = {\n\t\"/bar/baz\": \"rbxasset://.asphalt/bar/baz.png\";\n\t\"/foo\": \"rbxassetid://1\";\n};\nexport = assets;\n");
+        assert_eq!(ts, "const assets = {\n\t\"/bar/baz\": \"rbxasset://.asphalt/bar/baz.png\",\n\t\"/foo\": \"rbxassetid://1\",\n};\nexport = assets;\n");
     }
 
     #[test]
@@ -104,13 +104,13 @@ mod tests {
         let ts = super::nested::generate_ts(&lockfile, "assets", "assets", false).unwrap();
         assert_eq!(
             ts,
-            "const assets = {\n\tbar: {\n\t\t\"baz.png\": \"rbxasset://.asphalt/bar/baz.png\";\n\t};\n\t\"foo.png\": \"rbxassetid://1\";\n};\nexport = assets;\n"
+            "const assets = {\n\tbar: {\n\t\t\"baz.png\": \"rbxasset://.asphalt/bar/baz.png\",\n\t};\n\t\"foo.png\": \"rbxassetid://1\",\n};\nexport = assets;\n"
         );
 
         let ts = super::nested::generate_ts(&lockfile, "assets", "assets", true).unwrap();
         assert_eq!(
             ts,
-            "const assets = {\n\tbar: {\n\t\tbaz: \"rbxasset://.asphalt/bar/baz.png\";\n\t};\n\tfoo: \"rbxassetid://1\";\n};\nexport = assets;\n"
+            "const assets = {\n\tbar: {\n\t\tbaz: \"rbxasset://.asphalt/bar/baz.png\",\n\t};\n\tfoo: \"rbxassetid://1\",\n};\nexport = assets;\n"
         );
     }
 }
