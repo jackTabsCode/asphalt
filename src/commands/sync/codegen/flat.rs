@@ -4,6 +4,11 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use super::{
+    ast::{AstTarget, Expression},
+    generate_code,
+};
+
 fn asset_path(file_path: &str, strip_dir: &str, strip_extension: bool) -> anyhow::Result<String> {
     if strip_extension {
         Path::new(file_path).with_extension("")
@@ -17,21 +22,30 @@ fn asset_path(file_path: &str, strip_dir: &str, strip_extension: bool) -> anyhow
     .map(|s| s.to_string())
 }
 
+fn generate_table(
+    assets: &BTreeMap<String, String>,
+    strip_dir: &str,
+    strip_extension: bool,
+) -> anyhow::Result<Expression> {
+    let mut expressions: Vec<(Expression, Expression)> = Vec::new();
+    for (file_path, asset_id) in assets.iter() {
+        let file_stem = asset_path(file_path, strip_dir, strip_extension)?;
+        expressions.push((
+            Expression::String(file_stem),
+            Expression::String(asset_id.clone()),
+        ));
+    }
+    Ok(Expression::table(expressions))
+}
+
 pub fn generate_luau(
     assets: &BTreeMap<String, String>,
     strip_dir: &str,
     strip_extension: bool,
 ) -> anyhow::Result<String> {
-    let table = assets
-        .iter()
-        .map(|(file_path, asset_id)| {
-            let file_stem = asset_path(file_path, strip_dir, strip_extension)?;
-            Ok(format!("\t[\"{}\"] = \"{}\"", file_stem, asset_id))
-        })
-        .collect::<Result<Vec<String>, anyhow::Error>>()?
-        .join(",\n");
-
-    Ok(format!("return {{\n{}\n}}", table))
+    let table =
+        generate_table(assets, strip_dir, strip_extension).context("Failed to generate table")?;
+    generate_code(table, AstTarget::Luau)
 }
 
 pub fn generate_ts(
@@ -40,17 +54,12 @@ pub fn generate_ts(
     output_dir: &str,
     strip_extension: bool,
 ) -> anyhow::Result<String> {
-    let interface = assets
-        .keys()
-        .map(|file_path| {
-            let file_stem = asset_path(file_path, strip_dir, strip_extension)?;
-            Ok(format!("\t\"{}\": string", file_stem))
-        })
-        .collect::<Result<Vec<String>, anyhow::Error>>()?
-        .join(",\n");
-
-    Ok(format!(
-        "declare const {}: {{\n{}\n}}\nexport = {}",
-        output_dir, interface, output_dir
-    ))
+    let table =
+        generate_table(assets, strip_dir, strip_extension).context("Failed to generate table")?;
+    generate_code(
+        table,
+        AstTarget::Typescript {
+            output_dir: output_dir.to_owned(),
+        },
+    )
 }
