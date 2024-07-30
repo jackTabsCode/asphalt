@@ -1,6 +1,11 @@
 use std::collections::BTreeMap;
+use std::fmt::Write;
+
+use ast::{AstTarget, Expression, ReturnStatement};
 
 use crate::commands::sync::config::CodegenStyle;
+
+mod ast;
 mod flat;
 mod nested;
 
@@ -29,6 +34,12 @@ pub fn generate_ts(
     }
 }
 
+fn generate_code(expression: Expression, target: AstTarget) -> anyhow::Result<String> {
+    let mut buffer = String::new();
+    write!(buffer, "{}", ReturnStatement(expression, target))?;
+    Ok(buffer)
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
@@ -48,12 +59,12 @@ mod tests {
         let lockfile = test_assets();
 
         let lua = super::flat::generate_luau(&lockfile, "assets", false).unwrap();
-        assert_eq!(lua, "return {\n\t[\"/bar/baz.png\"] = \"rbxasset://.asphalt/bar/baz.png\",\n\t[\"/foo.png\"] = \"rbxassetid://1\"\n}");
+        assert_eq!(lua, "return {\n\t[\"/bar/baz.png\"] = \"rbxasset://.asphalt/bar/baz.png\",\n\t[\"/foo.png\"] = \"rbxassetid://1\",\n}\n");
 
         let lua = super::flat::generate_luau(&lockfile, "assets", true).unwrap();
         assert_eq!(
             lua,
-            "return {\n\t[\"/bar/baz\"] = \"rbxasset://.asphalt/bar/baz.png\",\n\t[\"/foo\"] = \"rbxassetid://1\"\n}"
+            "return {\n\t[\"/bar/baz\"] = \"rbxasset://.asphalt/bar/baz.png\",\n\t[\"/foo\"] = \"rbxassetid://1\",\n}\n"
         );
     }
 
@@ -62,10 +73,10 @@ mod tests {
         let lockfile = test_assets();
 
         let ts = super::flat::generate_ts(&lockfile, "assets", "assets", false).unwrap();
-        assert_eq!(ts, "declare const assets: {\n\t\"/bar/baz.png\": string,\n\t\"/foo.png\": string\n}\nexport = assets");
+        assert_eq!(ts, "declare const assets: {\n\t\"/bar/baz.png\": \"rbxasset://.asphalt/bar/baz.png\";\n\t\"/foo.png\": \"rbxassetid://1\";\n};\nexport = assets;\n");
 
         let ts = super::flat::generate_ts(&lockfile, "assets", "assets", true).unwrap();
-        assert_eq!(ts, "declare const assets: {\n\t\"/bar/baz\": string,\n\t\"/foo\": string\n}\nexport = assets");
+        assert_eq!(ts, "declare const assets: {\n\t\"/bar/baz\": \"rbxasset://.asphalt/bar/baz.png\";\n\t\"/foo\": \"rbxassetid://1\";\n};\nexport = assets;\n");
     }
 
     #[test]
@@ -75,12 +86,14 @@ mod tests {
         let lua = super::nested::generate_luau(&lockfile, "assets", false).unwrap();
         assert_eq!(
             lua,
-            "return {\n    bar = {\n        [\"baz.png\"] = \"rbxasset://.asphalt/bar/baz.png\",\n    },\n    [\"foo.png\"] = \"rbxassetid://1\",\n}");
+            "return {\n\tbar = {\n\t\t[\"baz.png\"] = \"rbxasset://.asphalt/bar/baz.png\",\n\t},\n\t[\"foo.png\"] = \"rbxassetid://1\",\n}\n"
+        );
 
         let lua = super::nested::generate_luau(&lockfile, "assets", true).unwrap();
         assert_eq!(
             lua,
-            "return {\n    bar = {\n        baz = \"rbxasset://.asphalt/bar/baz.png\",\n    },\n    foo = \"rbxassetid://1\",\n}");
+            "return {\n\tbar = {\n\t\tbaz = \"rbxasset://.asphalt/bar/baz.png\",\n\t},\n\tfoo = \"rbxassetid://1\",\n}\n"
+        );
     }
 
     #[test]
@@ -90,11 +103,13 @@ mod tests {
         let ts = super::nested::generate_ts(&lockfile, "assets", "assets", false).unwrap();
         assert_eq!(
             ts,
-            "declare const assets: {\n    bar: {\n        \"baz.png\": \"rbxasset://.asphalt/bar/baz.png\",\n    },\n    \"foo.png\": \"rbxassetid://1\",\n}\nexport = assets");
+            "declare const assets: {\n\tbar: {\n\t\t\"baz.png\": \"rbxasset://.asphalt/bar/baz.png\";\n\t};\n\t\"foo.png\": \"rbxassetid://1\";\n};\nexport = assets;\n"
+        );
 
         let ts = super::nested::generate_ts(&lockfile, "assets", "assets", true).unwrap();
         assert_eq!(
             ts,
-            "declare const assets: {\n    bar: {\n        baz: \"rbxasset://.asphalt/bar/baz.png\",\n    },\n    foo: \"rbxassetid://1\",\n}\nexport = assets");
+            "declare const assets: {\n\tbar: {\n\t\tbaz: \"rbxasset://.asphalt/bar/baz.png\";\n\t};\n\tfoo: \"rbxassetid://1\";\n};\nexport = assets;\n"
+        );
     }
 }
