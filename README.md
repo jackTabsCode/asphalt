@@ -89,8 +89,8 @@ type = "user"
 id = 9670971
 
 [existing]
-"test/some_sound_on_roblox.ogg" = { id = 123456789 }
-"test/some_image_on_roblox.png" = { id = 987654321 }
+"some_sound_on_roblox.ogg" = { id = 123456789 }
+"some_image_on_roblox.png" = { id = 987654321 }
 ```
 
 </details>
