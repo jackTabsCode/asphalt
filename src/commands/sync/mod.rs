@@ -13,7 +13,7 @@ use config::SyncConfig;
 use log::{debug, info, warn};
 use std::{
     collections::{BTreeMap, VecDeque},
-    path::Path,
+    path::{Path, PathBuf},
 };
 use tokio::fs::{read, read_dir, write, DirEntry};
 
@@ -182,12 +182,17 @@ pub async fn sync(args: SyncArgs, existing_lockfile: LockFile) -> anyhow::Result
 
     let asset_dir = state.asset_dir.to_str().unwrap();
 
-    assets.extend(
-        state
-            .existing
-            .into_iter()
-            .map(|(path, asset)| (path, format_asset_id(asset.id))),
-    );
+    assets.extend(state.existing.into_iter().map(|(path, asset)| {
+        let mut path = PathBuf::from(path);
+
+        if !path.starts_with(asset_dir) {
+            path = PathBuf::from(asset_dir).join(path);
+        }
+
+        let path = path.to_str().unwrap().to_string();
+
+        (path, format_asset_id(asset.id))
+    }));
 
     let luau_filename = format!("{}.{}", state.output_name, "luau");
     let luau_output = generate_luau(&assets, asset_dir, &state.style, state.strip_extension);
