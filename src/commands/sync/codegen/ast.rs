@@ -97,7 +97,7 @@ impl AstFormat for ReturnStatement {
                 write!(output, "return ")
             }
             AstTarget::Typescript { output_dir } => {
-                write!(output, "declare const {output_dir}: ")
+                write!(output, "const {output_dir} = ")
             }
         }?;
 
@@ -148,7 +148,7 @@ impl AstFormat for Table {
     fn fmt_ast(&self, output: &mut AstStream<'_, '_>) -> fmt::Result {
         let typescript = matches!(output.target, AstTarget::Typescript { .. });
         let (assignment, ending) = if typescript {
-            (": ", ";")
+            (": ", ",")
         } else {
             (" = ", ",")
         };
