@@ -32,6 +32,8 @@ rokit add jacktabscode/asphalt
 cargo install asphalt
 ```
 
+[Asphalt cannot be installed with Foreman.](https://github.com/Roblox/foreman/issues/97)
+
 ## Commands
 
 ### `asphalt init`
