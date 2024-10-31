@@ -72,7 +72,7 @@ async fn process_file(
         }
     };
 
-    let asset = Asset::new(file_name, data, ext, &state.font_db).await?;
+    let asset = Asset::new(file_name, data, ext, state.fontdb.clone()).await?;
     let hash = asset.hash();
 
     if state.dry_run {
