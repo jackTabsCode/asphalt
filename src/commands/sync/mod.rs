@@ -12,10 +12,11 @@ use codegen::{generate_luau, generate_ts};
 use config::SyncConfig;
 use log::{debug, info, warn};
 use std::{
-    collections::{BTreeMap, VecDeque},
+    collections::BTreeMap,
     path::{Path, PathBuf},
 };
-use tokio::fs::{read, read_dir, write, DirEntry};
+use tokio::fs::{read, write};
+use walkdir::{DirEntry, WalkDir};
 
 mod backend;
 mod codegen;
@@ -109,9 +110,7 @@ pub async fn sync(args: SyncArgs, existing_lockfile: LockFile) -> anyhow::Result
     info!("Syncing...");
 
     let mut assets = BTreeMap::<String, String>::new();
-    let mut remaining_items = VecDeque::new();
     let mut synced = 0;
-    remaining_items.push_back(state.asset_dir.clone());
 
     let backend = match state.target {
         SyncTarget::Cloud => TargetBackend::Cloud(CloudBackend),
@@ -119,47 +118,41 @@ pub async fn sync(args: SyncArgs, existing_lockfile: LockFile) -> anyhow::Result
         SyncTarget::Debug => TargetBackend::Debug(DebugBackend::new().await?),
     };
 
-    while let Some(path) = remaining_items.pop_front() {
-        let mut dir_entries = read_dir(path.clone())
-            .await
-            .with_context(|| format!("Failed to read directory: {}", path.to_str().unwrap()))?;
+    for entry in WalkDir::new(&state.asset_dir)
+        .into_iter()
+        .filter_map(|e| e.ok())
+    {
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
 
-        while let Some(entry) = dir_entries
-            .next_entry()
-            .await
-            .with_context(|| format!("Failed to read directory entry: {:?}", path))?
-        {
-            let entry_path = entry.path();
-            if entry_path.is_dir() {
-                remaining_items.push_back(entry_path);
-            } else {
-                let path_str = entry_path.to_str().unwrap();
-                let fixed_path = fix_path(path_str);
+        let path_str = path.to_str().unwrap();
 
-                if state.exclude_assets_matcher.is_match(path_str) {
-                    continue;
-                }
+        let fixed_path = fix_path(path_str);
 
-                let result = match process_file(&entry, &mut state, &backend).await {
-                    Ok(Some(result)) => {
-                        synced += 1;
-                        result
-                    }
-                    Ok(None) => {
-                        synced += 1;
-                        continue;
-                    }
-                    Err(e) => {
-                        warn!("Failed to process file {fixed_path}: {e:?}");
-                        continue;
-                    }
-                };
+        if state.exclude_assets_matcher.is_match(path_str) {
+            continue;
+        }
 
-                assets.insert(fixed_path.clone(), result.asset_id);
-                if let Some(file_entry) = result.file_entry {
-                    state.new_lockfile.entries.insert(fixed_path, file_entry);
-                }
+        let result = match process_file(&entry, &mut state, &backend).await {
+            Ok(Some(result)) => {
+                synced += 1;
+                result
             }
+            Ok(None) => {
+                synced += 1;
+                continue;
+            }
+            Err(e) => {
+                warn!("Failed to process file {fixed_path}: {e:?}");
+                continue;
+            }
+        };
+
+        assets.insert(fixed_path.clone(), result.asset_id);
+        if let Some(file_entry) = result.file_entry {
+            state.new_lockfile.entries.insert(fixed_path, file_entry);
         }
     }
 
