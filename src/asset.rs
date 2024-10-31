@@ -5,7 +5,7 @@ use image::{DynamicImage, ImageFormat};
 use rbx_xml::DecodeOptions;
 use rbxcloud::rbx::v1::assets::AssetType as CloudAssetType;
 use resvg::usvg::fontdb::Database;
-use std::io::Cursor;
+use std::{io::Cursor, sync::Arc};
 
 pub enum AudioKind {
     Mp3,
@@ -78,7 +78,7 @@ impl Asset {
         name: String,
         mut data: Vec<u8>,
         mut ext: &str,
-        font_db: &Database,
+        font_db: Arc<Database>,
     ) -> anyhow::Result<Self> {
         let kind = match ext {
             "mp3" => AssetKind::Audio(AudioKind::Mp3),

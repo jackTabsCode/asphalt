@@ -8,7 +8,7 @@ use cookie::Cookie;
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use rbxcloud::rbx::v1::assets::{AssetCreator, AssetGroupCreator, AssetUserCreator};
 use resvg::usvg::fontdb::Database;
-use std::{collections::HashMap, env, path::PathBuf};
+use std::{collections::HashMap, env, path::PathBuf, sync::Arc};
 use tokio::fs::create_dir_all;
 
 fn add_trailing_slash(path: &str) -> String {
@@ -58,7 +58,7 @@ pub struct SyncState {
     pub style: CodegenStyle,
     pub strip_extension: bool,
 
-    pub font_db: Database,
+    pub fontdb: Arc<Database>,
 
     pub existing_lockfile: LockFile,
     pub new_lockfile: LockFile,
@@ -130,7 +130,7 @@ impl SyncState {
             output_name,
             style,
             strip_extension,
-            font_db,
+            fontdb: Arc::new(font_db),
             existing_lockfile,
             new_lockfile,
             existing: manual,
