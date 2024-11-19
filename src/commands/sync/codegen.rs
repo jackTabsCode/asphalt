@@ -235,3 +235,242 @@ fn strip_extension(path: &str) -> String {
     new_path.push_str(stem);
     new_path
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_generate_typescript_empty_data() {
+        let data = BTreeMap::new();
+        let options = GeneratorOptions {
+            output_name: "assets".to_string(),
+            style: CodegenStyle::Flat,
+            strip_extension: false,
+        };
+        let generator = Generator::new(data, options);
+        let output = generator.generate_typescript();
+        let expected_output = "declare const assets: {\n};\nexport = assets;\n";
+        assert_eq!(output, expected_output);
+    }
+
+    #[test]
+    fn test_generate_luau_empty_data() {
+        let data = BTreeMap::new();
+        let options = GeneratorOptions {
+            output_name: "assets".to_string(),
+            style: CodegenStyle::Flat,
+            strip_extension: false,
+        };
+        let generator = Generator::new(data, options);
+        let output = generator.generate_luau();
+        let expected_output = "return {\n}";
+        assert_eq!(output, expected_output);
+    }
+
+    #[test]
+    fn test_generate_typescript_single_item() {
+        let mut data = BTreeMap::new();
+        data.insert("foo.png".to_string(), "path/to/foo.png".to_string());
+
+        let options = GeneratorOptions {
+            output_name: "assets".to_string(),
+            style: CodegenStyle::Flat,
+            strip_extension: false,
+        };
+
+        let generator = Generator::new(data, options);
+        let output = generator.generate_typescript();
+
+        let expected_output =
+            "declare const assets: {\n\t\"foo.png\": \"path/to/foo.png\"\n};\nexport = assets;\n";
+        assert_eq!(output, expected_output);
+    }
+
+    #[test]
+    fn test_generate_luau_single_item() {
+        let mut data = BTreeMap::new();
+        data.insert("foo.png".to_string(), "path/to/foo.png".to_string());
+
+        let options = GeneratorOptions {
+            output_name: "assets".to_string(),
+            style: CodegenStyle::Flat,
+            strip_extension: false,
+        };
+
+        let generator = Generator::new(data, options);
+        let output = generator.generate_luau();
+
+        let expected_output = "return {\n\t[\"foo.png\"] = \"path/to/foo.png\"\n}";
+        assert_eq!(output, expected_output);
+    }
+
+    #[test]
+    fn test_generate_typescript_multiple_items_flat() {
+        let mut data = BTreeMap::new();
+        data.insert("foo.png".to_string(), "path/to/foo.png".to_string());
+        data.insert("bar.jpg".to_string(), "path/to/bar.jpg".to_string());
+
+        let options = GeneratorOptions {
+            output_name: "assets".to_string(),
+            style: CodegenStyle::Flat,
+            strip_extension: false,
+        };
+
+        let generator = Generator::new(data, options);
+        let output = generator.generate_typescript();
+
+        let expected_output = "declare const assets: {\n\t\"bar.jpg\": \"path/to/bar.jpg\",\n\t\"foo.png\": \"path/to/foo.png\"\n};\nexport = assets;\n";
+        assert_eq!(output, expected_output);
+    }
+
+    #[test]
+    fn test_generate_luau_multiple_items_flat() {
+        let mut data = BTreeMap::new();
+        data.insert("foo.png".to_string(), "path/to/foo.png".to_string());
+        data.insert("bar.jpg".to_string(), "path/to/bar.jpg".to_string());
+
+        let options = GeneratorOptions {
+            output_name: "assets".to_string(),
+            style: CodegenStyle::Flat,
+            strip_extension: false,
+        };
+
+        let generator = Generator::new(data, options);
+        let output = generator.generate_luau();
+
+        let expected_output = "return {\n\t[\"bar.jpg\"] = \"path/to/bar.jpg\",\n\t[\"foo.png\"] = \"path/to/foo.png\"\n}";
+        assert_eq!(output, expected_output);
+    }
+
+    #[test]
+    fn test_generate_typescript_nested() {
+        let mut data = BTreeMap::new();
+        data.insert(
+            "images/foo.png".to_string(),
+            "path/to/images/foo.png".to_string(),
+        );
+        data.insert(
+            "images/bar.jpg".to_string(),
+            "path/to/images/bar.jpg".to_string(),
+        );
+        data.insert(
+            "sounds/baz.wav".to_string(),
+            "path/to/sounds/baz.wav".to_string(),
+        );
+
+        let options = GeneratorOptions {
+            output_name: "assets".to_string(),
+            style: CodegenStyle::Nested,
+            strip_extension: false,
+        };
+
+        let generator = Generator::new(data, options);
+        let output = generator.generate_typescript();
+
+        let expected_output = "declare const assets: {\n\timages: {\n\t\t\"bar.jpg\": \"path/to/images/bar.jpg\",\n\t\t\"foo.png\": \"path/to/images/foo.png\"\n\t},\n\tsounds: {\n\t\t\"baz.wav\": \"path/to/sounds/baz.wav\"\n\t}\n};\nexport = assets;\n";
+        assert_eq!(output, expected_output);
+    }
+
+    #[test]
+    fn test_generate_luau_nested() {
+        let mut data = BTreeMap::new();
+        data.insert(
+            "images/foo.png".to_string(),
+            "path/to/images/foo.png".to_string(),
+        );
+        data.insert(
+            "images/bar.jpg".to_string(),
+            "path/to/images/bar.jpg".to_string(),
+        );
+        data.insert(
+            "sounds/baz.wav".to_string(),
+            "path/to/sounds/baz.wav".to_string(),
+        );
+
+        let options = GeneratorOptions {
+            output_name: "assets".to_string(),
+            style: CodegenStyle::Nested,
+            strip_extension: false,
+        };
+
+        let generator = Generator::new(data, options);
+        let output = generator.generate_luau();
+
+        let expected_output = "return {\n\timages = {\n\t\t[\"bar.jpg\"] = \"path/to/images/bar.jpg\",\n\t\t[\"foo.png\"] = \"path/to/images/foo.png\"\n\t},\n\tsounds = {\n\t\t[\"baz.wav\"] = \"path/to/sounds/baz.wav\"\n\t}\n}";
+        assert_eq!(output, expected_output);
+    }
+
+    #[test]
+    fn test_generate_typescript_strip_extension() {
+        let mut data = BTreeMap::new();
+        data.insert("foo.png".to_string(), "path/to/foo.png".to_string());
+
+        let options = GeneratorOptions {
+            output_name: "assets".to_string(),
+            style: CodegenStyle::Flat,
+            strip_extension: true,
+        };
+
+        let generator = Generator::new(data, options);
+        let output = generator.generate_typescript();
+
+        let expected_output =
+            "declare const assets: {\n\tfoo: \"path/to/foo.png\"\n};\nexport = assets;\n";
+        assert_eq!(output, expected_output);
+    }
+
+    #[test]
+    fn test_generate_luau_strip_extension() {
+        let mut data = BTreeMap::new();
+        data.insert("foo.png".to_string(), "path/to/foo.png".to_string());
+
+        let options = GeneratorOptions {
+            output_name: "assets".to_string(),
+            style: CodegenStyle::Flat,
+            strip_extension: true,
+        };
+
+        let generator = Generator::new(data, options);
+        let output = generator.generate_luau();
+
+        let expected_output = "return {\n\tfoo = \"path/to/foo.png\"\n}";
+        assert_eq!(output, expected_output);
+    }
+
+    #[test]
+    fn test_generate_typescript_invalid_identifiers() {
+        let mut data = BTreeMap::new();
+        data.insert("foo-bar".to_string(), "path/to/foo-bar.png".to_string());
+
+        let options = GeneratorOptions {
+            output_name: "assets".to_string(),
+            style: CodegenStyle::Flat,
+            strip_extension: false,
+        };
+
+        let generator = Generator::new(data, options);
+        let output = generator.generate_typescript();
+
+        let expected_output = "declare const assets: {\n\t\"foo-bar\": \"path/to/foo-bar.png\"\n};\nexport = assets;\n";
+        assert_eq!(output, expected_output);
+    }
+
+    #[test]
+    fn test_generate_luau_invalid_identifiers() {
+        let mut data = BTreeMap::new();
+        data.insert("foo-bar".to_string(), "path/to/foo-bar.png".to_string());
+
+        let options = GeneratorOptions {
+            output_name: "assets".to_string(),
+            style: CodegenStyle::Flat,
+            strip_extension: false,
+        };
+
+        let generator = Generator::new(data, options);
+        let output = generator.generate_luau();
+
+        let expected_output = "return {\n\t[\"foo-bar\"] = \"path/to/foo-bar.png\"\n}";
+        assert_eq!(output, expected_output);
+    }
+}
