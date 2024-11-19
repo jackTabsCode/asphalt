@@ -1,5 +1,6 @@
 /target
 /test
+/input
 /output
 asphalt.lock.toml
 .env
