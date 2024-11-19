@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 pub struct GeneratorOptions {
+    pub output_name: String,
     pub style: CodegenStyle,
     pub strip_extension: bool,
 }
@@ -35,9 +36,9 @@ impl Generator {
         let data_value = self.build_data_value();
         let mut output = String::new();
 
-        output.push_str("export = ");
+        output.push_str(&format!("declare const {}: ", self.options.output_name));
         self.serialize_value_typescript(&data_value, &mut output, 0);
-        output.push(';');
+        output.push_str(";\nexport = assets;\n");
 
         output
     }
@@ -109,7 +110,7 @@ impl Generator {
             DataValue::Node(map) => {
                 output.push_str("{\n");
 
-                let indent_str = "  ".repeat(indent + 1);
+                let indent_str = "\t".repeat(indent + 1);
 
                 for (i, (key, val)) in map.iter().enumerate() {
                     output.push_str(&indent_str);
@@ -129,7 +130,7 @@ impl Generator {
                     output.push('\n');
                 }
 
-                output.push_str(&"  ".repeat(indent));
+                output.push_str(&"\t".repeat(indent));
                 output.push('}');
             }
         }
@@ -144,7 +145,7 @@ impl Generator {
             DataValue::Node(map) => {
                 output.push_str("{\n");
 
-                let indent_str = "  ".repeat(indent + 1);
+                let indent_str = "\t".repeat(indent + 1);
 
                 for (i, (key, val)) in map.iter().enumerate() {
                     output.push_str(&indent_str);
@@ -165,7 +166,7 @@ impl Generator {
                     output.push('\n');
                 }
 
-                output.push_str(&"  ".repeat(indent));
+                output.push_str(&"\t".repeat(indent));
                 output.push('}');
             }
         }

@@ -194,6 +194,7 @@ pub async fn sync(args: SyncArgs, existing_lockfile: LockFile) -> anyhow::Result
         GeneratorOptions {
             style: state.style,
             strip_extension: state.strip_extension,
+            output_name: state.output_name.clone(),
         },
     );
 
@@ -204,7 +205,7 @@ pub async fn sync(args: SyncArgs, existing_lockfile: LockFile) -> anyhow::Result
         .context("Failed to write output Luau file")?;
 
     if state.typescript {
-        let ts_filename = format!("{}.ts", state.output_name);
+        let ts_filename = format!("{}.d.ts", state.output_name);
         let ts_output = generator.generate_typescript();
 
         write(Path::new(&state.write_dir).join(ts_filename), ts_output)
