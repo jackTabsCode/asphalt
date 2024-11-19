@@ -1,6 +1,6 @@
 [package]
 name = "asphalt"
-version = "0.8.1"
+version = "0.8.2"
 edition = "2021"
 license = "MIT"
 authors = ["Jack T <jack@jackt.space>"]
@@ -28,8 +28,8 @@ rbx_cookie = { version = "0.1.4", default-features = false }
 rbx_xml = "0.13.5"
 rbxcloud = "0.14.0"
 reqwest = { version = "0.12.9", default-features = false, features = [
-    "rustls-tls",
-    "gzip",
+	"rustls-tls",
+	"gzip",
 ] }
 resvg = "0.44.0"
 roblox_install = "1.0.0"
@@ -54,10 +54,10 @@ ci = ["github"]
 installers = []
 # Target platforms to build apps for (Rust target-triple syntax)
 targets = [
-    "aarch64-apple-darwin",
-    "x86_64-apple-darwin",
-    "x86_64-unknown-linux-gnu",
-    "x86_64-pc-windows-msvc",
+	"aarch64-apple-darwin",
+	"x86_64-apple-darwin",
+	"x86_64-unknown-linux-gnu",
+	"x86_64-pc-windows-msvc",
 ]
 # Publish jobs to run in CI
 pr-run-mode = "skip"
