@@ -23,6 +23,31 @@ impl Display for CodegenStyle {
 }
 
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum CodegenLanguage {
+    Luau,
+    TypeScript,
+}
+
+impl Display for CodegenLanguage {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            CodegenLanguage::Luau => write!(f, "Luau"),
+            CodegenLanguage::TypeScript => write!(f, "TypeScript"),
+        }
+    }
+}
+
+impl CodegenLanguage {
+    pub fn extension(&self) -> &'static str {
+        match self {
+            CodegenLanguage::Luau => "luau",
+            CodegenLanguage::TypeScript => "ts",
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum CreatorType {
     User,
@@ -53,7 +78,7 @@ pub struct ExistingAsset {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct CodegenConfig {
     pub output_name: Option<String>,
-    pub typescript: Option<bool>,
+    pub language: Option<CodegenLanguage>,
     pub style: Option<CodegenStyle>,
     pub strip_extension: Option<bool>,
 }
