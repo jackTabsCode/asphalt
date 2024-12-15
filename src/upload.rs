@@ -208,6 +208,8 @@ pub async fn upload_animation(
         .body(contents)
         .send()
         .await
+        .context("Failed to send animation upload request")?
+        .error_for_status()
         .context("Failed to upload animation")?;
 
     let body = response
