@@ -125,7 +125,7 @@ id = 9670971
 -   `typescript`: boolean (optional)
     -   Generate a Typescript definition file.
 -   `style`: "flat" | "nested" (optional)
-    -   The code-generation style to use. Defaults to `flat`, which makes accessing assets feel like writing file paths. You may consider using `nested` if you are not a TypeScript user, however, as Luau does not support string template literals.
+    -   The code-generation style to use. Defaults to `flat`, which makes accessing assets feel like writing file paths. You may consider using `nested` if you are not a TypeScript user, however, as Luau does not support template literal types.
 -   `output_name`: string (optional)
     -   The name for the generated files. Defaults to `assets`.
 -   `strip_extension`: boolean (optional)
