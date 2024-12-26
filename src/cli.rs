@@ -21,6 +21,9 @@ pub enum Commands {
 
     /// Initialize a new configuration.
     Init,
+
+    /// Migrate an existing tarmac-manifest.toml to a lockfile.
+    MigrateTarmacManifest(crate::commands::migrate_tarmac_manifest::MigrateTarmacManifestArgs),
 }
 
 #[derive(ValueEnum, Clone)]
