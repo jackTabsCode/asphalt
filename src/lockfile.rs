@@ -31,7 +31,8 @@ impl LockFile {
         }
     }
 
-    pub async fn write(&self, filename: &Path) -> anyhow::Result<()> {
+    pub async fn write(&mut self, filename: &Path) -> anyhow::Result<()> {
+        self.version = VERSION;
         let content = toml::to_string(self)?;
         write(filename, content).await?;
 
