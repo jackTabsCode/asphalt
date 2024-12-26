@@ -1,6 +1,6 @@
 [package]
 name = "asphalt"
-version = "0.8.2"
+version = "0.8.3"
 edition = "2021"
 license = "MIT"
 authors = ["Jack T <jack@jackt.space>"]
@@ -47,7 +47,7 @@ lto = "thin"
 # Config for 'cargo dist'
 [workspace.metadata.dist]
 # The preferred cargo-dist version to use in CI (Cargo.toml SemVer syntax)
-cargo-dist-version = "0.13.2"
+cargo-dist-version = "0.27.0"
 # CI backends to support
 ci = ["github"]
 # The installers to generate for each app

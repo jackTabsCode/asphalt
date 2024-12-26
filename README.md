@@ -68,6 +68,10 @@ asphalt sync --dry-run
 
 Lists asset paths from the lockfile and their corresponding Roblox asset IDs.
 
+### `asphalt migrate-tarmac-manifest`
+
+Will migrate over an existing `tarmac-manifest.toml` to `asphalt.lock.toml`.
+
 ## Configuration
 
 Asphalt is configured with a project file called `asphalt.toml`. It is required for the program to run.
@@ -121,11 +125,11 @@ id = 9670971
 -   `typescript`: boolean (optional)
     -   Generate a Typescript definition file.
 -   `style`: "flat" | "nested" (optional)
-    -   The code-generation style to use. Defaults to `flat`. If you would like to have an experience similar to [Tarmac](https://github.com/rojo-rbx/tarmac), use `nested`.
+    -   The code-generation style to use. Defaults to `flat`, which makes accessing assets feel like writing file paths. You may consider using `nested` if you are not a TypeScript user, however, as Luau does not support template literal types.
 -   `output_name`: string (optional)
     -   The name for the generated files. Defaults to `assets`.
 -   `strip_extension`: boolean (optional)
-    -   Whether to strip the file extension. Defaults to `false`. If you would like to have an experience similar to [Tarmac](https://github.com/rojo-rbx/tarmac), use `true`.
+    -   Whether to strip the file extension. Defaults to `false`. We recommend `true` if using the `nested` codegen style.
 
 #### ExistingAsset
 

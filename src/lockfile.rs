@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, path::Path};
 use tokio::fs::{read_to_string, write};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -8,7 +8,7 @@ pub struct FileEntry {
     pub asset_id: u64,
 }
 
-static FILE_NAME: &str = "asphalt.lock.toml";
+pub static FILE_NAME: &str = "asphalt.lock.toml";
 pub static VERSION: u8 = 1;
 
 #[derive(Debug, Serialize, Deserialize, Default)]
@@ -31,10 +31,9 @@ impl LockFile {
         }
     }
 
-    pub async fn write(&mut self) -> anyhow::Result<()> {
-        self.version = VERSION;
+    pub async fn write(&self, filename: &Path) -> anyhow::Result<()> {
         let content = toml::to_string(self)?;
-        write(FILE_NAME, content).await?;
+        write(filename, content).await?;
 
         Ok(())
     }
