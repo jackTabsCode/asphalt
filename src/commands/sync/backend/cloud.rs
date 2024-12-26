@@ -4,6 +4,7 @@ use log::info;
 use crate::{
     asset::{Asset, AssetKind, ModelKind},
     commands::sync::state::SyncState,
+    lockfile,
     upload::{upload_animation, upload_cloud_asset},
 };
 
@@ -20,7 +21,9 @@ impl SyncBackend for CloudBackend {
     ) -> anyhow::Result<SyncResult> {
         let existing = state.existing_lockfile.entries.get(path);
         if let Some(existing_value) = existing {
-            if existing_value.hash == asset.hash() {
+            if existing_value.hash == asset.hash()
+                && state.existing_lockfile.version == lockfile::VERSION
+            {
                 return Ok(SyncResult::Cloud(existing_value.asset_id));
             }
         }
