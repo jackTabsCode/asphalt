@@ -68,6 +68,10 @@ asphalt sync --dry-run
 
 Lists asset paths from the lockfile and their corresponding Roblox asset IDs.
 
+### `asphalt migrate-tarmac-manifest`
+
+Will migrate over an existing `tarmac-manifest.toml` to `asphalt.lock.toml`.
+
 ## Configuration
 
 Asphalt is configured with a project file called `asphalt.toml`. It is required for the program to run.
