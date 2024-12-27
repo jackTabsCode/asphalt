@@ -1,16 +1,19 @@
 # Asphalt
 
-Asphalt is a simple CLI tool used to upload assets to Roblox and easily reference them in code.
+Asphalt is a command line tool used to upload assets to Roblox and easily reference them in code.
+It's my spiritual successor to [Tarmac](https://github.com/Roblox/Tarmac).
 
 ## Features
 
--   Upload images, SVGs, sounds, models, and animations to Roblox
--   Generate Luau code to reference the uploaded assets
--   Generate Typescript definitions for roblox-ts users
--   Uses the Open Cloud API
--   Supports uploading to groups
--   Define existing uploaded assets, so all of your stuff can be referenced in one place
--   Alpha bleeds images for crisp edges when scaled
+-   Syncs your images, sounds, models, and animations to Roblox
+-   Generates Luau or Typescript code so you can use them in your game
+-   Can target Roblox users or groups
+-   Processes SVGs into PNGs and alpha bleeds images for crisp edges
+-   Allows defining existing uploaded assets, so all of your stuff can be referenced in one place
+
+## Features Coming Soon
+-  Capablility to pack your images into spritesheets for lower client memory usage
+-  Extended support for different audio formats
 
 ## Installation
 
@@ -154,7 +157,7 @@ You can get one from the [Creator Dashboard](https://create.roblox.com/dashboard
 ## Cookie
 You will need a cookie to upload animations to Roblox. This is because the Open Cloud API does not support them. It will automatically detected from the current Roblox Studio installation. Otherwise, you can specify this using the `--cookie` argument, or the `ASPHALT_COOKIE` environment variable.
 
-You will probably want to [disable Session Protection](https://create.roblox.com/settings/advanced) if you are using Asphalt in an environment where your IP address changes frequently.
+You will probably want to [disable Session Protection](https://create.roblox.com/settings/advanced) if you are using Asphalt in an environment where your IP address changes frequently, but we don't recommend this on your main Roblox account, as it makes your account less secure.
 
 ## Animations
 
