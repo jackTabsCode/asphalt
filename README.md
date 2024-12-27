@@ -14,16 +14,17 @@ Asphalt is a simple CLI tool used to upload assets to Roblox and easily referenc
 
 ## Installation
 
-### [Aftman](https://github.com/lpghatguy/aftman)
+### [Homebrew](https://brew.sh) (macOS/Linux)
+
+```sh
+brew tap jacktabscode/tap
+brew install asphalt
+```
+
+### [Aftman](https://github.com/lpghatguy/aftman) or [Rokit](https://github.com/rojo-rbx/rokit)
 
 ```sh
 aftman add jacktabscode/asphalt
-```
-
-### [Rokit](https://github.com/rojo-rbx/rokit)
-
-```sh
-rokit add jacktabscode/asphalt
 ```
 
 ### [Cargo](https://crates.io/crates/asphalt) (build from source)
