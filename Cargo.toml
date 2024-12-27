@@ -51,7 +51,9 @@ cargo-dist-version = "0.27.0"
 # CI backends to support
 ci = ["github"]
 # The installers to generate for each app
-installers = []
+installers = ["homebrew"]
+tap = "jacktabscode/homebrew-tap"
+publish-jobs = ["homebrew"]
 # Target platforms to build apps for (Rust target-triple syntax)
 targets = [
 	"aarch64-apple-darwin",
