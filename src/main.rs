@@ -34,5 +34,10 @@ async fn main() -> anyhow::Result<()> {
             .context("Failed to sync"),
         Commands::List => list(existing_lockfile).await.context("Failed to list"),
         Commands::Init => init().await.context("Failed to initialize"),
+        Commands::MigrateTarmacManifest(args) => {
+            commands::migrate_tarmac_manifest::migrate_manifest(args)
+                .await
+                .context("Failed to migrate tarmac-manifest.toml")
+        }
     }
 }

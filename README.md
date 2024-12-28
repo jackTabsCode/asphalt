@@ -1,29 +1,33 @@
 # Asphalt
 
-Asphalt is a simple CLI tool used to upload assets to Roblox and easily reference them in code.
+Asphalt is a command line tool used to upload assets to Roblox and easily reference them in code.
+It's my spiritual successor to [Tarmac](https://github.com/Roblox/Tarmac).
 
 ## Features
 
--   Upload images, SVGs, sounds, models, and animations to Roblox
--   Generate Luau code to reference the uploaded assets
--   Generate Typescript definitions for roblox-ts users
--   Uses the Open Cloud API
--   Supports uploading to groups
--   Define existing uploaded assets, so all of your stuff can be referenced in one place
--   Alpha bleeds images for crisp edges when scaled
+-   Syncs your images, sounds, models, and animations to Roblox
+-   Generates Luau or Typescript code so you can use them in your game
+-   Can target Roblox users or groups
+-   Processes SVGs into PNGs and alpha bleeds images for crisp edges
+-   Allows defining existing uploaded assets, so all of your stuff can be referenced in one place
+
+## Features Coming Soon
+-  Capablility to pack your images into spritesheets for lower client memory usage
+-  Extended support for different audio formats
 
 ## Installation
 
-### [Aftman](https://github.com/lpghatguy/aftman)
+### [Homebrew](https://brew.sh) (macOS/Linux)
+
+```sh
+brew tap jacktabscode/tap
+brew install asphalt
+```
+
+### [Aftman](https://github.com/lpghatguy/aftman) or [Rokit](https://github.com/rojo-rbx/rokit)
 
 ```sh
 aftman add jacktabscode/asphalt
-```
-
-### [Rokit](https://github.com/rojo-rbx/rokit)
-
-```sh
-rokit add jacktabscode/asphalt
 ```
 
 ### [Cargo](https://crates.io/crates/asphalt) (build from source)
@@ -67,6 +71,10 @@ asphalt sync --dry-run
 ### `asphalt list`
 
 Lists asset paths from the lockfile and their corresponding Roblox asset IDs.
+
+### `asphalt migrate-tarmac-manifest`
+
+Will migrate over an existing `tarmac-manifest.toml` to `asphalt.lock.toml`.
 
 ## Configuration
 
@@ -121,11 +129,11 @@ id = 9670971
 -   `typescript`: boolean (optional)
     -   Generate a Typescript definition file.
 -   `style`: "flat" | "nested" (optional)
-    -   The code-generation style to use. Defaults to `flat`. If you would like to have an experience similar to [Tarmac](https://github.com/rojo-rbx/tarmac), use `nested`.
+    -   The code-generation style to use. Defaults to `flat`, which makes accessing assets feel like writing file paths. You may consider using `nested` if you are not a TypeScript user, however, as Luau does not support template literal types.
 -   `output_name`: string (optional)
     -   The name for the generated files. Defaults to `assets`.
 -   `strip_extension`: boolean (optional)
-    -   Whether to strip the file extension. Defaults to `false`. If you would like to have an experience similar to [Tarmac](https://github.com/rojo-rbx/tarmac), use `true`.
+    -   Whether to strip the file extension. Defaults to `false`. We recommend `true` if using the `nested` codegen style.
 
 #### ExistingAsset
 
@@ -149,7 +157,7 @@ You can get one from the [Creator Dashboard](https://create.roblox.com/dashboard
 ## Cookie
 You will need a cookie to upload animations to Roblox. This is because the Open Cloud API does not support them. It will automatically detected from the current Roblox Studio installation. Otherwise, you can specify this using the `--cookie` argument, or the `ASPHALT_COOKIE` environment variable.
 
-You will probably want to [disable Session Protection](https://create.roblox.com/settings/advanced) if you are using Asphalt in an environment where your IP address changes frequently.
+You will probably want to [disable Session Protection](https://create.roblox.com/settings/advanced) if you are using Asphalt in an environment where your IP address changes frequently, but we don't recommend this on your main Roblox account, as it makes your account less secure.
 
 ## Animations
 

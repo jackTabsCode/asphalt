@@ -168,7 +168,7 @@ pub async fn sync(args: SyncArgs, existing_lockfile: LockFile) -> anyhow::Result
     if let SyncTarget::Cloud = state.target {
         state
             .new_lockfile
-            .write()
+            .write(Path::new(crate::lockfile::FILE_NAME))
             .await
             .context("Failed to write lockfile")?;
     }
