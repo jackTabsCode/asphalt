@@ -8,12 +8,19 @@ pub struct FileEntry {
     pub asset_id: u64,
 }
 
+pub static FILE_NAME: &str = "asphalt.lock.toml";
+pub static VERSION: u8 = 1;
+
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub struct LockFile {
+    #[serde(default = "version_default")]
+    pub version: u8,
     pub entries: BTreeMap<String, FileEntry>,
 }
 
-pub static FILE_NAME: &str = "asphalt.lock.toml";
+fn version_default() -> u8 {
+    VERSION
+}
 
 impl LockFile {
     pub async fn read() -> anyhow::Result<Self> {
@@ -24,7 +31,8 @@ impl LockFile {
         }
     }
 
-    pub async fn write(&self, filename: &Path) -> anyhow::Result<()> {
+    pub async fn write(&mut self, filename: &Path) -> anyhow::Result<()> {
+        self.version = VERSION;
         let content = toml::to_string(self)?;
         write(filename, content).await?;
 
