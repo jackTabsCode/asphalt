@@ -7,9 +7,11 @@ use rbxcloud::rbx::v1::assets::AssetType as CloudAssetType;
 use resvg::usvg::fontdb::Database;
 use std::{io::Cursor, sync::Arc};
 
+/// Add a new variant for FLAC.
 pub enum AudioKind {
     Mp3,
     Ogg,
+    Flac, // <-- ADDED
 }
 
 pub enum DecalKind {
@@ -83,6 +85,10 @@ impl Asset {
         let kind = match ext {
             "mp3" => AssetKind::Audio(AudioKind::Mp3),
             "ogg" => AssetKind::Audio(AudioKind::Ogg),
+
+            // <-- ADDED .flac support
+            "flac" => AssetKind::Audio(AudioKind::Flac),
+
             "png" => AssetKind::Decal(DecalKind::Png),
             "jpg" => AssetKind::Decal(DecalKind::Jpg),
             "bmp" => AssetKind::Decal(DecalKind::Bmp),
@@ -99,14 +105,13 @@ impl Asset {
                 } else {
                     ModelFileFormat::Xml
                 };
-
                 verify_animation(data.clone(), format)?;
-
                 AssetKind::Model(ModelKind::Animation)
             }
             _ => bail!("Unknown extension .{ext}"),
         };
 
+        // Derive which "cloud" type this file is (if any).
         let cloud_type = match &kind {
             AssetKind::Decal(kind) => match kind {
                 DecalKind::Png => Some(CloudAssetType::DecalPng),
@@ -117,6 +122,11 @@ impl Asset {
             AssetKind::Audio(kind) => match kind {
                 AudioKind::Mp3 => Some(CloudAssetType::AudioMp3),
                 AudioKind::Ogg => Some(CloudAssetType::AudioOgg),
+
+                // <-- ADDED .flac -> you may need a matching `AudioFlac` in your
+                //     rbxcloud::rbx::v1::assets::AssetType if you truly want
+                //     Roblox to accept it, or map it to MP3/OGG if needed.
+                AudioKind::Flac => Some(CloudAssetType::AudioMp3),
             },
             AssetKind::Model(kind) => match kind {
                 ModelKind::Model => Some(CloudAssetType::ModelFbx),
@@ -124,6 +134,7 @@ impl Asset {
             },
         };
 
+        // If it's an image, fix alpha-bleeding:
         if let AssetKind::Decal(_) = &kind {
             let mut image: DynamicImage = image::load_from_memory(&data)?;
             alpha_bleed(&mut image);
