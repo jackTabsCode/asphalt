@@ -11,6 +11,7 @@ pub enum AudioKind {
     Mp3,
     Ogg,
     Flac,
+    Wav,
 }
 
 pub enum DecalKind {
@@ -85,6 +86,7 @@ impl Asset {
             "mp3" => AssetKind::Audio(AudioKind::Mp3),
             "ogg" => AssetKind::Audio(AudioKind::Ogg),
             "flac" => AssetKind::Audio(AudioKind::Flac),
+            "wav" => AssetKind::Audio(AudioKind::Wav),
             "png" => AssetKind::Decal(DecalKind::Png),
             "jpg" => AssetKind::Decal(DecalKind::Jpg),
             "bmp" => AssetKind::Decal(DecalKind::Bmp),
@@ -120,6 +122,7 @@ impl Asset {
                 AudioKind::Mp3 => Some(CloudAssetType::AudioMp3),
                 AudioKind::Ogg => Some(CloudAssetType::AudioOgg),
                 AudioKind::Flac => Some(CloudAssetType::AudioFlac),
+                AudioKind::Wav => Some(CloudAssetType::AudioWav),
             },
             AssetKind::Model(kind) => match kind {
                 ModelKind::Model => Some(CloudAssetType::ModelFbx),
