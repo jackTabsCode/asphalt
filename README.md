@@ -1,7 +1,7 @@
 # Asphalt
 
 Asphalt is a command line tool used to upload assets to Roblox and easily reference them in code.
-It's my spiritual successor to [Tarmac](https://github.com/Roblox/Tarmac).
+It's a modern alternative to [Tarmac](https://github.com/Roblox/Tarmac).
 
 ## Features
 
