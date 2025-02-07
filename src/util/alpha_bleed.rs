@@ -68,8 +68,6 @@ pub(crate) fn alpha_bleed(img: &mut DynamicImage) {
                 visited.set(x, y);
                 to_visit.push_back((x, y));
             }
-
-            img.put_pixel(x, y, Rgba([0, 0, 0, 0]));
         }
     }
 
