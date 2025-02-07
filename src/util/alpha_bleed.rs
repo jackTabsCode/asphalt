@@ -7,7 +7,7 @@ use std::collections::VecDeque;
 use bit_vec::BitVec;
 use image::{DynamicImage, GenericImage, GenericImageView, Rgba};
 
-pub(crate) fn alpha_bleed(img: &mut DynamicImage) {
+pub(crate) fn alpha_bleed(img: &mut DynamicImage, thickness: usize) {
     let (w, h) = img.dimensions();
 
     // Tells whether a given position has been touched by the bleeding algorithm
@@ -68,41 +68,59 @@ pub(crate) fn alpha_bleed(img: &mut DynamicImage) {
                 visited.set(x, y);
                 to_visit.push_back((x, y));
             }
+
+            img.put_pixel(x, y, Rgba([0, 0, 0, 0]));
         }
     }
 
-    while let Some((x, y)) = to_visit.pop_front() {
-        // Compute the average color from all surrounding pixels that are
-        // eligible to be sampled from.
-        let mut new_color = (0, 0, 0);
-        let mut contributing = 0;
+    for _ in 0..thickness {
+        let queue_length = to_visit.len();
+        if queue_length == 0 {
+            break;
+        }
 
-        for (x_source, y_source) in adjacent_positions(x, y) {
-            if can_be_sampled.get(x_source, y_source) {
-                let source = img.get_pixel(x_source, y_source);
+        let mut mutated_coords: Vec<(u32, u32)> = vec![(0, 0); queue_length];
+        for _ in 0..queue_length {
+            if let Some((x, y)) = to_visit.pop_front() {
+                // Compute the average color from all surrounding pixels that are
+                // eligible to be sampled from.
+                let mut new_color = (0, 0, 0);
+                let mut contributing = 0;
 
-                contributing += 1;
-                new_color.0 += source[0] as u16;
-                new_color.1 += source[1] as u16;
-                new_color.2 += source[2] as u16;
-            } else if !visited.get(x_source, y_source) {
-                visited.set(x_source, y_source);
-                to_visit.push_back((x_source, y_source));
+                for (x_source, y_source) in adjacent_positions(x, y) {
+                    if can_be_sampled.get(x_source, y_source) {
+                        let source = img.get_pixel(x_source, y_source);
+
+                        contributing += 1;
+                        new_color.0 += source[0] as u16;
+                        new_color.1 += source[1] as u16;
+                        new_color.2 += source[2] as u16;
+                    } else if !visited.get(x_source, y_source) {
+                        visited.set(x_source, y_source);
+                        to_visit.push_back((x_source, y_source));
+                    }
+                }
+
+                let denominator = u16::max(1, contributing);
+                let pixel = Rgba([
+                    (new_color.0 / denominator) as u8,
+                    (new_color.1 / denominator) as u8,
+                    (new_color.2 / denominator) as u8,
+                    0,
+                ]);
+
+                img.put_pixel(x, y, pixel);
+                mutated_coords.push((x, y));
             }
         }
 
-        let pixel = Rgba([
-            (new_color.0 / contributing) as u8,
-            (new_color.1 / contributing) as u8,
-            (new_color.2 / contributing) as u8,
-            0,
-        ]);
-
-        img.put_pixel(x, y, pixel);
-
-        // Now that we've bled this pixel, it's eligible to be sampled from for
-        // future iterations.
-        can_be_sampled.set(x, y);
+        for _ in 0..queue_length {
+            if let Some((x, y)) = mutated_coords.pop() {
+                // Now that we've bled this pixel, it's eligible to be sampled from for
+                // future iterations.
+                can_be_sampled.set(x, y);
+            }
+        }
     }
 }
 

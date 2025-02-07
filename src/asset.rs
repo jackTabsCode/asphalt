@@ -132,7 +132,7 @@ impl Asset {
 
         if let AssetKind::Decal(_) = &kind {
             let mut image: DynamicImage = image::load_from_memory(&data)?;
-            alpha_bleed(&mut image);
+            alpha_bleed(&mut image, 1);
 
             let format = ImageFormat::from_extension(ext)
                 .context("Failed to get image format from extension")?;
