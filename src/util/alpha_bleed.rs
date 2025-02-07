@@ -7,7 +7,7 @@ use std::collections::VecDeque;
 use bit_vec::BitVec;
 use image::{DynamicImage, GenericImage, GenericImageView, Rgba};
 
-pub(crate) fn alpha_bleed(img: &mut DynamicImage, thickness: usize) {
+pub(crate) fn alpha_bleed(img: &mut DynamicImage) {
     let (w, h) = img.dimensions();
 
     // Tells whether a given position has been touched by the bleeding algorithm
@@ -68,12 +68,10 @@ pub(crate) fn alpha_bleed(img: &mut DynamicImage, thickness: usize) {
                 visited.set(x, y);
                 to_visit.push_back((x, y));
             }
-
-            img.put_pixel(x, y, Rgba([0, 0, 0, 0]));
         }
     }
 
-    for _ in 0..thickness {
+    loop {
         let queue_length = to_visit.len();
         if queue_length == 0 {
             break;
