@@ -13,7 +13,6 @@ It's a modern alternative to [Tarmac](https://github.com/Roblox/Tarmac).
 
 ## Features Coming Soon
 -  Capablility to pack your images into spritesheets for lower client memory usage
--  Extended support for different audio formats
 
 ## Installation
 
