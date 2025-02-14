@@ -35,6 +35,11 @@ pub enum AssetKind {
 pub struct Asset {
     name: String,
     ext: String,
+
+    /// The initial data that was passed to `Asset::new`.
+    initial_data: Vec<u8>,
+
+    /// The data that will be uploaded to the cloud.
     data: Vec<u8>,
 
     kind: AssetKind,
@@ -46,11 +51,10 @@ enum ModelFileFormat {
     Xml,
 }
 
-fn verify_animation(data: Vec<u8>, format: ModelFileFormat) -> anyhow::Result<Vec<u8>> {
-    let slice = data.as_slice();
+fn verify_animation(data: &[u8], format: ModelFileFormat) -> anyhow::Result<Vec<u8>> {
     let dom = match format {
-        ModelFileFormat::Binary => rbx_binary::from_reader(slice)?,
-        ModelFileFormat::Xml => rbx_xml::from_reader(slice, DecodeOptions::new())?,
+        ModelFileFormat::Binary => rbx_binary::from_reader(data)?,
+        ModelFileFormat::Xml => rbx_xml::from_reader(data, DecodeOptions::new())?,
     };
 
     let children = dom.root().children();
@@ -78,10 +82,12 @@ pub struct UploadResult {
 impl Asset {
     pub async fn new(
         name: String,
-        mut data: Vec<u8>,
+        data: Vec<u8>,
         mut ext: &str,
         font_db: Arc<Database>,
     ) -> anyhow::Result<Self> {
+        let mut new_data = data.clone();
+
         let kind = match ext {
             "mp3" => AssetKind::Audio(AudioKind::Mp3),
             "ogg" => AssetKind::Audio(AudioKind::Ogg),
@@ -92,7 +98,7 @@ impl Asset {
             "bmp" => AssetKind::Decal(DecalKind::Bmp),
             "tga" => AssetKind::Decal(DecalKind::Tga),
             "svg" => {
-                data = svg_to_png(&data, font_db).await?;
+                new_data = svg_to_png(&new_data, font_db).await?;
                 ext = "png";
                 AssetKind::Decal(DecalKind::Png)
             }
@@ -104,7 +110,7 @@ impl Asset {
                     ModelFileFormat::Xml
                 };
 
-                verify_animation(data.clone(), format)?;
+                verify_animation(&new_data, format)?;
 
                 AssetKind::Model(ModelKind::Animation)
             }
@@ -131,7 +137,7 @@ impl Asset {
         };
 
         if let AssetKind::Decal(_) = &kind {
-            let mut image: DynamicImage = image::load_from_memory(&data)?;
+            let mut image: DynamicImage = image::load_from_memory(&new_data)?;
             alpha_bleed(&mut image);
 
             let format = ImageFormat::from_extension(ext)
@@ -139,14 +145,13 @@ impl Asset {
 
             let mut new_data: Cursor<Vec<u8>> = Cursor::new(Vec::new());
             image.write_to(&mut new_data, format)?;
-
-            data = new_data.into_inner();
         }
 
         Ok(Self {
             name,
             ext: ext.to_string(),
-            data,
+            initial_data: data,
+            data: new_data,
             kind,
             cloud_type,
         })
@@ -154,7 +159,7 @@ impl Asset {
 
     pub fn hash(&self) -> String {
         let mut hasher = Hasher::new();
-        hasher.update(&self.data);
+        hasher.update(&self.initial_data);
         hasher.finalize().to_string()
     }
 
