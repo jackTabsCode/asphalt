@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::Context;
-use tokio::fs::{create_dir_all, write};
+use tokio::fs;
 
 use crate::asset::Asset;
 
@@ -22,7 +22,7 @@ pub trait SyncBackend {
         &self,
         state: &mut SyncState,
         path: &str,
-        asset: Asset,
+        asset: &Asset,
     ) -> anyhow::Result<SyncResult>;
 }
 
@@ -39,11 +39,11 @@ async fn write_to_path(dest_path: &Path, asset_path: &Path, data: &[u8]) -> anyh
         .parent()
         .context("Asset should have a parent path")?;
 
-    create_dir_all(parent_path)
+    fs::create_dir_all(parent_path)
         .await
         .with_context(|| format!("Failed to create asset folder {}", parent_path.display()))?;
 
-    write(&write_path, data)
+    fs::write(&write_path, data)
         .await
         .with_context(|| format!("Failed to write asset to {}", asset_path.display()))
 }

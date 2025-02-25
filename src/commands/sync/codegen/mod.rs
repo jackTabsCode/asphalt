@@ -1,115 +1,182 @@
+use anyhow::Result;
+use log::debug;
 use std::collections::BTreeMap;
 use std::fmt::Write;
 
-use ast::{AstTarget, Expression, ReturnStatement};
-
-use crate::commands::sync::config::CodegenStyle;
-
-mod ast;
 mod flat;
 mod nested;
 
-pub fn generate_luau(
-    assets: &BTreeMap<String, String>,
-    strip_dir: &str,
-    style: &CodegenStyle,
-    strip_extension: bool,
-) -> anyhow::Result<String> {
-    match style {
-        CodegenStyle::Flat => flat::generate_luau(assets, strip_dir, strip_extension),
-        CodegenStyle::Nested => nested::generate_luau(assets, strip_dir, strip_extension),
+#[derive(Debug, Clone)]
+pub enum AssetValue {
+    Asset(String),
+    Sprite {
+        id: String,
+        x: u32,
+        y: u32,
+        width: u32,
+        height: u32,
+    },
+}
+
+pub trait CodeGenerator {
+    fn generate_luau(
+        &self,
+        assets: &BTreeMap<String, AssetValue>,
+        strip_extension: bool,
+    ) -> Result<String>;
+
+    fn generate_ts(
+        &self,
+        assets: &BTreeMap<String, AssetValue>,
+        output_name: &str,
+        strip_extension: bool,
+    ) -> Result<String>;
+}
+
+pub struct CodeWriter {
+    code: String,
+    indent_level: usize,
+    indent_str: String,
+}
+
+impl CodeWriter {
+    pub fn new(indent_str: &str) -> Self {
+        CodeWriter {
+            code: String::new(),
+            indent_level: 0,
+            indent_str: indent_str.to_string(),
+        }
     }
+
+    pub fn indent(&mut self) {
+        self.indent_level += 1;
+    }
+
+    pub fn dedent(&mut self) {
+        if self.indent_level > 0 {
+            self.indent_level -= 1;
+        }
+    }
+
+    pub fn write_indent(&mut self) -> Result<()> {
+        for _ in 0..self.indent_level {
+            write!(self.code, "{}", self.indent_str)?;
+        }
+        Ok(())
+    }
+
+    pub fn write_line(&mut self, line: &str) -> Result<()> {
+        self.write_indent()?;
+        writeln!(self.code, "{}", line)?;
+        Ok(())
+    }
+
+    pub fn into_string(self) -> String {
+        self.code
+    }
+}
+
+pub fn normalize_path(path: &str) -> String {
+    path.replace('\\', "/")
+}
+
+pub fn get_relative_path(file_path: &str, asset_dir: &str) -> Result<String> {
+    let file_path = normalize_path(file_path);
+    let asset_dir = normalize_path(asset_dir);
+
+    let asset_dir = if asset_dir.ends_with('/') {
+        asset_dir
+    } else {
+        format!("{}/", asset_dir)
+    };
+
+    debug!("File path: {}", file_path);
+    debug!("Asset dir: {}", asset_dir);
+
+    if file_path.starts_with(&asset_dir) {
+        let rel_path = file_path.strip_prefix(&asset_dir).unwrap_or(&file_path);
+        debug!("Relative path: {}", rel_path);
+        Ok(rel_path.to_string())
+    } else {
+        let asset_dir_no_slash = asset_dir.trim_end_matches('/');
+        if file_path.starts_with(asset_dir_no_slash) {
+            let rel_path = file_path
+                .strip_prefix(asset_dir_no_slash)
+                .unwrap_or(&file_path)
+                .trim_start_matches('/');
+            debug!("Relative path (no slash): {}", rel_path);
+            Ok(rel_path.to_string())
+        } else {
+            debug!(
+                "Could not strip prefix '{}' from '{}'",
+                asset_dir, file_path
+            );
+            Ok(file_path)
+        }
+    }
+}
+
+pub fn get_generator(
+    style: &crate::commands::sync::config::CodegenStyle,
+) -> Box<dyn CodeGenerator> {
+    match style {
+        crate::commands::sync::config::CodegenStyle::Flat => Box::new(flat::FlatCodeGenerator),
+        crate::commands::sync::config::CodegenStyle::Nested => {
+            Box::new(nested::NestedCodeGenerator)
+        }
+    }
+}
+
+pub fn generate_luau(
+    assets: &BTreeMap<String, AssetValue>,
+    asset_dir: &str,
+    style: &crate::commands::sync::config::CodegenStyle,
+    strip_extension: bool,
+) -> Result<String> {
+    let mut processed_assets = BTreeMap::new();
+    for (path, value) in assets {
+        let rel_path = get_relative_path(path, asset_dir)?;
+        processed_assets.insert(rel_path, value.clone());
+    }
+
+    let generator = get_generator(style);
+    generator.generate_luau(&processed_assets, strip_extension)
 }
 
 pub fn generate_ts(
-    assets: &BTreeMap<String, String>,
-    strip_dir: &str,
-    output_dir: &str,
-    style: &CodegenStyle,
+    assets: &BTreeMap<String, AssetValue>,
+    asset_dir: &str,
+    output_name: &str,
+    style: &crate::commands::sync::config::CodegenStyle,
     strip_extension: bool,
-) -> anyhow::Result<String> {
-    match style {
-        CodegenStyle::Flat => flat::generate_ts(assets, strip_dir, output_dir, strip_extension),
-        CodegenStyle::Nested => nested::generate_ts(assets, strip_dir, output_dir, strip_extension),
+) -> Result<String> {
+    let mut processed_assets = BTreeMap::new();
+    for (path, value) in assets {
+        let rel_path = get_relative_path(path, asset_dir)?;
+        processed_assets.insert(rel_path, value.clone());
     }
-}
 
-fn generate_code(expression: Expression, target: AstTarget) -> anyhow::Result<String> {
-    let mut buffer = String::new();
-    write!(buffer, "{}", ReturnStatement(expression, target))?;
-    Ok(buffer)
+    let generator = get_generator(style);
+    generator.generate_ts(&processed_assets, output_name, strip_extension)
 }
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
-
-    fn test_assets() -> BTreeMap<String, String> {
-        let mut entries = BTreeMap::new();
-        entries.insert("assets/foo.png".to_string(), "rbxassetid://1".to_string());
-        entries.insert(
-            "assets/bar/baz.png".to_string(),
-            "rbxasset://.asphalt/bar/baz.png".to_string(),
-        );
-        entries
-    }
+    use super::*;
 
     #[test]
-    fn generate_luau() {
-        let lockfile = test_assets();
-
-        let lua = super::flat::generate_luau(&lockfile, "assets", false).unwrap();
-        assert_eq!(lua, "return {\n\t[\"/bar/baz.png\"] = \"rbxasset://.asphalt/bar/baz.png\",\n\t[\"/foo.png\"] = \"rbxassetid://1\",\n}\n");
-
-        let lua = super::flat::generate_luau(&lockfile, "assets", true).unwrap();
+    fn test_get_relative_path() {
         assert_eq!(
-            lua,
-            "return {\n\t[\"/bar/baz\"] = \"rbxasset://.asphalt/bar/baz.png\",\n\t[\"/foo\"] = \"rbxassetid://1\",\n}\n"
+            get_relative_path("input/file.png", "input").unwrap(),
+            "file.png"
         );
-    }
-
-    #[test]
-    fn generate_ts() {
-        let lockfile = test_assets();
-
-        let ts = super::flat::generate_ts(&lockfile, "assets", "assets", false).unwrap();
-        assert_eq!(ts, "declare const assets: {\n\t\"/bar/baz.png\": \"rbxasset://.asphalt/bar/baz.png\";\n\t\"/foo.png\": \"rbxassetid://1\";\n};\nexport = assets;\n");
-
-        let ts = super::flat::generate_ts(&lockfile, "assets", "assets", true).unwrap();
-        assert_eq!(ts, "declare const assets: {\n\t\"/bar/baz\": \"rbxasset://.asphalt/bar/baz.png\";\n\t\"/foo\": \"rbxassetid://1\";\n};\nexport = assets;\n");
-    }
-
-    #[test]
-    fn generate_luau_nested() {
-        let lockfile = test_assets();
-
-        let lua = super::nested::generate_luau(&lockfile, "assets", false).unwrap();
         assert_eq!(
-            lua,
-            "return {\n\tbar = {\n\t\t[\"baz.png\"] = \"rbxasset://.asphalt/bar/baz.png\",\n\t},\n\t[\"foo.png\"] = \"rbxassetid://1\",\n}\n"
+            get_relative_path("input/dir/file.png", "input").unwrap(),
+            "dir/file.png"
         );
-
-        let lua = super::nested::generate_luau(&lockfile, "assets", true).unwrap();
         assert_eq!(
-            lua,
-            "return {\n\tbar = {\n\t\tbaz = \"rbxasset://.asphalt/bar/baz.png\",\n\t},\n\tfoo = \"rbxassetid://1\",\n}\n"
-        );
-    }
-
-    #[test]
-    fn generate_ts_nested() {
-        let lockfile = test_assets();
-
-        let ts = super::nested::generate_ts(&lockfile, "assets", "assets", false).unwrap();
-        assert_eq!(
-            ts,
-            "declare const assets: {\n\tbar: {\n\t\t\"baz.png\": \"rbxasset://.asphalt/bar/baz.png\";\n\t};\n\t\"foo.png\": \"rbxassetid://1\";\n};\nexport = assets;\n"
-        );
-
-        let ts = super::nested::generate_ts(&lockfile, "assets", "assets", true).unwrap();
-        assert_eq!(
-            ts,
-            "declare const assets: {\n\tbar: {\n\t\tbaz: \"rbxasset://.asphalt/bar/baz.png\";\n\t};\n\tfoo: \"rbxassetid://1\";\n};\nexport = assets;\n"
+            get_relative_path("input\\dir\\file.png", "input").unwrap(),
+            "dir/file.png"
         );
     }
 }

@@ -16,11 +16,11 @@ impl SyncBackend for CloudBackend {
         &self,
         state: &mut SyncState,
         path: &str,
-        asset: Asset,
+        asset: &Asset,
     ) -> anyhow::Result<SyncResult> {
         let existing = state.existing_lockfile.entries.get(path);
         if let Some(existing_value) = existing {
-            if existing_value.hash == asset.hash() {
+            if existing_value.hash == Some(asset.hash()) {
                 return Ok(SyncResult::Cloud(existing_value.asset_id));
             }
         }

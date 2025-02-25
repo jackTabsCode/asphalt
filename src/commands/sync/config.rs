@@ -4,7 +4,7 @@ use std::{
     collections::HashMap,
     fmt::{self, Display, Formatter},
 };
-use tokio::fs::{read_to_string, write};
+use tokio::fs;
 
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
@@ -66,6 +66,8 @@ pub struct SyncConfig {
     pub write_dir: String,
     pub creator: Creator,
     pub codegen: CodegenConfig,
+    #[serde(default)]
+    pub spritesheet_dirs: Option<Vec<String>>,
     pub existing: Option<HashMap<String, ExistingAsset>>,
 }
 
@@ -73,7 +75,7 @@ static FILE_NAME: &str = "asphalt.toml";
 
 impl SyncConfig {
     pub async fn read() -> anyhow::Result<Self> {
-        let content = read_to_string(FILE_NAME)
+        let content = fs::read_to_string(FILE_NAME)
             .await
             .context("Failed to read config. Did you create it?")?;
         toml::from_str(&content).context("Failed to parse config")
@@ -81,7 +83,7 @@ impl SyncConfig {
 
     pub async fn write(&self) -> anyhow::Result<()> {
         let content = toml::to_string(self)?;
-        write(FILE_NAME, content)
+        fs::write(FILE_NAME, content)
             .await
             .context("Failed to write config")
     }

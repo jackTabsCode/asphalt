@@ -1,65 +1,178 @@
-use anyhow::Context;
-use std::{
-    collections::BTreeMap,
-    path::{Path, PathBuf},
-};
+use super::{AssetValue, CodeGenerator, CodeWriter};
+use anyhow::Result;
+use std::collections::BTreeMap;
+use std::path::Path;
 
-use super::{
-    ast::{AstTarget, Expression},
-    generate_code,
-};
+pub struct FlatCodeGenerator;
 
-fn asset_path(file_path: &str, strip_dir: &str, strip_extension: bool) -> anyhow::Result<String> {
-    if strip_extension {
-        Path::new(file_path).with_extension("")
+fn process_path(path: &str, strip_extension: bool) -> String {
+    let path = if strip_extension {
+        Path::new(path)
+            .with_extension("")
+            .to_string_lossy()
+            .to_string()
     } else {
-        PathBuf::from(file_path)
+        path.to_string()
+    };
+
+    path
+}
+
+impl CodeGenerator for FlatCodeGenerator {
+    fn generate_luau(
+        &self,
+        assets: &BTreeMap<String, AssetValue>,
+        strip_extension: bool,
+    ) -> Result<String> {
+        let mut writer = CodeWriter::new("\t");
+        writer.write_line("return {")?;
+
+        let mut sorted_assets: Vec<_> = assets.iter().collect();
+        sorted_assets.sort_by(|a, b| a.0.cmp(b.0));
+
+        writer.indent();
+
+        for (path, value) in sorted_assets {
+            let processed_path = process_path(path, strip_extension);
+
+            match value {
+                AssetValue::Asset(asset_id) => {
+                    writer.write_line(&format!("[\"{}\"] = \"{}\",", processed_path, asset_id))?;
+                }
+                AssetValue::Sprite {
+                    id,
+                    x,
+                    y,
+                    width,
+                    height,
+                } => {
+                    writer.write_line(&format!("[\"{}\"] = {{", processed_path))?;
+                    writer.indent();
+                    writer.write_line(&format!("id = \"{}\",", id))?;
+                    writer.write_line(&format!("x = {},", x))?;
+                    writer.write_line(&format!("y = {},", y))?;
+                    writer.write_line(&format!("width = {},", width))?;
+                    writer.write_line(&format!("height = {},", height))?;
+                    writer.dedent();
+                    writer.write_line("},")?;
+                }
+            }
+        }
+
+        writer.dedent();
+        writer.write_line("}")?;
+
+        Ok(writer.into_string())
     }
-    .to_str()
-    .unwrap()
-    .strip_prefix(strip_dir)
-    .context("Failed to strip directory prefix")
-    .map(|s| s.to_string())
-}
 
-fn generate_table(
-    assets: &BTreeMap<String, String>,
-    strip_dir: &str,
-    strip_extension: bool,
-) -> anyhow::Result<Expression> {
-    let mut expressions: Vec<(Expression, Expression)> = Vec::new();
-    for (file_path, asset_id) in assets.iter() {
-        let file_stem = asset_path(file_path, strip_dir, strip_extension)?;
-        expressions.push((
-            Expression::String(file_stem),
-            Expression::String(asset_id.clone()),
-        ));
+    fn generate_ts(
+        &self,
+        assets: &BTreeMap<String, AssetValue>,
+        output_name: &str,
+        strip_extension: bool,
+    ) -> Result<String> {
+        let mut writer = CodeWriter::new("\t");
+        writer.write_line(&format!("declare const {}: {{", output_name))?;
+
+        let mut sorted_assets: Vec<_> = assets.iter().collect();
+        sorted_assets.sort_by(|a, b| a.0.cmp(b.0));
+
+        writer.indent();
+
+        for (path, value) in sorted_assets {
+            let processed_path = process_path(path, strip_extension);
+
+            match value {
+                AssetValue::Asset(_) => {
+                    writer.write_line(&format!("\"{}\": string", processed_path))?;
+                }
+                AssetValue::Sprite { .. } => {
+                    writer.write_line(&format!("\"{}\": {{", processed_path))?;
+                    writer.indent();
+                    writer.write_line("id: string")?;
+                    writer.write_line("x: number")?;
+                    writer.write_line("y: number")?;
+                    writer.write_line("width: number")?;
+                    writer.write_line("height: number")?;
+                    writer.dedent();
+                    writer.write_line("}")?;
+                }
+            }
+        }
+
+        writer.dedent();
+        writer.write_line("};")?;
+        writer.write_line(&format!("export = {};", output_name))?;
+
+        Ok(writer.into_string())
     }
-    Ok(Expression::table(expressions))
 }
 
-pub fn generate_luau(
-    assets: &BTreeMap<String, String>,
-    strip_dir: &str,
-    strip_extension: bool,
-) -> anyhow::Result<String> {
-    let table =
-        generate_table(assets, strip_dir, strip_extension).context("Failed to generate table")?;
-    generate_code(table, AstTarget::Luau)
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-pub fn generate_ts(
-    assets: &BTreeMap<String, String>,
-    strip_dir: &str,
-    output_dir: &str,
-    strip_extension: bool,
-) -> anyhow::Result<String> {
-    let table =
-        generate_table(assets, strip_dir, strip_extension).context("Failed to generate table")?;
-    generate_code(
-        table,
-        AstTarget::Typescript {
-            output_dir: output_dir.to_owned(),
-        },
-    )
+    #[test]
+    fn test_process_path() {
+        assert_eq!(process_path("file.png", false), "/file.png");
+        assert_eq!(process_path("/file.png", false), "/file.png");
+        assert_eq!(process_path("dir/file.png", false), "/dir/file.png");
+        assert_eq!(process_path("file.png", true), "/file");
+    }
+
+    #[test]
+    fn test_generate_luau_flat() {
+        let generator = FlatCodeGenerator;
+
+        let mut assets = BTreeMap::new();
+        assets.insert(
+            "file.png".to_string(),
+            AssetValue::Asset("rbxassetid://12345".to_string()),
+        );
+        assets.insert(
+            "dir/sprite.png".to_string(),
+            AssetValue::Sprite {
+                id: "rbxassetid://67890".to_string(),
+                x: 10,
+                y: 20,
+                width: 30,
+                height: 40,
+            },
+        );
+
+        let code = generator.generate_luau(&assets, false).unwrap();
+        assert!(code.contains("[\"/dir/sprite.png\"]"));
+        assert!(code.contains("[\"/file.png\"]"));
+        assert!(code.contains("id = \"rbxassetid://67890\""));
+        assert!(code.contains("x = 10"));
+        assert!(code.contains("width = 30"));
+    }
+
+    #[test]
+    fn test_generate_ts_flat() {
+        let generator = FlatCodeGenerator;
+
+        let mut assets = BTreeMap::new();
+        assets.insert(
+            "file.png".to_string(),
+            AssetValue::Asset("rbxassetid://12345".to_string()),
+        );
+        assets.insert(
+            "dir/sprite.png".to_string(),
+            AssetValue::Sprite {
+                id: "rbxassetid://67890".to_string(),
+                x: 10,
+                y: 20,
+                width: 30,
+                height: 40,
+            },
+        );
+
+        let code = generator.generate_ts(&assets, "assets", false).unwrap();
+        assert!(code.contains("declare const assets:"));
+        assert!(code.contains("\"/dir/sprite.png\": {"));
+        assert!(code.contains("\"/file.png\": string;"));
+        assert!(code.contains("x: number;"));
+        assert!(code.contains("width: number;"));
+    }
 }

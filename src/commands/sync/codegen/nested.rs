@@ -1,118 +1,285 @@
-use self::types::NestedTable;
-use super::ast::{AstTarget, Expression};
-use super::generate_code;
-use anyhow::{bail, Context};
+use super::{AssetValue, CodeGenerator, CodeWriter};
+use anyhow::{bail, Result};
 use std::collections::BTreeMap;
-use std::path::PathBuf;
-use std::{path::Component as PathComponent, path::Path};
+use std::path::{Component, Path, PathBuf};
 
-pub(crate) mod types {
-    use std::collections::BTreeMap;
+pub struct NestedCodeGenerator;
 
-    #[derive(Debug)]
-    pub enum NestedTable<'a> {
-        Folder(BTreeMap<String, NestedTable<'a>>),
-        Asset(&'a String),
-    }
+#[derive(Debug)]
+enum NestedValue<'a> {
+    Folder(BTreeMap<String, NestedValue<'a>>),
+    Asset(&'a AssetValue),
 }
 
-/// Recursively builds a **[`NestedTable`]** (normally a root table) into expressions that can be evaluated in the `ast`.
-fn build_table(entry: &NestedTable) -> Expression {
-    match entry {
-        NestedTable::Folder(entries) => Expression::table(
-            entries
-                .iter()
-                .map(|(component, entry)| (component.into(), build_table(entry)))
-                .collect(),
-        ),
-        NestedTable::Asset(asset_id) => Expression::String(asset_id.to_string()),
-    }
+fn get_path_components(path: &str, strip_extension: bool) -> Vec<String> {
+    let path_buf = if strip_extension {
+        Path::new(path).with_extension("")
+    } else {
+        PathBuf::from(path)
+    };
+
+    path_buf
+        .components()
+        .filter_map(|c| match c {
+            Component::Normal(s) => Some(s.to_string_lossy().to_string()),
+            _ => None,
+        })
+        .collect()
 }
 
-/**
- * Creates expressions based on a map of assets and builds a table for code generation.
-*/
-fn generate_expressions(
-    assets: &BTreeMap<String, String>,
-    strip_dir: &str,
+fn build_nested_tree(
+    assets: &BTreeMap<String, AssetValue>,
     strip_extension: bool,
-) -> anyhow::Result<Expression> {
-    let mut root: BTreeMap<String, NestedTable<'_>> = BTreeMap::new();
+) -> Result<BTreeMap<String, NestedValue<'_>>> {
+    let mut root = BTreeMap::new();
 
-    for (file_path, asset_id) in assets.iter() {
-        let mut components = vec![];
-        let full_path = if strip_extension {
-            Path::new(file_path).with_extension("")
-        } else {
-            PathBuf::from(file_path)
-        };
-        let path = full_path
-            .strip_prefix(strip_dir)
-            .context("Failed to strip directory prefix")?;
+    for (path, value) in assets {
+        let components = get_path_components(path, strip_extension);
+        if components.is_empty() {
+            continue;
+        }
 
-        for component in path.components() {
-            match component {
-                PathComponent::RootDir | PathComponent::Prefix(..) | PathComponent::Normal(..) => {
-                    components.push(
-                        component
-                            .as_os_str()
-                            .to_str()
-                            .context("Failed to resolve path component")?,
-                    )
-                }
-                PathComponent::ParentDir => {
-                    if components.pop().is_none() {
-                        bail!("Failed to resolve parent directory")
+        let mut current = &mut root;
+
+        for (i, component) in components.iter().enumerate() {
+            if i == components.len() - 1 {
+                if let Some(existing) = current.get(component) {
+                    match existing {
+                        NestedValue::Folder(_) => {
+                            bail!("Path conflict: {} is both a folder and a file", component);
+                        }
+                        NestedValue::Asset(_) => {
+                            bail!("Duplicate asset path: {}", path);
+                        }
                     }
                 }
-                _ => {}
-            }
-        }
-
-        let mut current_directory = &mut root;
-        for (index, &component) in components.iter().enumerate() {
-            // last component is assumed to be a file.
-            if index == components.len() - 1 {
-                if current_directory.get_mut(component).is_none() {
-                    current_directory.insert(component.to_owned(), NestedTable::Asset(asset_id));
-                };
-            } else if let NestedTable::Folder(entries) = current_directory
-                .entry(component.to_owned())
-                .or_insert_with(|| NestedTable::Folder(BTreeMap::new()))
-            {
-                current_directory = entries;
+                current.insert(component.clone(), NestedValue::Asset(value));
             } else {
-                unreachable!()
+                let entry = current
+                    .entry(component.clone())
+                    .or_insert_with(|| NestedValue::Folder(BTreeMap::new()));
+
+                current = match entry {
+                    NestedValue::Folder(children) => children,
+                    NestedValue::Asset(_) => {
+                        bail!("Path conflict: {} is both a file and a folder", component);
+                    }
+                };
             }
         }
     }
 
-    Ok(build_table(&NestedTable::Folder(root)))
+    Ok(root)
 }
 
-pub fn generate_luau(
-    assets: &BTreeMap<String, String>,
-    strip_dir: &str,
-    strip_extension: bool,
-) -> anyhow::Result<String> {
-    generate_code(
-        generate_expressions(assets, strip_dir, strip_extension)
-            .context("Failed to generate nested table")?,
-        AstTarget::Luau,
-    )
+fn write_nested_luau(
+    writer: &mut CodeWriter,
+    tree: &BTreeMap<String, NestedValue<'_>>,
+) -> Result<()> {
+    let mut sorted_keys: Vec<_> = tree.keys().collect();
+    sorted_keys.sort();
+
+    for key in sorted_keys {
+        match &tree[key] {
+            NestedValue::Folder(children) => {
+                writer.write_line(&format!("{} = {{", key))?;
+
+                writer.indent();
+                write_nested_luau(writer, children)?;
+                writer.dedent();
+
+                writer.write_line("},")?;
+            }
+            NestedValue::Asset(value) => match value {
+                AssetValue::Asset(asset_id) => {
+                    writer.write_line(&format!("{} = \"{}\",", key, asset_id))?;
+                }
+                AssetValue::Sprite {
+                    id,
+                    x,
+                    y,
+                    width,
+                    height,
+                } => {
+                    writer.write_line(&format!("{} = {{", key))?;
+
+                    writer.indent();
+                    writer.write_line(&format!("id = \"{}\",", id))?;
+                    writer.write_line(&format!("x = {},", x))?;
+                    writer.write_line(&format!("y = {},", y))?;
+                    writer.write_line(&format!("width = {},", width))?;
+                    writer.write_line(&format!("height = {},", height))?;
+                    writer.dedent();
+
+                    writer.write_line("},")?;
+                }
+            },
+        }
+    }
+
+    Ok(())
 }
 
-pub fn generate_ts(
-    assets: &BTreeMap<String, String>,
-    strip_dir: &str,
-    output_dir: &str,
-    strip_extension: bool,
-) -> anyhow::Result<String> {
-    generate_code(
-        generate_expressions(assets, strip_dir, strip_extension)
-            .context("Failed to generate nested table")?,
-        AstTarget::Typescript {
-            output_dir: output_dir.to_owned(),
-        },
-    )
+fn write_nested_ts(
+    writer: &mut CodeWriter,
+    tree: &BTreeMap<String, NestedValue<'_>>,
+) -> Result<()> {
+    let mut sorted_keys: Vec<_> = tree.keys().collect();
+    sorted_keys.sort();
+
+    for key in sorted_keys {
+        match &tree[key] {
+            NestedValue::Folder(children) => {
+                writer.write_line(&format!("{}: {{", key))?;
+
+                writer.indent();
+                write_nested_ts(writer, children)?;
+                writer.dedent();
+
+                writer.write_line("}")?;
+            }
+            NestedValue::Asset(value) => match value {
+                AssetValue::Asset(_) => {
+                    writer.write_line(&format!("{}: string", key))?;
+                }
+                AssetValue::Sprite { .. } => {
+                    writer.write_line(&format!("{}: {{", key))?;
+
+                    writer.indent();
+                    writer.write_line("id: string")?;
+                    writer.write_line("x: number")?;
+                    writer.write_line("y: number")?;
+                    writer.write_line("width: number")?;
+                    writer.write_line("height: number")?;
+                    writer.dedent();
+
+                    writer.write_line("}")?;
+                }
+            },
+        }
+    }
+
+    Ok(())
+}
+
+impl CodeGenerator for NestedCodeGenerator {
+    fn generate_luau(
+        &self,
+        assets: &BTreeMap<String, AssetValue>,
+        strip_extension: bool,
+    ) -> Result<String> {
+        let tree = build_nested_tree(assets, strip_extension)?;
+
+        let mut writer = CodeWriter::new("\t");
+        writer.write_line("return {")?;
+
+        writer.indent();
+        write_nested_luau(&mut writer, &tree)?;
+        writer.dedent();
+
+        writer.write_line("}")?;
+
+        Ok(writer.into_string())
+    }
+
+    fn generate_ts(
+        &self,
+        assets: &BTreeMap<String, AssetValue>,
+        output_name: &str,
+        strip_extension: bool,
+    ) -> Result<String> {
+        let tree = build_nested_tree(assets, strip_extension)?;
+
+        let mut writer = CodeWriter::new("\t");
+        writer.write_line(&format!("declare const {}: {{", output_name))?;
+
+        writer.indent();
+        write_nested_ts(&mut writer, &tree)?;
+        writer.dedent();
+
+        writer.write_line("};")?;
+        writer.write_line(&format!("export = {};", output_name))?;
+
+        Ok(writer.into_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_path_components() {
+        let components = get_path_components("dir/file.png", false);
+        assert_eq!(components, vec!["dir", "file.png"]);
+
+        let components = get_path_components("dir/file.png", true);
+        assert_eq!(components, vec!["dir", "file"]);
+
+        let components = get_path_components("file.png", false);
+        assert_eq!(components, vec!["file.png"]);
+    }
+
+    #[test]
+    fn test_generate_luau_nested() {
+        let generator = NestedCodeGenerator;
+
+        let mut assets = BTreeMap::new();
+        assets.insert(
+            "file.png".to_string(),
+            AssetValue::Asset("rbxassetid://12345".to_string()),
+        );
+        assets.insert(
+            "dir/sprite.png".to_string(),
+            AssetValue::Sprite {
+                id: "rbxassetid://67890".to_string(),
+                x: 10,
+                y: 20,
+                width: 30,
+                height: 40,
+            },
+        );
+        assets.insert(
+            "dir/subdir/other.png".to_string(),
+            AssetValue::Asset("rbxassetid://54321".to_string()),
+        );
+
+        let code = generator.generate_luau(&assets, false).unwrap();
+        assert!(code.contains("dir = {"));
+        assert!(code.contains("sprite.png = {"));
+        assert!(code.contains("id = \"rbxassetid://67890\""));
+        assert!(code.contains("x = 10"));
+        assert!(code.contains("subdir = {"));
+        assert!(code.contains("other.png = \"rbxassetid://54321\""));
+        assert!(code.contains("file.png = \"rbxassetid://12345\""));
+    }
+
+    #[test]
+    fn test_generate_ts_nested() {
+        let generator = NestedCodeGenerator;
+
+        let mut assets = BTreeMap::new();
+        assets.insert(
+            "file.png".to_string(),
+            AssetValue::Asset("rbxassetid://12345".to_string()),
+        );
+        assets.insert(
+            "dir/sprite.png".to_string(),
+            AssetValue::Sprite {
+                id: "rbxassetid://67890".to_string(),
+                x: 10,
+                y: 20,
+                width: 30,
+                height: 40,
+            },
+        );
+
+        let code = generator.generate_ts(&assets, "assets", false).unwrap();
+        assert!(code.contains("declare const assets:"));
+        assert!(code.contains("dir: {"));
+        assert!(code.contains("sprite.png: {"));
+        assert!(code.contains("id: string;"));
+        assert!(code.contains("width: number;"));
+        assert!(code.contains("file.png: string;"));
+    }
 }

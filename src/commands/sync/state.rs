@@ -6,10 +6,16 @@ use crate::{
 use anyhow::Context;
 use cookie::Cookie;
 use globset::{Glob, GlobSet, GlobSetBuilder};
+use log::debug;
 use rbxcloud::rbx::v1::assets::{AssetCreator, AssetGroupCreator, AssetUserCreator};
 use resvg::usvg::fontdb::Database;
-use std::{collections::HashMap, env, path::PathBuf, sync::Arc};
-use tokio::fs::create_dir_all;
+use std::{
+    collections::HashMap,
+    env,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
+use tokio::fs;
 
 fn add_trailing_slash(path: &str) -> String {
     if !path.ends_with('/') {
@@ -64,6 +70,8 @@ pub struct SyncState {
     pub new_lockfile: LockFile,
 
     pub existing: HashMap<String, ExistingAsset>,
+
+    pub spritesheet_dirs: Vec<String>,
 }
 
 impl SyncState {
@@ -88,7 +96,7 @@ impl SyncState {
         let asset_dir = add_trailing_slash(&config.asset_dir);
         let asset_dir = PathBuf::from(asset_dir);
 
-        let _ = create_dir_all(&config.write_dir)
+        let _ = fs::create_dir_all(&config.write_dir)
             .await
             .context("Failed to create write directory");
         let write_dir = add_trailing_slash(&config.write_dir);
@@ -138,10 +146,53 @@ impl SyncState {
             target,
             dry_run: args.dry_run,
             csrf: None,
+            spritesheet_dirs: config.spritesheet_dirs.unwrap_or_default(),
         })
     }
 
     pub fn update_csrf(&mut self, csrf: Option<String>) {
         self.csrf = csrf;
+    }
+
+    pub fn is_in_spritesheet(&self, path: &str) -> bool {
+        let asset_dir_str = self.asset_dir.to_str().unwrap();
+
+        let relative_path = if path.starts_with(asset_dir_str) {
+            path.strip_prefix(asset_dir_str)
+                .unwrap_or(path)
+                .trim_start_matches('/')
+        } else {
+            path
+        };
+
+        for dir in self.spritesheet_dirs.iter() {
+            let dir_path = if dir.ends_with('/') {
+                dir.clone()
+            } else {
+                format!("{}/", dir)
+            };
+
+            if relative_path.starts_with(&dir_path) {
+                let ext = Path::new(path)
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .map(|e| e.to_lowercase());
+
+                match ext {
+                    Some(ext)
+                        if matches!(
+                            ext.as_str(),
+                            "png" | "jpg" | "jpeg" | "bmp" | "tga" | "svg"
+                        ) =>
+                    {
+                        debug!("Path '{}' is in spritesheet directory '{}'", path, dir);
+                        return true;
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        false
     }
 }

@@ -169,4 +169,4 @@ Asphalt expects a single [KeyframeSequence](https://create.roblox.com/docs/refer
 
 ## Attributions
 
-Thank you to [Tarmac](https://github.com/Roblox/tarmac) for the alpha bleeding and nested codegen implementations, which were used in this project.
+Thank you to [Tarmac](https://github.com/Roblox/tarmac) for the alpha bleeding implementation, which was used in this project.

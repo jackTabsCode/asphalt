@@ -3,7 +3,7 @@ use std::{env, path::PathBuf};
 use anyhow::Context;
 use log::{debug, info, warn};
 use roblox_install::RobloxStudio;
-use tokio::fs::remove_dir_all;
+use tokio::fs;
 
 use crate::{
     asset::{Asset, AssetKind, ModelKind},
@@ -27,7 +27,6 @@ impl StudioBackend {
             environment variable",
         )?;
 
-        // Get current directory name and convert to kebab-case
         let current_dir = env::current_dir().context("Failed to get current directory")?;
         let name = current_dir
             .file_name()
@@ -46,7 +45,7 @@ impl StudioBackend {
 
         if sync_path.exists() {
             debug!("Removing existing folder...");
-            remove_dir_all(&sync_path)
+            fs::remove_dir_all(&sync_path)
                 .await
                 .context("Failed to remove existing folder")?;
         }
@@ -63,11 +62,11 @@ impl SyncBackend for StudioBackend {
         &self,
         state: &mut SyncState,
         path: &str,
-        asset: Asset,
+        asset: &Asset,
     ) -> anyhow::Result<SyncResult> {
         if let AssetKind::Model(ModelKind::Animation) = asset.kind() {
             let existing = state.existing_lockfile.entries.get(path).and_then(|entry| {
-                if entry.hash == asset.hash() {
+                if entry.hash == Some(asset.hash()) {
                     Some(entry)
                 } else {
                     None

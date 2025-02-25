@@ -81,6 +81,7 @@ pub async fn init() -> anyhow::Result<()> {
             strip_extension: Some(strip_extension),
         },
         existing: None,
+        spritesheet_dirs: None,
     };
 
     config.write().await.context("Failed to write config")?;

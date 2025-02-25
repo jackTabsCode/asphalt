@@ -3,6 +3,7 @@ use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
 use anyhow::Context;
 use resvg::usvg::fontdb::Database;
 use serde::{Deserialize, Serialize};
+use tokio::fs;
 
 use crate::asset::Asset;
 
@@ -17,7 +18,8 @@ struct TarmacEntry {
 }
 
 pub async fn migrate_manifest(args: MigrateTarmacManifestArgs) -> anyhow::Result<()> {
-    let tarmac_manifest_contents = std::fs::read_to_string(&args.manifest_path)
+    let tarmac_manifest_contents = fs::read_to_string(&args.manifest_path)
+        .await
         .context("Failed to open tarmac-manifest.toml")?;
     let tarmac_manifest: TarmacManifest = toml::from_str(&tarmac_manifest_contents)
         .context("Failed to parse tarmac-manifest.toml")?;
@@ -26,7 +28,7 @@ pub async fn migrate_manifest(args: MigrateTarmacManifestArgs) -> anyhow::Result
 
     for (path, entry) in tarmac_manifest.inputs {
         let content_path = args.manifest_path.with_file_name(&path);
-        let content = match std::fs::read(&content_path) {
+        let content = match fs::read(&content_path).await {
             Ok(content) => content,
             Err(error) => {
                 if error.kind() == std::io::ErrorKind::NotFound {
@@ -59,7 +61,8 @@ pub async fn migrate_manifest(args: MigrateTarmacManifestArgs) -> anyhow::Result
             path.to_string_lossy().to_string(),
             crate::FileEntry {
                 asset_id: entry.id,
-                hash: asset.hash(),
+                hash: Some(asset.hash()),
+                sprite: None,
             },
         );
     }

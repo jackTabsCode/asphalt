@@ -2,7 +2,7 @@ use std::{env, path::PathBuf};
 
 use anyhow::Context;
 use log::{debug, info};
-use tokio::fs::remove_dir_all;
+use tokio::fs;
 
 use crate::{
     asset::Asset,
@@ -25,7 +25,7 @@ impl DebugBackend {
 
         if debug_path.exists() {
             debug!("Removing existing folder...");
-            remove_dir_all(&debug_path)
+            fs::remove_dir_all(&debug_path)
                 .await
                 .context("Failed to remove existing folder")?;
         }
@@ -41,7 +41,7 @@ impl SyncBackend for DebugBackend {
         &self,
         state: &mut SyncState,
         path: &str,
-        asset: Asset,
+        asset: &Asset,
     ) -> anyhow::Result<SyncResult> {
         let asset_path = asset_path(state.asset_dir.to_str().unwrap(), path, asset.extension())
             .context("Failed to normalize asset path")?;
