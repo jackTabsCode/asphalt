@@ -81,6 +81,7 @@ impl Asset {
         mut data: Vec<u8>,
         mut ext: &str,
         font_db: Arc<Database>,
+        run_alpha_bleed: bool,
     ) -> anyhow::Result<Self> {
         let kind = match ext {
             "mp3" => AssetKind::Audio(AudioKind::Mp3),
@@ -130,17 +131,19 @@ impl Asset {
             },
         };
 
-        if let AssetKind::Decal(_) = &kind {
-            let mut image: DynamicImage = image::load_from_memory(&data)?;
-            alpha_bleed(&mut image);
+        if run_alpha_bleed {
+            if let AssetKind::Decal(_) = &kind {
+                let mut image: DynamicImage = image::load_from_memory(&data)?;
+                alpha_bleed(&mut image);
 
-            let format = ImageFormat::from_extension(ext)
-                .context("Failed to get image format from extension")?;
+                let format = ImageFormat::from_extension(ext)
+                    .context("Failed to get image format from extension")?;
 
-            let mut new_data: Cursor<Vec<u8>> = Cursor::new(Vec::new());
-            image.write_to(&mut new_data, format)?;
+                let mut new_data: Cursor<Vec<u8>> = Cursor::new(Vec::new());
+                image.write_to(&mut new_data, format)?;
 
-            data = new_data.into_inner();
+                data = new_data.into_inner();
+            }
         }
 
         Ok(Self {

@@ -1,9 +1,4 @@
-use std::{env, path::PathBuf};
-
-use anyhow::Context;
-use log::{debug, info};
-use tokio::fs;
-
+use super::{SyncBackend, SyncResult};
 use crate::{
     asset::Asset,
     commands::sync::{
@@ -11,8 +6,10 @@ use crate::{
         state::SyncState,
     },
 };
-
-use super::{SyncBackend, SyncResult};
+use anyhow::Context;
+use log::{debug, info};
+use std::{env, path::PathBuf};
+use tokio::fs::remove_dir_all;
 
 pub struct DebugBackend {
     sync_path: PathBuf,
@@ -25,7 +22,7 @@ impl DebugBackend {
 
         if debug_path.exists() {
             debug!("Removing existing folder...");
-            fs::remove_dir_all(&debug_path)
+            remove_dir_all(&debug_path)
                 .await
                 .context("Failed to remove existing folder")?;
         }
@@ -43,9 +40,19 @@ impl SyncBackend for DebugBackend {
         path: &str,
         asset: &Asset,
     ) -> anyhow::Result<SyncResult> {
-        let asset_path = asset_path(state.asset_dir.to_str().unwrap(), path, asset.extension())
-            .context("Failed to normalize asset path")?;
-        write_to_path(&self.sync_path, &asset_path, asset.data())
+        let path_buf = if path.starts_with("_spritesheets/") {
+            PathBuf::from(path)
+        } else {
+            match asset_path(state.asset_dir.to_str().unwrap(), path, asset.extension()) {
+                Ok(normalized) => normalized,
+                Err(e) => {
+                    debug!("Failed to normalize path {}: {}", path, e);
+                    PathBuf::from(path)
+                }
+            }
+        };
+
+        write_to_path(&self.sync_path, &path_buf, asset.data())
             .await
             .context("Failed to sync asset")?;
 

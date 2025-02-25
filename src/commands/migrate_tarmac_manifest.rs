@@ -53,6 +53,7 @@ pub async fn migrate_manifest(args: MigrateTarmacManifestArgs) -> anyhow::Result
             content,
             &path.extension().unwrap_or_default().to_string_lossy(),
             font_db,
+            true,
         )
         .await
         .with_context(|| format!("Failed to create asset for {}", path.to_string_lossy()))?;

@@ -3,9 +3,10 @@ use crate::{
     asset::Asset,
     cli::{SyncArgs, SyncTarget},
     lockfile::SpriteInfo,
+    util::spritesheet,
     FileEntry, LockFile,
 };
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use backend::{
     cloud::CloudBackend, debug::DebugBackend, studio::StudioBackend, SyncBackend, SyncResult,
 };
@@ -14,7 +15,8 @@ use config::SyncConfig;
 use image::DynamicImage;
 use log::{debug, info, warn};
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, HashSet},
+    io::Cursor,
     path::{Path, PathBuf},
 };
 use tokio::fs;
@@ -44,10 +46,46 @@ struct ProcessResult {
     file_entry: Option<FileEntry>,
 }
 
+#[derive(Default)]
+struct DryRunStats {
+    pending_files: Vec<String>,
+    pending_spritesheets: Vec<String>,
+    pending_sprite_count: usize,
+}
+
+impl DryRunStats {
+    fn has_pending_assets(&self) -> bool {
+        !self.pending_files.is_empty() || !self.pending_spritesheets.is_empty()
+    }
+
+    fn report(&self) {
+        if !self.pending_files.is_empty() {
+            info!("Files that need uploading ({}):", self.pending_files.len());
+            for file in &self.pending_files {
+                info!("  - {}", file);
+            }
+        }
+
+        if !self.pending_spritesheets.is_empty() {
+            info!(
+                "Spritesheets that need uploading ({} with {} sprites):",
+                self.pending_spritesheets.len(),
+                self.pending_sprite_count
+            );
+            info!("{}", self.pending_spritesheets.join(", "));
+        }
+
+        if !self.has_pending_assets() {
+            info!("All assets are already in sync!");
+        }
+    }
+}
+
 async fn process_file(
     entry: &DirEntry,
     state: &mut SyncState,
     backend: &TargetBackend,
+    dry_run_stats: &mut Option<DryRunStats>,
 ) -> anyhow::Result<Option<ProcessResult>> {
     let path = entry.path();
     let path_str = path.to_str().unwrap();
@@ -60,12 +98,7 @@ async fn process_file(
         return Ok(None);
     }
 
-    let file_name = path
-        .file_name()
-        .with_context(|| format!("Failed to get file name of {}", fixed_path))?
-        .to_str()
-        .unwrap()
-        .to_string();
+    let file_name = path.file_name().unwrap().to_str().unwrap().to_string();
 
     let data = fs::read(&path)
         .await
@@ -79,11 +112,24 @@ async fn process_file(
         }
     };
 
-    let asset = Asset::new(file_name, data, ext, state.fontdb.clone()).await?;
+    let asset = Asset::new(file_name, data, ext, state.fontdb.clone(), true).await?;
     let hash = asset.hash();
 
+    let needs_sync = match state.existing_lockfile.entries.get(&fixed_path) {
+        Some(entry) => entry.hash.as_ref() != Some(&hash),
+        None => true,
+    };
+
+    if !needs_sync {
+        debug!("Skipping {fixed_path} as it hasn't changed");
+        return Ok(None);
+    }
+
     if state.dry_run {
-        info!("Sync {fixed_path}");
+        if let Some(stats) = dry_run_stats {
+            stats.pending_files.push(fixed_path.clone());
+        }
+        info!("Would sync {fixed_path}");
         return Ok(None);
     }
 
@@ -118,49 +164,40 @@ async fn process_file(
 async fn process_spritesheets(
     state: &mut SyncState,
     backend: &TargetBackend,
-) -> anyhow::Result<(
-    HashMap<String, (String, HashMap<String, SpriteInfo>)>,
-    BTreeMap<String, AssetValue>,
-)> {
-    use crate::util::spritesheet;
-
+    dry_run_stats: &mut Option<DryRunStats>,
+) -> anyhow::Result<BTreeMap<String, AssetValue>> {
     let asset_dir = PathBuf::from(&state.asset_dir);
 
-    let packs = spritesheet::collect_images_for_packing(
+    let images = spritesheet::collect_images_for_packing(
         &asset_dir,
-        &state.spritesheet_dirs,
+        &state.spritesheet_matcher,
         &state.exclude_assets_matcher,
         state.fontdb.clone(),
     )
     .await?;
 
-    if packs.is_empty() {
-        return Ok((HashMap::new(), BTreeMap::new()));
+    if images.is_empty() {
+        return Ok(BTreeMap::new());
     }
 
-    let mut results = HashMap::new();
     let mut sprite_assets = BTreeMap::new();
 
-    for (pack_dir, images) in packs {
-        if images.is_empty() {
-            info!("No valid images found in directory: {}", pack_dir);
-            continue;
-        }
+    let dir_name = "spritesheet";
 
-        let spritesheet = spritesheet::pack_spritesheet(&images)?;
+    let spritesheets = spritesheet::pack_spritesheets(&images)?;
 
+    for (sheet_index, spritesheet) in spritesheets.iter().enumerate() {
         let spritesheet_image = DynamicImage::ImageRgba8(spritesheet.image.clone());
 
-        let spritesheet_name = format!(
-            "{}.png",
-            Path::new(&pack_dir)
-                .file_stem()
-                .unwrap_or_default()
-                .to_string_lossy()
-        );
+        let spritesheet_name = if spritesheets.len() == 1 {
+            format!("{}.png", dir_name)
+        } else {
+            format!("{}_{}.png", dir_name, sheet_index + 1)
+        };
+
         let mut spritesheet_data = Vec::new();
         spritesheet_image.write_to(
-            &mut std::io::Cursor::new(&mut spritesheet_data),
+            &mut Cursor::new(&mut spritesheet_data),
             image::ImageFormat::Png,
         )?;
 
@@ -169,114 +206,108 @@ async fn process_spritesheets(
             spritesheet_data,
             "png",
             state.fontdb.clone(),
+            false,
         )
         .await?;
 
-        let spritesheet_path = format!("__SPRITESHEETS/{}", spritesheet_name);
+        let spritesheet_path = format!("_spritesheets/{}", spritesheet_name);
 
-        if !state.dry_run {
-            let sync_result = match &backend {
-                TargetBackend::Cloud(backend) => {
-                    backend.sync(state, &spritesheet_path, &asset).await
-                }
-                TargetBackend::Studio(backend) => {
-                    backend.sync(state, &spritesheet_path, &asset).await
-                }
-                TargetBackend::Debug(backend) => {
-                    backend.sync(state, &spritesheet_path, &asset).await
-                }
-            }?;
+        let needs_sync = match state.existing_lockfile.entries.get(&spritesheet_path) {
+            Some(entry) => entry.hash.as_ref() != Some(&asset.hash()),
+            None => true,
+        };
 
-            match sync_result {
-                SyncResult::Cloud(asset_id) => {
-                    state.new_lockfile.entries.insert(
-                        spritesheet_path.clone(),
-                        FileEntry {
-                            hash: Some(asset.hash()),
-                            asset_id,
-                            sprite: None,
-                        },
-                    );
+        if !needs_sync {
+            debug!("Skipping spritesheet {spritesheet_path} as it hasn't changed");
+            continue;
+        }
 
-                    let asset_id_str = format_asset_id(asset_id);
-                    let mut sprite_infos = HashMap::new();
-
-                    for (path, info) in &spritesheet.sprites {
-                        let sprite_info = SpriteInfo {
-                            x: info.x,
-                            y: info.y,
-                            width: info.width,
-                            height: info.height,
-                            spritesheet: spritesheet_path.clone(),
-                        };
-
-                        sprite_infos.insert(path.clone(), sprite_info.clone());
-
-                        state.new_lockfile.entries.insert(
-                            path.clone(),
-                            FileEntry {
-                                hash: None,
-                                asset_id,
-                                sprite: Some(sprite_info),
-                            },
-                        );
-
-                        let sprite_asset = AssetValue::Sprite {
-                            id: asset_id_str.clone(),
-                            x: info.x,
-                            y: info.y,
-                            width: info.width,
-                            height: info.height,
-                        };
-
-                        sprite_assets.insert(path.clone(), sprite_asset);
-                    }
-
-                    results.insert(pack_dir, (asset_id_str, sprite_infos));
-                }
-                SyncResult::Studio(asset_id) => {
-                    info!("Synced spritesheet {} to Studio", spritesheet_path);
-
-                    let mut sprite_infos = HashMap::new();
-
-                    for (path, info) in &spritesheet.sprites {
-                        let sprite_info = SpriteInfo {
-                            x: info.x,
-                            y: info.y,
-                            width: info.width,
-                            height: info.height,
-                            spritesheet: spritesheet_path.clone(),
-                        };
-
-                        sprite_infos.insert(path.clone(), sprite_info);
-
-                        let sprite_asset = AssetValue::Sprite {
-                            id: asset_id.clone(),
-                            x: info.x,
-                            y: info.y,
-                            width: info.width,
-                            height: info.height,
-                        };
-
-                        sprite_assets.insert(path.clone(), sprite_asset);
-                    }
-
-                    results.insert(pack_dir, (asset_id, sprite_infos));
-                }
-                SyncResult::None => {
-                    info!("No result for spritesheet {}", spritesheet_path);
-                }
+        if state.dry_run {
+            if let Some(stats) = dry_run_stats {
+                stats.pending_spritesheets.push(spritesheet_path.clone());
+                stats.pending_sprite_count += spritesheet.sprites.len();
             }
-        } else {
             info!(
                 "Would upload spritesheet: {} with {} sprites",
                 spritesheet_path,
                 spritesheet.sprites.len()
             );
+            continue;
+        }
+
+        let sync_result = match &backend {
+            TargetBackend::Cloud(backend) => backend.sync(state, &spritesheet_path, &asset).await,
+            TargetBackend::Studio(backend) => backend.sync(state, &spritesheet_path, &asset).await,
+            TargetBackend::Debug(backend) => backend.sync(state, &spritesheet_path, &asset).await,
+        }?;
+
+        match sync_result {
+            SyncResult::Cloud(asset_id) => {
+                info!(
+                    "Uploaded spritesheet {} with ID {}",
+                    spritesheet_path, asset_id
+                );
+
+                state.new_lockfile.entries.insert(
+                    spritesheet_path.clone(),
+                    FileEntry {
+                        hash: Some(asset.hash()),
+                        asset_id,
+                        sprite: None,
+                    },
+                );
+
+                let asset_id_str = format_asset_id(asset_id);
+
+                for (path, info) in &spritesheet.sprites {
+                    let sprite_asset = AssetValue::Sprite {
+                        id: asset_id_str.clone(),
+                        x: info.x,
+                        y: info.y,
+                        width: info.width,
+                        height: info.height,
+                    };
+
+                    sprite_assets.insert(path.clone(), sprite_asset);
+
+                    state.new_lockfile.entries.insert(
+                        path.clone(),
+                        FileEntry {
+                            hash: None,
+                            asset_id,
+                            sprite: Some(SpriteInfo {
+                                x: info.x,
+                                y: info.y,
+                                width: info.width,
+                                height: info.height,
+                                spritesheet: spritesheet_path.clone(),
+                            }),
+                        },
+                    );
+                }
+            }
+            SyncResult::Studio(asset_id) => {
+                info!("Synced spritesheet {} to Studio", spritesheet_path);
+
+                for (path, info) in &spritesheet.sprites {
+                    let sprite_asset = AssetValue::Sprite {
+                        id: asset_id.clone(),
+                        x: info.x,
+                        y: info.y,
+                        width: info.width,
+                        height: info.height,
+                    };
+
+                    sprite_assets.insert(path.clone(), sprite_asset);
+                }
+            }
+            SyncResult::None => {
+                info!("No result for spritesheet {}", spritesheet_path);
+            }
         }
     }
 
-    Ok((results, sprite_assets))
+    Ok(sprite_assets)
 }
 
 pub async fn sync(args: SyncArgs, existing_lockfile: LockFile) -> anyhow::Result<()> {
@@ -291,20 +322,25 @@ pub async fn sync(args: SyncArgs, existing_lockfile: LockFile) -> anyhow::Result
     let mut assets = BTreeMap::<String, AssetValue>::new();
     let mut synced = 0;
 
+    let mut dry_run_stats = if state.dry_run {
+        Some(DryRunStats::default())
+    } else {
+        None
+    };
+
     let backend = match state.target {
         SyncTarget::Cloud => TargetBackend::Cloud(CloudBackend),
         SyncTarget::Studio => TargetBackend::Studio(StudioBackend::new().await?),
         SyncTarget::Debug => TargetBackend::Debug(DebugBackend::new().await?),
     };
 
-    let (spritesheet_results, sprite_assets) = process_spritesheets(&mut state, &backend).await?;
-
+    let sprite_assets = process_spritesheets(&mut state, &backend, &mut dry_run_stats).await?;
     assets.extend(sprite_assets);
 
     let mut sprite_paths = HashSet::new();
-    for (_, sprites) in spritesheet_results.values() {
-        for path in sprites.keys() {
-            sprite_paths.insert(path.clone());
+    for (_, sprites) in state.new_lockfile.entries.iter() {
+        if let Some(sprite) = &sprites.sprite {
+            sprite_paths.insert(sprite.spritesheet.clone());
         }
     }
 
@@ -329,7 +365,7 @@ pub async fn sync(args: SyncArgs, existing_lockfile: LockFile) -> anyhow::Result
             continue;
         }
 
-        let result = match process_file(&entry, &mut state, &backend).await {
+        let result = match process_file(&entry, &mut state, &backend, &mut dry_run_stats).await {
             Ok(Some(result)) => {
                 synced += 1;
                 result
@@ -350,7 +386,26 @@ pub async fn sync(args: SyncArgs, existing_lockfile: LockFile) -> anyhow::Result
         }
     }
 
-    if state.dry_run || matches!(state.target, SyncTarget::Debug) {
+    if state.dry_run {
+        if let Some(stats) = dry_run_stats {
+            info!(
+                "Dry run completed. {} asset{} would be synced.",
+                synced,
+                if synced == 1 { "" } else { "s" }
+            );
+
+            stats.report();
+
+            if stats.has_pending_assets() {
+                return Err(anyhow!(
+                    "Assets need to be uploaded. Run without --dry-run to upload them."
+                ));
+            }
+        }
+        return Ok(());
+    }
+
+    if matches!(state.target, SyncTarget::Debug) {
         info!(
             "Synced {} asset{}!",
             synced,
@@ -369,13 +424,11 @@ pub async fn sync(args: SyncArgs, existing_lockfile: LockFile) -> anyhow::Result
 
     let asset_dir = state.asset_dir.to_str().unwrap();
 
+    // Fixed this section to maintain relative paths
     for (path, asset) in state.existing.iter() {
-        let mut path_buf = PathBuf::from(path);
-        if !path_buf.starts_with(asset_dir) {
-            path_buf = PathBuf::from(asset_dir).join(path);
-        }
-        let path_str = path_buf.to_str().unwrap().to_string();
-        assets.insert(path_str, AssetValue::Asset(format_asset_id(asset.id)));
+        // Paths in state.existing should already be relative to asset_dir
+        // Use them directly without modification
+        assets.insert(path.clone(), AssetValue::Asset(format_asset_id(asset.id)));
     }
 
     let luau_filename = format!("{}.{}", state.output_name, "luau");

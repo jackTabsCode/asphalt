@@ -50,6 +50,7 @@ pub struct SyncState {
     pub asset_dir: PathBuf,
     pub write_dir: PathBuf,
     pub exclude_assets_matcher: GlobSet,
+    pub spritesheet_matcher: GlobSet,
 
     pub api_key: String,
     pub cookie: Option<String>,
@@ -70,8 +71,6 @@ pub struct SyncState {
     pub new_lockfile: LockFile,
 
     pub existing: HashMap<String, ExistingAsset>,
-
-    pub spritesheet_dirs: Vec<String>,
 }
 
 impl SyncState {
@@ -119,8 +118,6 @@ impl SyncState {
 
         let new_lockfile: LockFile = Default::default();
 
-        let manual = config.existing.unwrap_or_default();
-
         let mut exclude_assets_matcher_builder = GlobSetBuilder::new();
         for glob in config.exclude_assets {
             let glob = Glob::new(&glob)?;
@@ -128,10 +125,19 @@ impl SyncState {
         }
         let exclude_assets_matcher = exclude_assets_matcher_builder.build()?;
 
+        let mut spritesheet_matcher_builder = GlobSetBuilder::new();
+        for glob in config.spritesheets {
+            let glob = Glob::new(&glob)?;
+            spritesheet_matcher_builder.add(glob);
+        }
+
+        let spritesheet_matcher = spritesheet_matcher_builder.build()?;
+
         Ok(Self {
             asset_dir,
             write_dir,
             exclude_assets_matcher,
+            spritesheet_matcher,
             api_key,
             creator,
             typescript,
@@ -141,12 +147,11 @@ impl SyncState {
             fontdb: Arc::new(font_db),
             existing_lockfile,
             new_lockfile,
-            existing: manual,
+            existing: config.existing,
             cookie,
             target,
             dry_run: args.dry_run,
             csrf: None,
-            spritesheet_dirs: config.spritesheet_dirs.unwrap_or_default(),
         })
     }
 
@@ -165,32 +170,19 @@ impl SyncState {
             path
         };
 
-        for dir in self.spritesheet_dirs.iter() {
-            let dir_path = if dir.ends_with('/') {
-                dir.clone()
-            } else {
-                format!("{}/", dir)
-            };
+        let ext = Path::new(path)
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| e.to_lowercase());
 
-            if relative_path.starts_with(&dir_path) {
-                let ext = Path::new(path)
-                    .extension()
-                    .and_then(|e| e.to_str())
-                    .map(|e| e.to_lowercase());
-
-                match ext {
-                    Some(ext)
-                        if matches!(
-                            ext.as_str(),
-                            "png" | "jpg" | "jpeg" | "bmp" | "tga" | "svg"
-                        ) =>
-                    {
-                        debug!("Path '{}' is in spritesheet directory '{}'", path, dir);
-                        return true;
-                    }
-                    _ => {}
+        match ext {
+            Some(ext) if matches!(ext.as_str(), "png" | "jpg" | "jpeg" | "bmp" | "tga" | "svg") => {
+                if self.spritesheet_matcher.is_match(relative_path) {
+                    debug!("Path '{}' matches a spritesheet glob", relative_path);
+                    return true;
                 }
             }
+            _ => {}
         }
 
         false

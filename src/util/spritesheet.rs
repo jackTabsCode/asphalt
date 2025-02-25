@@ -1,12 +1,15 @@
-use crate::util::svg::svg_to_png;
+use crate::asset::Asset;
 use anyhow::bail;
 use image::{DynamicImage, GenericImageView, ImageBuffer, RgbaImage};
+use log::{debug, info};
 use resvg::usvg::fontdb::Database;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::sync::Arc;
 use tokio::fs;
 use walkdir::WalkDir;
+
+const MAX_SIZE: u32 = 1024;
 
 #[derive(Debug, Clone)]
 pub struct SpriteInfo {
@@ -22,21 +25,44 @@ pub struct Spritesheet {
     pub sprites: HashMap<String, SpriteInfo>,
 }
 
-const MAX_SIZE: u32 = 1000;
-
-pub fn pack_spritesheet(images: &HashMap<String, DynamicImage>) -> anyhow::Result<Spritesheet> {
+pub fn pack_spritesheets(
+    images: &HashMap<String, DynamicImage>,
+) -> anyhow::Result<Vec<Spritesheet>> {
     if images.is_empty() {
-        bail!("No images to pack");
+        return Ok(Vec::new());
     }
 
-    let mut image_entries: Vec<_> = images.iter().collect();
+    let mut sorted_paths: Vec<_> = images.keys().collect();
+    sorted_paths.sort();
 
-    image_entries.sort_by(|a, b| a.0.cmp(b.0));
-    image_entries.sort_by(|a, b| {
-        let a_height = a.1.height();
-        let b_height = b.1.height();
-        b_height.cmp(&a_height)
-    });
+    let mut remaining_paths: HashSet<_> = sorted_paths.iter().cloned().collect();
+    let mut spritesheets = Vec::new();
+
+    while !remaining_paths.is_empty() {
+        let spritesheet = pack_single_spritesheet(images, &remaining_paths)?;
+
+        for path in spritesheet.sprites.keys() {
+            remaining_paths.remove(path);
+        }
+
+        spritesheets.push(spritesheet);
+    }
+
+    info!(
+        "Created {} spritesheet(s) for {} images",
+        spritesheets.len(),
+        images.len()
+    );
+
+    Ok(spritesheets)
+}
+
+fn pack_single_spritesheet(
+    images: &HashMap<String, DynamicImage>,
+    remaining_paths: &HashSet<&String>,
+) -> anyhow::Result<Spritesheet> {
+    let mut paths_to_pack: Vec<_> = remaining_paths.iter().collect();
+    paths_to_pack.sort();
 
     let mut spritesheet = ImageBuffer::new(MAX_SIZE, MAX_SIZE);
     let mut sprites = HashMap::new();
@@ -45,22 +71,47 @@ pub fn pack_spritesheet(images: &HashMap<String, DynamicImage>) -> anyhow::Resul
     let mut current_y = 0;
     let mut row_height = 0;
 
-    for (path, image) in image_entries {
+    for &&path in &paths_to_pack {
+        let image = &images[path];
         let width = image.width();
         let height = image.height();
+
+        if width > MAX_SIZE || height > MAX_SIZE {
+            if sprites.is_empty() {
+                let mut large_sheet = ImageBuffer::new(width, height);
+                for y in 0..height {
+                    for x in 0..width {
+                        large_sheet.put_pixel(x, y, image.get_pixel(x, y));
+                    }
+                }
+
+                let mut single_sprite = HashMap::new();
+                single_sprite.insert(
+                    path.clone(),
+                    SpriteInfo {
+                        x: 0,
+                        y: 0,
+                        width,
+                        height,
+                    },
+                );
+
+                return Ok(Spritesheet {
+                    image: large_sheet,
+                    sprites: single_sprite,
+                });
+            }
+            continue;
+        }
 
         if current_x + width > MAX_SIZE {
             current_x = 0;
             current_y += row_height;
             row_height = 0;
-        }
 
-        if current_y + height > MAX_SIZE {
-            bail!(
-                "Cannot fit all images in a {}x{} spritesheet",
-                MAX_SIZE,
-                MAX_SIZE
-            );
+            if current_y + height > MAX_SIZE {
+                break;
+            }
         }
 
         for y in 0..height {
@@ -81,7 +132,11 @@ pub fn pack_spritesheet(images: &HashMap<String, DynamicImage>) -> anyhow::Resul
         );
 
         current_x += width;
-        row_height = row_height.max(height);
+        row_height = std::cmp::max(row_height, height);
+    }
+
+    if sprites.is_empty() {
+        bail!("Could not fit any images into a spritesheet");
     }
 
     Ok(Spritesheet {
@@ -92,78 +147,60 @@ pub fn pack_spritesheet(images: &HashMap<String, DynamicImage>) -> anyhow::Resul
 
 pub async fn collect_images_for_packing(
     asset_dir: &Path,
-    pack_dirs: &[String],
+    spritesheet_matcher: &globset::GlobSet,
     exclude_patterns: &globset::GlobSet,
     fontdb: Arc<Database>,
-) -> anyhow::Result<HashMap<String, HashMap<String, DynamicImage>>> {
-    let mut packs: HashMap<String, HashMap<String, DynamicImage>> = HashMap::new();
+) -> anyhow::Result<HashMap<String, DynamicImage>> {
+    let mut images = HashMap::new();
 
-    let mut sorted_pack_dirs = pack_dirs.to_vec();
-    sorted_pack_dirs.sort();
-
-    for pack_dir in sorted_pack_dirs {
-        let full_path = asset_dir.join(&pack_dir);
-        if !full_path.exists() || !full_path.is_dir() {
-            bail!("Pack directory does not exist: {}", full_path.display());
+    for entry in WalkDir::new(asset_dir)
+        .sort_by_file_name()
+        .into_iter()
+        .filter_map(|e| e.ok())
+    {
+        if !entry.file_type().is_file() {
+            continue;
         }
 
-        let mut images = HashMap::new();
+        let path = entry.path();
 
-        let mut entries = Vec::new();
-
-        for entry in WalkDir::new(&full_path)
-            .sort_by_file_name()
-            .into_iter()
-            .filter_map(|e| e.ok())
-        {
-            if entry.file_type().is_file() {
-                entries.push(entry);
-            }
+        if exclude_patterns.is_match(path.to_string_lossy().as_ref()) {
+            continue;
         }
 
-        entries.sort_by(|a, b| a.path().to_string_lossy().cmp(&b.path().to_string_lossy()));
+        let rel_path = path
+            .strip_prefix(asset_dir)
+            .unwrap_or(path)
+            .to_string_lossy()
+            .replace('\\', "/");
 
-        for entry in entries {
-            let path = entry.path();
-
-            if exclude_patterns.is_match(path.to_string_lossy().as_ref()) {
-                continue;
-            }
-
-            if is_image_file(path) {
-                let image = if is_svg_file(path) {
-                    let svg_data = fs::read(path).await?;
-
-                    let png_data = svg_to_png(&svg_data, fontdb.clone()).await?;
-
-                    image::load_from_memory(&png_data)?
-                } else {
-                    image::open(path)?
-                };
-
-                let rel_path = path
-                    .strip_prefix(asset_dir)
-                    .unwrap_or(path)
-                    .to_string_lossy()
-                    .replace('\\', "/");
-
-                images.insert(rel_path.to_string(), image);
-            }
+        if !spritesheet_matcher.is_match(&rel_path) {
+            continue;
         }
 
-        if !images.is_empty() {
-            packs.insert(pack_dir.clone(), images);
+        if is_image_file(path) {
+            debug!("Processing image for spritesheet: {}", path.display());
+
+            let file_name = path
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string();
+            let ext = path
+                .extension()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string();
+            let data = fs::read(path).await?;
+
+            let asset = Asset::new(file_name, data, &ext, fontdb.clone(), true).await?;
+            let image = image::load_from_memory(asset.data())?;
+
+            images.insert(rel_path.to_string(), image);
         }
     }
 
-    Ok(packs)
-}
-
-fn is_svg_file(path: &Path) -> bool {
-    match path.extension().and_then(|ext| ext.to_str()) {
-        Some(ext) => ext.to_lowercase() == "svg",
-        None => false,
-    }
+    Ok(images)
 }
 
 fn is_image_file(path: &Path) -> bool {

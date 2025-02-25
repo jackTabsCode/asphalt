@@ -27,10 +27,29 @@ pub trait SyncBackend {
 }
 
 fn asset_path(asset_dir: &str, path: &str, ext: &str) -> anyhow::Result<PathBuf> {
-    let stripped_path_str = path
-        .strip_prefix(asset_dir)
-        .context("Failed to strip asset directory prefix")?;
-    Ok(PathBuf::from(stripped_path_str).with_extension(ext))
+    let asset_dir = asset_dir.replace('\\', "/");
+    let path = path.replace('\\', "/");
+
+    let asset_dir = if asset_dir.ends_with('/') {
+        asset_dir
+    } else {
+        format!("{}/", asset_dir)
+    };
+
+    let stripped_path = if path.starts_with(&asset_dir) {
+        path.strip_prefix(&asset_dir).unwrap_or(&path)
+    } else {
+        let asset_dir_no_slash = asset_dir.trim_end_matches('/');
+        if path.starts_with(asset_dir_no_slash) {
+            path.strip_prefix(asset_dir_no_slash)
+                .unwrap_or(&path)
+                .trim_start_matches('/')
+        } else {
+            &path
+        }
+    };
+
+    Ok(PathBuf::from(stripped_path).with_extension(ext))
 }
 
 async fn write_to_path(dest_path: &Path, asset_path: &Path, data: &[u8]) -> anyhow::Result<()> {

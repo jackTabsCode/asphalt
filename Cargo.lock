@@ -139,7 +139,6 @@ dependencies = [
  "image",
  "inquire",
  "log",
- "packos",
  "rbx_binary",
  "rbx_cookie",
  "rbx_xml",
@@ -1633,15 +1632,6 @@ name = "once_cell"
 version = "1.20.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1261fe7e33c73b354eab43b1273a57c8f967d0391e80353e51f764ac02cf6775"
-
-[[package]]
-name = "packos"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e41b3851457ac6b3a0c15799a28d392884c93a72ca412190f4ee53e2e81ae6d2"
-dependencies = [
- "log",
-]
 
 [[package]]
 name = "parking_lot"

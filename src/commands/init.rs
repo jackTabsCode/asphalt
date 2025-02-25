@@ -80,8 +80,8 @@ pub async fn init() -> anyhow::Result<()> {
             style: Some(codegen_style),
             strip_extension: Some(strip_extension),
         },
-        existing: None,
-        spritesheet_dirs: None,
+        existing: Default::default(),
+        spritesheets: Default::default(),
     };
 
     config.write().await.context("Failed to write config")?;

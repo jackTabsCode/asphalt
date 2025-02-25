@@ -1,10 +1,9 @@
-use std::sync::Arc;
-
 use anyhow::Context;
 use resvg::{
     tiny_skia::Pixmap,
     usvg::{fontdb::Database, Options, Transform, Tree},
 };
+use std::sync::Arc;
 
 pub async fn svg_to_png(data: &[u8], fontdb: Arc<Database>) -> anyhow::Result<Vec<u8>> {
     let opt = Options {

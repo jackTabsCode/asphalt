@@ -1,10 +1,4 @@
-use std::{env, path::PathBuf};
-
-use anyhow::Context;
-use log::{debug, info, warn};
-use roblox_install::RobloxStudio;
-use tokio::fs;
-
+use super::{SyncBackend, SyncResult};
 use crate::{
     asset::{Asset, AssetKind, ModelKind},
     commands::sync::{
@@ -12,8 +6,11 @@ use crate::{
         state::SyncState,
     },
 };
-
-use super::{SyncBackend, SyncResult};
+use anyhow::Context;
+use log::{debug, info, warn};
+use roblox_install::RobloxStudio;
+use std::{env, path::PathBuf};
+use tokio::fs;
 
 pub struct StudioBackend {
     identifier: String,

@@ -1,13 +1,11 @@
-use anyhow::Context;
-use log::info;
-
+use super::{SyncBackend, SyncResult};
 use crate::{
     asset::{Asset, AssetKind, ModelKind},
     commands::sync::state::SyncState,
     upload::{upload_animation, upload_cloud_asset},
 };
-
-use super::{SyncBackend, SyncResult};
+use anyhow::Context;
+use log::info;
 
 pub struct CloudBackend;
 
