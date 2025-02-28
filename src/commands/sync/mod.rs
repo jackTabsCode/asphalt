@@ -2,9 +2,9 @@ use self::state::SyncState;
 use crate::{
     asset::Asset,
     cli::{SyncArgs, SyncTarget},
-    FileEntry, LockFile,
+    lockfile, FileEntry, LockFile,
 };
-use anyhow::Context;
+use anyhow::{bail, Context};
 use backend::{
     cloud::CloudBackend, debug::DebugBackend, studio::StudioBackend, SyncBackend, SyncResult,
 };
@@ -101,6 +101,14 @@ async fn process_file(
 }
 
 pub async fn sync(args: SyncArgs, existing_lockfile: LockFile) -> anyhow::Result<()> {
+    if existing_lockfile.version > lockfile::VERSION {
+        bail!(
+            "Lockfile version is too new: expected {}, got {}. Please update Asphalt: https://github.com/jackTabsCode/asphalt",
+            lockfile::VERSION,
+            existing_lockfile.version
+        );
+    }
+
     let config = SyncConfig::read().await.context("Failed to read config")?;
 
     let mut state = SyncState::new(args, config, existing_lockfile)
