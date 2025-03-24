@@ -1,10 +1,8 @@
-use std::sync::Arc;
-
-use anyhow::Context;
 use resvg::{
     tiny_skia::Pixmap,
     usvg::{fontdb::Database, Options, Transform, Tree},
 };
+use std::sync::Arc;
 
 pub async fn svg_to_png(data: &[u8], fontdb: Arc<Database>) -> anyhow::Result<Vec<u8>> {
     let opt = Options {
@@ -12,14 +10,13 @@ pub async fn svg_to_png(data: &[u8], fontdb: Arc<Database>) -> anyhow::Result<Ve
         ..Default::default()
     };
 
-    let rtree = Tree::from_data(data, &opt).context("Failed to parse SVG file")?;
+    let rtree = Tree::from_data(data, &opt)?;
     let pixmap_size = rtree.size();
 
-    let mut pixmap = Pixmap::new(pixmap_size.width() as u32, pixmap_size.height() as u32)
-        .context("Failed to create pixmap")?;
+    let mut pixmap = Pixmap::new(pixmap_size.width() as u32, pixmap_size.height() as u32).unwrap();
     resvg::render(&rtree, Transform::identity(), &mut pixmap.as_mut());
 
-    let encoded = pixmap.encode_png().context("Failed to encode PNG")?;
+    let encoded = pixmap.encode_png()?;
 
     Ok(encoded)
 }
