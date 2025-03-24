@@ -5,13 +5,13 @@ use crate::{
     sync::WalkedFile,
     util::{alpha_bleed::alpha_bleed, svg::svg_to_png},
 };
-use anyhow::{Context, bail};
+use anyhow::{bail, Context};
 use blake3::Hasher;
 use image::DynamicImage;
 use indicatif::{ProgressBar, ProgressStyle};
 use log::{debug, warn};
 use rbx_xml::DecodeOptions;
-use std::{io::Cursor, sync::Arc, thread};
+use std::{io::Cursor, sync::Arc};
 
 pub async fn process_input(
     state: Arc<SyncState>,
@@ -23,7 +23,7 @@ pub async fn process_input(
             .with_prefix(input.name.clone())
             .with_style(
                 ProgressStyle::default_bar()
-                    .template("{prefix:.bold}: {msg} [{bar:40.cyan/blue}] {pos}/{len}")
+                    .template("Input \"{prefix}\"\n {msg}\n Progress: {pos}/{len} | ETA: {eta}\n[{bar:40.cyan/blue}]")
                     .unwrap()
                     .progress_chars("=> "),
             ),
@@ -31,7 +31,7 @@ pub async fn process_input(
 
     for file in files {
         let file_path_display = file.path.to_string_lossy().to_string();
-        let message = format!("Processing {}", file_path_display);
+        let message = format!("Processing \"{}\"", file_path_display);
         progress_bar.set_message(message);
         progress_bar.inc(1);
 
