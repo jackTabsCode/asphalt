@@ -1,5 +1,6 @@
 use super::SyncState;
 use crate::{asset::Asset, config::Input};
+use anyhow::bail;
 use indicatif::{ProgressBar, ProgressStyle};
 use log::{debug, info, warn};
 use std::sync::Arc;
@@ -20,15 +21,26 @@ pub async fn process_input(
             ),
     );
 
+    let mut dry_run_count = 0;
+
     for mut asset in assets {
         let display = asset.path.display().to_string();
 
-        let message = format!("Processing \"{}\"", display);
+        let message = format!(
+            "{} \"{}\"",
+            if state.args.dry_run {
+                "Checking"
+            } else {
+                "Processing"
+            },
+            display
+        );
         progress_bar.set_message(message);
         progress_bar.inc(1);
 
         if state.args.dry_run {
             info!("File {} would be synced", display);
+            dry_run_count += 1;
             continue;
         } else {
             debug!("File {} changed, syncing", display);
@@ -41,6 +53,10 @@ pub async fn process_input(
             );
             continue;
         }
+    }
+
+    if state.args.dry_run && dry_run_count > 0 {
+        bail!("{} files would be synced", dry_run_count);
     }
 
     Ok(())

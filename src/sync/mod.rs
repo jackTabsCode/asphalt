@@ -1,9 +1,9 @@
 use crate::{
-    cli::SyncArgs,
+    cli::{SyncArgs, SyncTarget},
     config::Config,
     lockfile::{Lockfile, LockfileEntry},
 };
-use anyhow::Context;
+use anyhow::{bail, Context};
 use env_logger::Logger;
 use indicatif::MultiProgress;
 use indicatif_log_bridge::LogWrapper;
@@ -36,6 +36,10 @@ pub struct SyncState {
 }
 
 pub async fn sync(logger: Logger, args: SyncArgs) -> anyhow::Result<()> {
+    if args.dry_run && !matches!(&args.target, Some(SyncTarget::Cloud)) {
+        bail!("A dry run doesn't make sense in this context");
+    }
+
     let config = Config::read()?;
     let lockfile = Lockfile::read().await?;
 
