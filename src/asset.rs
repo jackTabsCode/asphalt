@@ -16,6 +16,8 @@ pub struct Asset {
     pub kind: AssetKind,
     processed: bool,
     ext: String,
+    /// The hash before processing
+    pub hash: String,
 }
 
 impl Asset {
@@ -49,19 +51,18 @@ impl Asset {
             _ => bail!("Unknown extension .{ext}"),
         };
 
+        let mut hasher = Hasher::new();
+        hasher.update(&data);
+        let hash = hasher.finalize().to_string();
+
         Ok(Self {
             path,
             data,
             kind,
             processed: false,
             ext,
+            hash,
         })
-    }
-
-    pub fn hash(&self) -> String {
-        let mut hasher = Hasher::new();
-        hasher.update(&self.data);
-        hasher.finalize().to_string()
     }
 
     pub fn rel_path(&self, input_path: &Path) -> anyhow::Result<PathBuf> {

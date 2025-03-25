@@ -5,10 +5,10 @@ use indicatif::{ProgressBar, ProgressStyle};
 use log::{debug, info, warn};
 use std::sync::Arc;
 
-pub async fn process_input(
+pub async fn process(
     state: Arc<SyncState>,
     input: &Input,
-    assets: Vec<Asset>,
+    assets: &mut Vec<Asset>,
 ) -> anyhow::Result<()> {
     let progress_bar = state.multi_progress.add(
         ProgressBar::new(assets.len() as u64)
@@ -23,7 +23,7 @@ pub async fn process_input(
 
     let mut dry_run_count = 0;
 
-    for mut asset in assets {
+    for asset in assets {
         let display = asset.path.display().to_string();
 
         let message = format!(

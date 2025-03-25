@@ -24,7 +24,7 @@ impl Config {
 }
 
 #[derive(Debug, Deserialize, Clone)]
-struct Codegen {
+pub struct Codegen {
     style: CodegenStyle,
     #[serde(default)]
     typescript: bool,
@@ -66,20 +66,20 @@ pub struct Input {
     pub name: String,
     pub path: Glob,
     pub output_path: PathBuf,
-    pub pack: Option<PackOptions>,
+    // pub pack: Option<PackOptions>,
     #[serde(default = "default_true")]
     pub bleed: bool,
 }
 
-fn default_pack_size() -> u32 {
-    1024
-}
+// fn default_pack_size() -> u32 {
+//     1024
+// }
 
-#[derive(Debug, Deserialize, Clone)]
-struct PackOptions {
-    #[serde(default = "default_pack_size")]
-    size: u32,
-}
+// #[derive(Debug, Deserialize, Clone)]
+// pub struct PackOptions {
+//     #[serde(default = "default_pack_size")]
+//     size: u32,
+// }
 
 #[derive(Debug, Deserialize, Default, Clone)]
 #[serde(rename_all = "snake_case")]

@@ -1,37 +1,52 @@
-use super::{SyncBackend, SyncResult};
+use super::{BackendSyncResult, SyncBackend};
 use crate::{
     asset::{Asset, AssetKind, ModelKind},
+    config::Input,
     sync::SyncState,
     upload::{upload_animation, upload_cloud},
 };
 use anyhow::bail;
+use std::sync::Arc;
 
 pub struct CloudBackend;
 
 impl SyncBackend for CloudBackend {
+    async fn new() -> anyhow::Result<Self>
+    where
+        Self: Sized,
+    {
+        Ok(Self)
+    }
+
     async fn sync(
         &self,
-        state: &mut SyncState,
+        state: Arc<SyncState>,
+        _input: &Input,
         asset: &Asset,
-    ) -> anyhow::Result<Option<SyncResult>> {
+    ) -> anyhow::Result<Option<BackendSyncResult>> {
         let asset_id = match asset.kind {
             AssetKind::Decal(_) | AssetKind::Audio(_) | AssetKind::Model(ModelKind::Model) => {
-                upload_cloud(asset, state.api_key.clone(), &state.config.creator).await?
+                upload_cloud(asset, state.auth.api_key.clone(), &state.config.creator).await?
             }
             AssetKind::Model(ModelKind::Animation(_)) => {
-                let Some(cookie) = state.cookie.clone() else {
+                let Some(cookie) = state.auth.cookie.clone() else {
                     bail!("Cookie required for uploading animations")
                 };
 
-                let res =
-                    upload_animation(asset, cookie, state.csrf.clone(), &state.config.creator)
-                        .await?;
+                let res = upload_animation(
+                    asset,
+                    cookie,
+                    Some(state.csrf.read().await.as_ref().unwrap().clone()),
+                    &state.config.creator,
+                )
+                .await?;
 
-                state.csrf = Some(res.csrf);
+                *state.csrf.write().await = Some(res.csrf);
+
                 res.asset_id
             }
         };
 
-        Ok(Some(SyncResult::Cloud(asset_id)))
+        Ok(Some(BackendSyncResult::Cloud(asset_id)))
     }
 }

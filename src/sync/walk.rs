@@ -70,10 +70,9 @@ async fn walk_file(
     let data = fs::read(&path).await?;
     let asset = Asset::new(path.clone(), data)?;
 
-    let hash = asset.hash();
     let entry = state.existing_lockfile.get(input.name.clone(), &path);
 
-    let changed = entry.is_none_or(|entry| entry.hash != hash);
+    let changed = entry.is_none_or(|entry| entry.hash != asset.hash);
 
     Ok(WalkFileResult { asset, changed })
 }

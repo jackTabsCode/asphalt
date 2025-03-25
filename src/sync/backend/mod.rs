@@ -1,19 +1,26 @@
+use std::sync::Arc;
+
 use super::SyncState;
-use crate::asset::Asset;
+use crate::{asset::Asset, config::Input};
 
-mod cloud;
-mod debug;
-mod studio;
+pub mod cloud;
+pub mod debug;
+pub mod studio;
 
-pub enum SyncResult {
+pub enum BackendSyncResult {
     Cloud(u64),
     Studio(String),
 }
 
 pub trait SyncBackend {
+    async fn new() -> anyhow::Result<Self>
+    where
+        Self: Sized;
+
     async fn sync(
         &self,
-        state: &mut SyncState,
+        state: Arc<SyncState>,
+        input: &Input,
         asset: &Asset,
-    ) -> anyhow::Result<Option<SyncResult>>;
+    ) -> anyhow::Result<Option<BackendSyncResult>>;
 }

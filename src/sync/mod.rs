@@ -1,38 +1,42 @@
 use crate::{
+    auth::Auth,
     cli::{SyncArgs, SyncTarget},
     config::Config,
     lockfile::{Lockfile, LockfileEntry},
 };
 use anyhow::{bail, Context};
+use backend::BackendSyncResult;
 use env_logger::Logger;
 use indicatif::MultiProgress;
 use indicatif_log_bridge::LogWrapper;
 use log::debug;
 use resvg::usvg::fontdb::Database;
 use std::{env, path::PathBuf, sync::Arc};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, RwLock};
 
 mod backend;
+mod perform;
 mod process;
 mod walk;
 
-struct LockfileTxParams {
-    input_name: String,
+pub struct SyncResult {
+    hash: String,
     path: PathBuf,
-    entry: LockfileEntry,
+    input_name: String,
+    backend: BackendSyncResult,
 }
 
 pub struct SyncState {
     args: SyncArgs,
     config: Config,
     existing_lockfile: Lockfile,
-    lockfile_tx: mpsc::Sender<LockfileTxParams>,
+    result_tx: mpsc::Sender<SyncResult>,
 
     multi_progress: MultiProgress,
     font_db: Arc<Database>,
-    api_key: String,
-    cookie: Option<String>,
-    csrf: Option<String>,
+    auth: Auth,
+
+    csrf: Arc<RwLock<Option<String>>>,
 }
 
 pub async fn sync(logger: Logger, args: SyncArgs) -> anyhow::Result<()> {
@@ -42,10 +46,7 @@ pub async fn sync(logger: Logger, args: SyncArgs) -> anyhow::Result<()> {
 
     let config = Config::read()?;
     let lockfile = Lockfile::read().await?;
-
-    let api_key = env::var("ASPHALT_API_KEY").context("ASPHALT_API_KEY variable must be set to use Asphalt.\nAcquire one here: https://create.roblox.com/dashboard/credentials")?;
-
-    let cookie = rbx_cookie::get();
+    let auth = Auth::new(args.api_key.clone())?;
 
     let multi_progress = MultiProgress::new();
     LogWrapper::new(multi_progress.clone(), logger).try_init()?;
@@ -57,41 +58,64 @@ pub async fn sync(logger: Logger, args: SyncArgs) -> anyhow::Result<()> {
     });
 
     let mut new_lockfile = lockfile.clone();
-    let (tx, mut rx) = mpsc::channel::<LockfileTxParams>(100);
+    let (result_tx, mut result_rx) = mpsc::channel::<SyncResult>(100);
 
     tokio::spawn(async move {
-        while let Some(tx) = rx.recv().await {
-            new_lockfile.insert(tx.input_name, &tx.path, tx.entry);
-            new_lockfile.write(None).await.unwrap();
+        while let Some(tx) = result_rx.recv().await {
+            if let BackendSyncResult::Cloud(asset_id) = tx.backend {
+                new_lockfile.insert(
+                    tx.input_name,
+                    &tx.path,
+                    LockfileEntry {
+                        asset_id,
+                        hash: tx.hash,
+                    },
+                );
+
+                let _ = new_lockfile
+                    .write(None)
+                    .await
+                    .context("Failed to write lockfile");
+            };
+
+            // add to codegen
         }
     });
+
+    let csrf = Arc::new(RwLock::new(None));
 
     let state = Arc::new(SyncState {
         args,
         multi_progress,
         config: config.clone(),
         existing_lockfile: lockfile.clone(),
-        lockfile_tx: tx,
+        result_tx,
         font_db,
-        api_key,
-        cookie,
-        csrf: None,
+        auth,
+        csrf: csrf.clone(),
     });
 
-    let mut handles = Vec::new();
+    let mut handles: Vec<tokio::task::JoinHandle<anyhow::Result<()>>> = Vec::new();
 
     for input in config.inputs {
         let state = state.clone();
 
-        let handle = tokio::spawn(async move {
-            debug!("Walking input: {}", input.name);
-            let paths = walk::walk(state.clone(), &input).await?;
+        handles.push(tokio::spawn(async move {
+            debug!("Walking input {}", input.name);
+            let mut assets = walk::walk(state.clone(), &input).await?;
 
-            debug!("Discovered {} files, starting processing", paths.len());
-            process::process_input(state, &input, paths).await
-        });
+            debug!(
+                "Discovered {} files for input {}, starting processing",
+                assets.len(),
+                input.name
+            );
+            process::process(state.clone(), &input, &mut assets).await?;
 
-        handles.push(handle);
+            debug!("Starting perform for input {}", input.name);
+            perform::perform(state, &input, &assets).await?;
+
+            Ok(())
+        }));
     }
 
     for handle in handles {
