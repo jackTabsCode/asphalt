@@ -11,6 +11,7 @@ mod glob;
 mod lockfile;
 mod sync;
 mod upload;
+mod upload_command;
 mod util;
 
 #[tokio::main]

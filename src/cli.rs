@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use clap_verbosity_flag::{InfoLevel, Verbosity};
 
@@ -16,7 +18,7 @@ pub enum Commands {
     /// Sync assets.
     Sync(SyncArgs),
 
-    /// Uploads a single asset and returns the asset ID. =
+    /// Uploads a single asset and returns the asset ID.
     Upload(UploadArgs),
 }
 
@@ -50,6 +52,9 @@ pub struct SyncArgs {
 
 #[derive(Args)]
 pub struct UploadArgs {
+    /// The file to upload.
+    pub path: String,
+
     /// Your Open Cloud API key.
     /// Can also be set with the ASPHALT_API_KEY environment variable.
     #[arg(short, long)]
@@ -59,4 +64,8 @@ pub struct UploadArgs {
     /// This is only required if you are uploading animations with Asphalt.
     #[arg(long)]
     pub cookie: Option<String>,
+
+    /// Whether to alpha bleed if it's an image.
+    #[arg(long, default_value = "true")]
+    pub bleed: bool,
 }
