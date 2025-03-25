@@ -7,7 +7,6 @@ use rbxcloud::rbx::{
         CreateAssetParamsWithContents, GetAssetOperationParams,
     },
 };
-use reqwest::Client;
 use serde::Deserialize;
 use std::time::Duration;
 
@@ -19,6 +18,7 @@ use crate::{
 const ASSET_DESCRIPTION: &str = "Uploaded by Asphalt";
 
 pub async fn upload_cloud(
+    client: reqwest::Client,
     asset: &Asset,
     api_key: String,
     creator: &Creator,
@@ -61,7 +61,7 @@ pub async fn upload_cloud(
                     let id = id_str.parse::<u64>().context("Asset ID wasn't a number")?;
 
                     return match asset.kind {
-                        AssetKind::Decal(_) => get_image_id(id).await,
+                        AssetKind::Decal(_) => get_image_id(client, id).await,
                         _ => Ok(id),
                     };
                 }
@@ -106,8 +106,7 @@ struct Content {
     url: String,
 }
 
-async fn get_image_id(asset_id: u64) -> anyhow::Result<u64> {
-    let client = Client::new();
+async fn get_image_id(client: reqwest::Client, asset_id: u64) -> anyhow::Result<u64> {
     let url = format!("https://assetdelivery.roblox.com/v1/asset?id={}", asset_id);
 
     let response = client
@@ -138,6 +137,7 @@ pub struct AnimationResult {
 const ANIMATION_URL: &str = "https://www.roblox.com/ide/publish/uploadnewanimation";
 
 pub async fn upload_animation(
+    client: reqwest::Client,
     asset: &Asset,
     cookie: String,
     csrf: Option<String>,
@@ -145,12 +145,10 @@ pub async fn upload_animation(
 ) -> anyhow::Result<AnimationResult> {
     let display_name = asset.path.to_string_lossy().to_string();
 
-    let client = Client::new();
-
     let csrf = if let Some(token) = csrf {
         token
     } else {
-        get_csrf_token(cookie.clone()).await?
+        get_csrf_token(client.clone(), cookie.clone()).await?
     };
 
     let creator_ty = match creator.ty {
@@ -197,9 +195,7 @@ pub async fn upload_animation(
     Ok(AnimationResult { asset_id: id, csrf })
 }
 
-pub async fn get_csrf_token(cookie: String) -> anyhow::Result<String> {
-    let client = Client::new();
-
+pub async fn get_csrf_token(client: reqwest::Client, cookie: String) -> anyhow::Result<String> {
     let response = client
         .post(ANIMATION_URL)
         .header("Cookie", cookie)

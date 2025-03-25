@@ -26,7 +26,13 @@ impl SyncBackend for CloudBackend {
     ) -> anyhow::Result<Option<BackendSyncResult>> {
         let asset_id = match asset.kind {
             AssetKind::Decal(_) | AssetKind::Audio(_) | AssetKind::Model(ModelKind::Model) => {
-                upload_cloud(asset, state.auth.api_key.clone(), &state.config.creator).await?
+                upload_cloud(
+                    state.client.clone(),
+                    asset,
+                    state.auth.api_key.clone(),
+                    &state.config.creator,
+                )
+                .await?
             }
             AssetKind::Model(ModelKind::Animation(_)) => {
                 let Some(cookie) = state.auth.cookie.clone() else {
@@ -34,6 +40,7 @@ impl SyncBackend for CloudBackend {
                 };
 
                 let res = upload_animation(
+                    state.client.clone(),
                     asset,
                     cookie,
                     Some(state.csrf.read().await.as_ref().unwrap().clone()),

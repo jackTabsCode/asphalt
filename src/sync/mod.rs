@@ -11,7 +11,7 @@ use indicatif::MultiProgress;
 use indicatif_log_bridge::LogWrapper;
 use log::debug;
 use resvg::usvg::fontdb::Database;
-use std::{env, path::PathBuf, sync::Arc};
+use std::{path::PathBuf, sync::Arc};
 use tokio::sync::{mpsc, RwLock};
 
 mod backend;
@@ -27,6 +27,7 @@ pub struct SyncResult {
 }
 
 pub struct SyncState {
+    client: reqwest::Client,
     args: SyncArgs,
     config: Config,
     existing_lockfile: Lockfile,
@@ -85,6 +86,7 @@ pub async fn sync(logger: Logger, args: SyncArgs) -> anyhow::Result<()> {
     let csrf = Arc::new(RwLock::new(None));
 
     let state = Arc::new(SyncState {
+        client: reqwest::Client::new(),
         args,
         multi_progress,
         config: config.clone(),
