@@ -72,9 +72,7 @@ async fn process_file(
     }
 
     file.data = match file.kind {
-        AssetKind::Model(ModelKind::Animation(_)) => {
-            get_animation(file.data, ModelFileFormat::Binary)?
-        }
+        AssetKind::Model(ModelKind::Animation(ref format)) => get_animation(file.data, format)?,
         AssetKind::Decal(_) if input.bleed => {
             let mut image: DynamicImage = image::load_from_memory(&file.data)?;
             alpha_bleed(&mut image);
@@ -95,7 +93,7 @@ fn hash_file(data: &[u8]) -> String {
     hasher.finalize().to_string()
 }
 
-fn get_animation(data: Vec<u8>, format: ModelFileFormat) -> anyhow::Result<Vec<u8>> {
+fn get_animation(data: Vec<u8>, format: &ModelFileFormat) -> anyhow::Result<Vec<u8>> {
     let slice = data.as_slice();
     let dom = match format {
         ModelFileFormat::Binary => rbx_binary::from_reader(slice)?,

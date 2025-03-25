@@ -3,10 +3,10 @@ use crate::{
     asset::{AssetKind, AudioKind, DecalKind, ModelFileFormat, ModelKind},
     config::Input,
 };
-use anyhow::{Context, bail};
+use anyhow::{bail, Context};
 use indicatif::{ProgressBar, ProgressStyle};
 use log::warn;
-use std::{path::PathBuf, sync::Arc, thread};
+use std::{path::PathBuf, sync::Arc};
 use tokio::fs;
 use walkdir::WalkDir;
 
@@ -68,11 +68,10 @@ fn kind_from_ext(ext: &str) -> anyhow::Result<AssetKind> {
         "ogg" => AssetKind::Audio(AudioKind::Ogg),
         "flac" => AssetKind::Audio(AudioKind::Flac),
         "wav" => AssetKind::Audio(AudioKind::Wav),
-        "png" => AssetKind::Decal(DecalKind::Png),
+        "png" | "svg" => AssetKind::Decal(DecalKind::Png),
         "jpg" => AssetKind::Decal(DecalKind::Jpg),
         "bmp" => AssetKind::Decal(DecalKind::Bmp),
         "tga" => AssetKind::Decal(DecalKind::Tga),
-        "svg" => AssetKind::Decal(DecalKind::Svg),
         "fbx" => AssetKind::Model(ModelKind::Model),
         "rbxm" | "rbxmx" => {
             let format = if ext == "rbxm" {
