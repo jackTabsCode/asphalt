@@ -6,7 +6,6 @@ pub struct Asset {
     pub path: PathBuf,
     pub data: Vec<u8>,
     pub kind: AssetKind,
-    pub changed: bool,
 }
 
 impl Asset {

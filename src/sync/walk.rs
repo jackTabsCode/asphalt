@@ -6,7 +6,7 @@ use crate::{
 use anyhow::{bail, Context};
 use blake3::Hasher;
 use indicatif::{ProgressBar, ProgressStyle};
-use log::warn;
+use log::{debug, warn};
 use std::{path::PathBuf, sync::Arc};
 use tokio::fs;
 use walkdir::WalkDir;
@@ -41,7 +41,16 @@ pub async fn walk(state: Arc<SyncState>, input: &Input) -> anyhow::Result<Vec<As
         progress_bar.tick();
 
         match walk_file(state.clone(), path.clone()).await {
-            Ok(file) => files.push(file),
+            Ok(WalkFileResult {
+                asset,
+                changed: true,
+            }) => files.push(asset),
+            Ok(WalkFileResult {
+                changed: false,
+                asset: _,
+            }) => {
+                debug!("Skipping file {} because it didn't change", path.display());
+            }
             Err(err) => {
                 warn!("Skipping file {}: {}", path.display(), err);
             }
@@ -53,7 +62,12 @@ pub async fn walk(state: Arc<SyncState>, input: &Input) -> anyhow::Result<Vec<As
     Ok(files)
 }
 
-async fn walk_file(state: Arc<SyncState>, path: PathBuf) -> anyhow::Result<Asset> {
+struct WalkFileResult {
+    asset: Asset,
+    changed: bool,
+}
+
+async fn walk_file(state: Arc<SyncState>, path: PathBuf) -> anyhow::Result<WalkFileResult> {
     let data = fs::read(&path).await?;
     let ext = path.extension().context("File has no extension")?;
     let ext = ext.to_str().context("Extension is not valid UTF-8")?;
@@ -68,12 +82,9 @@ async fn walk_file(state: Arc<SyncState>, path: PathBuf) -> anyhow::Result<Asset
 
     let changed = entry.is_none_or(|entry| entry.hash != hash);
 
-    Ok(Asset {
-        path,
-        data,
-        kind,
-        changed,
-    })
+    let asset = Asset { path, data, kind };
+
+    Ok(WalkFileResult { asset, changed })
 }
 
 fn hash_file(data: &[u8]) -> String {

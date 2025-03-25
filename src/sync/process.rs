@@ -7,7 +7,7 @@ use crate::{
 use anyhow::{bail, Context};
 use image::DynamicImage;
 use indicatif::{ProgressBar, ProgressStyle};
-use log::{debug, info, warn};
+use log::{debug, info};
 use rbx_xml::DecodeOptions;
 use std::{io::Cursor, sync::Arc};
 
@@ -28,28 +28,22 @@ pub async fn process_input(
     );
 
     for mut asset in assets {
-        let file_path_display = asset.path.to_string_lossy().to_string();
-        let message = format!("Processing \"{}\"", file_path_display);
+        let display = asset.path.display().to_string();
+
+        let message = format!("Processing \"{}\"", display);
         progress_bar.set_message(message);
         progress_bar.inc(1);
 
-        match process_asset(state.clone(), input, &mut asset).await {
-            Ok(_) => {
-                let display = asset.path.display();
-                if asset.changed {
-                    if state.args.dry_run {
-                        info!("File {} would be synced", display);
-                    } else {
-                        debug!("File {} changed, syncing", display);
-                    }
-                } else {
-                    debug!("File {} unchanged, skipping", display);
-                }
-            }
-            Err(err) => {
-                warn!("Failed to process file {}: {}", file_path_display, err);
-            }
+        if state.args.dry_run {
+            info!("File {} would be synced", display);
+            continue;
+        } else {
+            debug!("File {} changed, syncing", display);
         }
+
+        process_asset(state.clone(), input, &mut asset)
+            .await
+            .context(format!("Failed to process file {}", display))?;
     }
 
     Ok(())
