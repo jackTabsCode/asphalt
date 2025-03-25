@@ -1,12 +1,20 @@
 use anyhow::bail;
 use rbxcloud::rbx::v1::assets::AssetType;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 pub struct Asset {
     pub path: PathBuf,
     pub data: Vec<u8>,
     pub kind: AssetKind,
     pub changed: bool,
+}
+
+impl Asset {
+    pub fn rel_path(&self, input_path: &Path, ext: &str) -> anyhow::Result<PathBuf> {
+        let stripped_path_str = self.path.strip_prefix(input_path)?;
+
+        Ok(PathBuf::from(stripped_path_str).with_extension(ext))
+    }
 }
 
 #[derive(Debug, Clone)]

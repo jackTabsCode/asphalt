@@ -22,9 +22,3 @@ pub trait SyncBackend {
         asset: &Asset,
     ) -> anyhow::Result<Option<SyncResult>>;
 }
-
-fn relative_asset_path(input_path: &Path, asset_path: &Path, ext: &str) -> anyhow::Result<PathBuf> {
-    let stripped_path_str = asset_path.strip_prefix(input_path)?;
-
-    Ok(PathBuf::from(stripped_path_str).with_extension(ext))
-}
