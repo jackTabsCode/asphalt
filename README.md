@@ -18,20 +18,25 @@ It's a modern alternative to [Tarmac](https://github.com/Roblox/Tarmac).
 
 ### [Homebrew](https://brew.sh) (macOS/Linux)
 
-```sh
+```bash
 brew tap jacktabscode/tap
 brew install asphalt
 ```
 
+### [Pesde](https://github.com/pesde-pkg/pesde)
+```bash
+pesde add --dev pesde/asphalt --target lune
+```
+
 ### [Aftman](https://github.com/lpghatguy/aftman) or [Rokit](https://github.com/rojo-rbx/rokit)
 
-```sh
+```bash
 aftman add jacktabscode/asphalt
 ```
 
 ### [Cargo](https://crates.io/crates/asphalt) (build from source)
 
-```sh
+```bash
 cargo install asphalt
 ```
 
