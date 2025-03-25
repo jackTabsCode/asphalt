@@ -10,7 +10,7 @@ pub struct LockfileEntry {
 
 #[derive(Debug, Serialize, Deserialize, Default, Clone)]
 pub struct Lockfile {
-    pub entries: BTreeMap<String, LockfileEntry>,
+    entries: BTreeMap<String, LockfileEntry>,
 }
 
 pub const FILE_NAME: &str = "asphalt.lock.toml";
@@ -22,6 +22,19 @@ impl Lockfile {
             Ok(content) => Ok(toml::from_str(&content)?),
             Err(_) => Ok(Lockfile::default()),
         }
+    }
+
+    fn format_path(input_name: &str, path: &Path) -> String {
+        format!("{}/{}", input_name, path.display())
+    }
+
+    pub fn get(&self, input_name: String, path: &Path) -> Option<&LockfileEntry> {
+        self.entries.get(&Lockfile::format_path(&input_name, path))
+    }
+
+    pub fn insert(&mut self, input_name: String, path: &Path, entry: LockfileEntry) {
+        self.entries
+            .insert(Lockfile::format_path(&input_name, path), entry);
     }
 
     pub async fn write(&self, filename: Option<&Path>) -> anyhow::Result<()> {

@@ -6,7 +6,6 @@ use crate::{
     upload::{upload_animation, upload_cloud},
 };
 use anyhow::bail;
-use log::info;
 use resvg::usvg::fontdb::Database;
 use std::{path::PathBuf, sync::Arc};
 use tokio::fs;
@@ -43,12 +42,8 @@ pub async fn upload(args: UploadArgs) -> anyhow::Result<()> {
                 .asset_id
         }
     };
-
     if args.link {
-        println!(
-            "https://create.roblox.com/dashboard/creations/store/{}/configure",
-            asset_id
-        );
+        println!("https://create.roblox.com/store/asset/{}", asset_id);
     } else {
         println!("{}", asset_id);
     }

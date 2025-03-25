@@ -35,7 +35,7 @@ pub async fn walk(state: Arc<SyncState>, input: &Input) -> anyhow::Result<Vec<As
         progress_bar.set_message(format!("Reading {}", path.display()));
         progress_bar.tick();
 
-        match walk_file(state.clone(), path.clone()).await {
+        match walk_file(state.clone(), input, path.clone()).await {
             Ok(WalkFileResult {
                 asset,
                 changed: true,
@@ -62,15 +62,16 @@ struct WalkFileResult {
     changed: bool,
 }
 
-async fn walk_file(state: Arc<SyncState>, path: PathBuf) -> anyhow::Result<WalkFileResult> {
+async fn walk_file(
+    state: Arc<SyncState>,
+    input: &Input,
+    path: PathBuf,
+) -> anyhow::Result<WalkFileResult> {
     let data = fs::read(&path).await?;
     let asset = Asset::new(path.clone(), data)?;
 
     let hash = asset.hash();
-    let entry = state
-        .existing_lockfile
-        .entries
-        .get(&path.to_string_lossy().to_string());
+    let entry = state.existing_lockfile.get(input.name.clone(), &path);
 
     let changed = entry.is_none_or(|entry| entry.hash != hash);
 

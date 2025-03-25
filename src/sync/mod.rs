@@ -9,18 +9,24 @@ use indicatif::MultiProgress;
 use indicatif_log_bridge::LogWrapper;
 use log::debug;
 use resvg::usvg::fontdb::Database;
-use std::{env, sync::Arc};
+use std::{env, path::PathBuf, sync::Arc};
 use tokio::sync::mpsc;
 
 mod backend;
 mod process;
 mod walk;
 
+struct LockfileTxParams {
+    input_name: String,
+    path: PathBuf,
+    entry: LockfileEntry,
+}
+
 pub struct SyncState {
     args: SyncArgs,
     config: Config,
     existing_lockfile: Lockfile,
-    lockfile_tx: mpsc::Sender<(String, LockfileEntry)>,
+    lockfile_tx: mpsc::Sender<LockfileTxParams>,
 
     multi_progress: MultiProgress,
     font_db: Arc<Database>,
@@ -47,11 +53,11 @@ pub async fn sync(logger: Logger, args: SyncArgs) -> anyhow::Result<()> {
     });
 
     let mut new_lockfile = lockfile.clone();
-    let (tx, mut rx) = mpsc::channel(100);
+    let (tx, mut rx) = mpsc::channel::<LockfileTxParams>(100);
 
     tokio::spawn(async move {
-        while let Some((path, entry)) = rx.recv().await {
-            new_lockfile.entries.insert(path, entry);
+        while let Some(tx) = rx.recv().await {
+            new_lockfile.insert(tx.input_name, &tx.path, tx.entry);
             new_lockfile.write(None).await.unwrap();
         }
     });
