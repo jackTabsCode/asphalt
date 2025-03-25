@@ -1,25 +1,23 @@
-use super::{ProcessedFile, SyncState};
+use super::SyncState;
 use crate::{
-    asset::{AssetKind, ModelFileFormat, ModelKind},
+    asset::{Asset, AssetKind, ModelFileFormat, ModelKind},
     config::Input,
-    sync::WalkedFile,
     util::{alpha_bleed::alpha_bleed, svg::svg_to_png},
 };
 use anyhow::{bail, Context};
-use blake3::Hasher;
 use image::DynamicImage;
 use indicatif::{ProgressBar, ProgressStyle};
-use log::{debug, warn};
+use log::{debug, info, warn};
 use rbx_xml::DecodeOptions;
 use std::{io::Cursor, sync::Arc};
 
 pub async fn process_input(
     state: Arc<SyncState>,
     input: &Input,
-    files: Vec<WalkedFile>,
+    assets: Vec<Asset>,
 ) -> anyhow::Result<()> {
     let progress_bar = state.multi_progress.add(
-        ProgressBar::new(files.len() as u64)
+        ProgressBar::new(assets.len() as u64)
             .with_prefix(input.name.clone())
             .with_style(
                 ProgressStyle::default_bar()
@@ -29,19 +27,23 @@ pub async fn process_input(
             ),
     );
 
-    for file in files {
-        let file_path_display = file.path.to_string_lossy().to_string();
+    for mut asset in assets {
+        let file_path_display = asset.path.to_string_lossy().to_string();
         let message = format!("Processing \"{}\"", file_path_display);
         progress_bar.set_message(message);
         progress_bar.inc(1);
 
-        match process_file(state.clone(), input, file).await {
-            Ok(processed) => {
-                if processed.changed {
-                    debug!("File {} changed, uploading", processed.file.path.display());
-                    // thread::sleep(std::time::Duration::from_secs(1));
+        match process_asset(state.clone(), input, &mut asset).await {
+            Ok(_) => {
+                let display = asset.path.display();
+                if asset.changed {
+                    if state.args.dry_run {
+                        info!("File {} would be synced", display);
+                    } else {
+                        debug!("File {} changed, syncing", display);
+                    }
                 } else {
-                    debug!("File {} unchanged, skipping", processed.file.path.display());
+                    debug!("File {} unchanged, skipping", display);
                 }
             }
             Err(err) => {
@@ -53,51 +55,38 @@ pub async fn process_input(
     Ok(())
 }
 
-async fn process_file(
+async fn process_asset(
     state: Arc<SyncState>,
     input: &Input,
-    mut file: WalkedFile,
-) -> anyhow::Result<ProcessedFile> {
-    let hash = hash_file(&file.data);
-    let entry = state
-        .lockfile
-        .entries
-        .get(&file.path.to_string_lossy().to_string());
-
-    let changed = entry.is_none_or(|entry| entry.hash != hash);
-
-    let ext = file.path.extension().context("File has no extension")?;
+    asset: &mut Asset,
+) -> anyhow::Result<()> {
+    let ext = asset.path.extension().context("File has no extension")?;
     if ext == "svg" {
-        file.data = svg_to_png(&file.data, state.font_db.clone()).await?;
+        asset.data = svg_to_png(&asset.data, state.font_db.clone()).await?;
     }
 
-    file.data = match file.kind {
-        AssetKind::Model(ModelKind::Animation(ref format)) => get_animation(file.data, format)?,
+    match asset.kind {
+        AssetKind::Model(ModelKind::Animation(ref format)) => {
+            asset.data = get_animation(&asset.data, format)?;
+        }
         AssetKind::Decal(_) if input.bleed => {
-            let mut image: DynamicImage = image::load_from_memory(&file.data)?;
+            let mut image: DynamicImage = image::load_from_memory(&asset.data)?;
             alpha_bleed(&mut image);
 
             let mut writer = Cursor::new(Vec::new());
             image.write_to(&mut writer, image::ImageFormat::Png)?;
-            writer.into_inner()
+            asset.data = writer.into_inner();
         }
-        _ => file.data,
+        _ => {}
     };
 
-    Ok(ProcessedFile { file, changed })
+    Ok(())
 }
 
-fn hash_file(data: &[u8]) -> String {
-    let mut hasher = Hasher::new();
-    hasher.update(data);
-    hasher.finalize().to_string()
-}
-
-fn get_animation(data: Vec<u8>, format: &ModelFileFormat) -> anyhow::Result<Vec<u8>> {
-    let slice = data.as_slice();
+fn get_animation(data: &[u8], format: &ModelFileFormat) -> anyhow::Result<Vec<u8>> {
     let dom = match format {
-        ModelFileFormat::Binary => rbx_binary::from_reader(slice)?,
-        ModelFileFormat::Xml => rbx_xml::from_reader(slice, DecodeOptions::new())?,
+        ModelFileFormat::Binary => rbx_binary::from_reader(data)?,
+        ModelFileFormat::Xml => rbx_xml::from_reader(data, DecodeOptions::new())?,
     };
 
     let children = dom.root().children();

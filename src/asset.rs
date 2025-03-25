@@ -1,5 +1,13 @@
 use anyhow::bail;
 use rbxcloud::rbx::v1::assets::AssetType;
+use std::path::PathBuf;
+
+pub struct Asset {
+    pub path: PathBuf,
+    pub data: Vec<u8>,
+    pub kind: AssetKind,
+    pub changed: bool,
+}
 
 #[derive(Debug, Clone)]
 pub enum AudioKind {

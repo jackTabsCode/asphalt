@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use anyhow::{bail, Context};
 use log::{debug, warn};
 use rbxcloud::rbx::{
@@ -11,29 +9,31 @@ use rbxcloud::rbx::{
 };
 use reqwest::Client;
 use serde::Deserialize;
+use std::time::Duration;
 
-use crate::{asset::AssetKind, config::Creator};
-
-pub struct CloudUpload<'a> {
-    contents: &'a [u8],
-    display_name: String,
-    kind: AssetKind,
-    api_key: String,
-    creator: Creator,
-}
+use crate::{
+    asset::{Asset, AssetKind},
+    config::Creator,
+};
 
 const ASSET_DESCRIPTION: &str = "Uploaded by Asphalt";
 
-pub async fn upload_cloud(payload: CloudUpload<'_>) -> anyhow::Result<u64> {
+pub async fn upload_cloud(
+    asset: &Asset,
+    api_key: String,
+    creator: &Creator,
+) -> anyhow::Result<u64> {
+    let display_name = asset.path.to_string_lossy().to_string();
+
     let params = CreateAssetParamsWithContents {
-        contents: payload.contents,
-        api_key: payload.api_key.clone(),
+        contents: &asset.data,
+        api_key: api_key.clone(),
         asset: AssetCreation {
-            asset_type: payload.kind.clone().try_into()?,
-            display_name: payload.display_name,
+            asset_type: asset.kind.clone().try_into()?,
+            display_name,
             description: ASSET_DESCRIPTION.to_string(),
             creation_context: AssetCreationContext {
-                creator: payload.creator.into(),
+                creator: creator.clone().into(),
                 expected_price: Some(0),
             },
         },
@@ -48,7 +48,7 @@ pub async fn upload_cloud(payload: CloudUpload<'_>) -> anyhow::Result<u64> {
         .to_string();
 
     let get_params = GetAssetOperationParams {
-        api_key: payload.api_key,
+        api_key,
         operation_id: id,
     };
 
@@ -60,7 +60,7 @@ pub async fn upload_cloud(payload: CloudUpload<'_>) -> anyhow::Result<u64> {
                     let id_str = response.asset_id;
                     let id = id_str.parse::<u64>().context("Asset ID wasn't a number")?;
 
-                    return match payload.kind {
+                    return match asset.kind {
                         AssetKind::Decal(_) => get_image_id(id).await,
                         _ => Ok(id),
                     };

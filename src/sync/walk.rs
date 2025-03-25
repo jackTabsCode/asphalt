@@ -1,16 +1,17 @@
-use super::{SyncState, WalkedFile};
+use super::SyncState;
 use crate::{
-    asset::{AssetKind, AudioKind, DecalKind, ModelFileFormat, ModelKind},
+    asset::{Asset, AssetKind, AudioKind, DecalKind, ModelFileFormat, ModelKind},
     config::Input,
 };
 use anyhow::{bail, Context};
+use blake3::Hasher;
 use indicatif::{ProgressBar, ProgressStyle};
 use log::warn;
 use std::{path::PathBuf, sync::Arc};
 use tokio::fs;
 use walkdir::WalkDir;
 
-pub async fn walk(state: Arc<SyncState>, input: &Input) -> anyhow::Result<Vec<WalkedFile>> {
+pub async fn walk(state: Arc<SyncState>, input: &Input) -> anyhow::Result<Vec<Asset>> {
     let prefix = input.path.get_prefix();
 
     let prefix_display = prefix.to_string_lossy().to_string();
@@ -39,7 +40,7 @@ pub async fn walk(state: Arc<SyncState>, input: &Input) -> anyhow::Result<Vec<Wa
         progress_bar.set_message(format!("Reading {}", path.display()));
         progress_bar.tick();
 
-        match walk_file(path.clone()).await {
+        match walk_file(state.clone(), path.clone()).await {
             Ok(file) => files.push(file),
             Err(err) => {
                 warn!("Skipping file {}: {}", path.display(), err);
@@ -52,14 +53,33 @@ pub async fn walk(state: Arc<SyncState>, input: &Input) -> anyhow::Result<Vec<Wa
     Ok(files)
 }
 
-async fn walk_file(path: PathBuf) -> anyhow::Result<WalkedFile> {
+async fn walk_file(state: Arc<SyncState>, path: PathBuf) -> anyhow::Result<Asset> {
     let data = fs::read(&path).await?;
     let ext = path.extension().context("File has no extension")?;
     let ext = ext.to_str().context("Extension is not valid UTF-8")?;
 
     let kind = kind_from_ext(ext)?;
 
-    Ok(WalkedFile { path, data, kind })
+    let hash = hash_file(&data);
+    let entry = state
+        .existing_lockfile
+        .entries
+        .get(&path.to_string_lossy().to_string());
+
+    let changed = entry.is_none_or(|entry| entry.hash != hash);
+
+    Ok(Asset {
+        path,
+        data,
+        kind,
+        changed,
+    })
+}
+
+fn hash_file(data: &[u8]) -> String {
+    let mut hasher = Hasher::new();
+    hasher.update(data);
+    hasher.finalize().to_string()
 }
 
 fn kind_from_ext(ext: &str) -> anyhow::Result<AssetKind> {

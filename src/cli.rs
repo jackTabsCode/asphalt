@@ -15,6 +15,9 @@ pub struct Cli {
 pub enum Commands {
     /// Sync assets.
     Sync(SyncArgs),
+
+    /// Uploads a single asset and returns the asset ID. =
+    Upload(UploadArgs),
 }
 
 #[derive(ValueEnum, Clone)]
@@ -43,4 +46,17 @@ pub struct SyncArgs {
     /// Skip asset syncing and only display what assets will be synced.
     #[arg(long, action)]
     pub dry_run: bool,
+}
+
+#[derive(Args)]
+pub struct UploadArgs {
+    /// Your Open Cloud API key.
+    /// Can also be set with the ASPHALT_API_KEY environment variable.
+    #[arg(short, long)]
+    pub api_key: Option<String>,
+
+    /// Your cookie.
+    /// This is only required if you are uploading animations with Asphalt.
+    #[arg(long)]
+    pub cookie: Option<String>,
 }

@@ -28,5 +28,6 @@ async fn main() -> anyhow::Result<()> {
 
     match args.command {
         Commands::Sync(args) => sync(logger, args).await,
+        Commands::Upload(args) => todo!(),
     }
 }

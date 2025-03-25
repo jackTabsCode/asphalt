@@ -1,29 +1,27 @@
-use crate::{asset::AssetKind, cli::SyncArgs, config::Config, lockfile::Lockfile};
+use crate::{
+    cli::SyncArgs,
+    config::Config,
+    lockfile::{Lockfile, LockfileEntry},
+};
 use anyhow::Context;
 use env_logger::Logger;
 use indicatif::MultiProgress;
 use indicatif_log_bridge::LogWrapper;
 use log::debug;
 use resvg::usvg::fontdb::Database;
-use std::{env, path::PathBuf, sync::Arc};
+use std::{env, sync::Arc};
+use tokio::sync::mpsc;
 
+mod backend;
 mod process;
 mod walk;
 
-pub struct WalkedFile {
-    path: PathBuf,
-    data: Vec<u8>,
-    kind: AssetKind,
-}
-
-pub struct ProcessedFile {
-    file: WalkedFile,
-    changed: bool,
-}
-
 pub struct SyncState {
+    args: SyncArgs,
     config: Config,
-    lockfile: Lockfile,
+    existing_lockfile: Lockfile,
+    lockfile_tx: mpsc::Sender<(String, LockfileEntry)>,
+
     multi_progress: MultiProgress,
     font_db: Arc<Database>,
     api_key: String,
@@ -47,10 +45,21 @@ pub async fn sync(logger: Logger, args: SyncArgs) -> anyhow::Result<()> {
         db
     });
 
+    let mut new_lockfile = lockfile.clone();
+    let (tx, mut rx) = mpsc::channel(100);
+
+    tokio::spawn(async move {
+        while let Some((path, entry)) = rx.recv().await {
+            new_lockfile.entries.insert(path, entry);
+        }
+    });
+
     let state = Arc::new(SyncState {
+        args,
         multi_progress,
         config: config.clone(),
-        lockfile: lockfile.clone(),
+        existing_lockfile: lockfile.clone(),
+        lockfile_tx: tx,
         font_db,
         api_key,
         cookie,

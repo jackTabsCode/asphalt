@@ -7,8 +7,8 @@ use crate::glob::Glob;
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Config {
-    creator: Creator,
-    codegen: Codegen,
+    pub creator: Creator,
+    pub codegen: Codegen,
     pub inputs: Vec<Input>,
 }
 
