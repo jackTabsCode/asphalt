@@ -1,4 +1,5 @@
 use anyhow::Context;
+use clap::ValueEnum;
 use rbxcloud::rbx::v1::assets::{AssetCreator, AssetGroupCreator, AssetUserCreator};
 use serde::Deserialize;
 use std::path::PathBuf;
@@ -12,7 +13,7 @@ pub struct Config {
     pub inputs: Vec<Input>,
 }
 
-pub static FILE_NAME: &str = "asphalt.toml";
+pub const FILE_NAME: &str = "asphalt.toml";
 
 impl Config {
     pub fn read() -> anyhow::Result<Config> {
@@ -29,9 +30,9 @@ struct Codegen {
     typescript: bool,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, ValueEnum)]
 #[serde(rename_all = "snake_case")]
-enum CreatorType {
+pub enum CreatorType {
     User,
     Group,
 }
@@ -39,8 +40,8 @@ enum CreatorType {
 #[derive(Debug, Deserialize, Clone)]
 pub struct Creator {
     #[serde(rename = "type")]
-    ty: CreatorType,
-    id: u64,
+    pub ty: CreatorType,
+    pub id: u64,
 }
 
 impl From<Creator> for AssetCreator {

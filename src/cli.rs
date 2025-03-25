@@ -1,5 +1,4 @@
-use std::path::Path;
-
+use crate::config::CreatorType;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use clap_verbosity_flag::{InfoLevel, Verbosity};
 
@@ -55,6 +54,14 @@ pub struct UploadArgs {
     /// The file to upload.
     pub path: String,
 
+    /// The creator type of the asset.
+    #[arg(long)]
+    pub creator_type: CreatorType,
+
+    /// The creator ID of the asset.
+    #[arg(long)]
+    pub creator_id: u64,
+
     /// Your Open Cloud API key.
     /// Can also be set with the ASPHALT_API_KEY environment variable.
     #[arg(short, long)]
@@ -68,4 +75,8 @@ pub struct UploadArgs {
     /// Whether to alpha bleed if it's an image.
     #[arg(long, default_value = "true")]
     pub bleed: bool,
+
+    /// Format it as a link instead of just the asset ID.
+    #[arg(long)]
+    pub link: bool,
 }

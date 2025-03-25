@@ -26,6 +26,7 @@ pub struct SyncState {
     font_db: Arc<Database>,
     api_key: String,
     cookie: Option<String>,
+    csrf: Option<String>,
 }
 
 pub async fn sync(logger: Logger, args: SyncArgs) -> anyhow::Result<()> {
@@ -51,6 +52,7 @@ pub async fn sync(logger: Logger, args: SyncArgs) -> anyhow::Result<()> {
     tokio::spawn(async move {
         while let Some((path, entry)) = rx.recv().await {
             new_lockfile.entries.insert(path, entry);
+            new_lockfile.write(None).await.unwrap();
         }
     });
 
@@ -63,6 +65,7 @@ pub async fn sync(logger: Logger, args: SyncArgs) -> anyhow::Result<()> {
         font_db,
         api_key,
         cookie,
+        csrf: None,
     });
 
     let mut handles = Vec::new();

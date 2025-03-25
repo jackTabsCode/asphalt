@@ -1,10 +1,5 @@
 use super::SyncState;
-use crate::{
-    asset::{Asset, AssetKind, AudioKind, DecalKind, ModelFileFormat, ModelKind},
-    config::Input,
-};
-use anyhow::{bail, Context};
-use blake3::Hasher;
+use crate::{asset::Asset, config::Input};
 use indicatif::{ProgressBar, ProgressStyle};
 use log::{debug, warn};
 use std::{path::PathBuf, sync::Arc};
@@ -69,12 +64,9 @@ struct WalkFileResult {
 
 async fn walk_file(state: Arc<SyncState>, path: PathBuf) -> anyhow::Result<WalkFileResult> {
     let data = fs::read(&path).await?;
-    let ext = path.extension().context("File has no extension")?;
-    let ext = ext.to_str().context("Extension is not valid UTF-8")?;
+    let asset = Asset::new(path.clone(), data)?;
 
-    let kind = kind_from_ext(ext)?;
-
-    let hash = hash_file(&data);
+    let hash = asset.hash();
     let entry = state
         .existing_lockfile
         .entries
@@ -82,39 +74,5 @@ async fn walk_file(state: Arc<SyncState>, path: PathBuf) -> anyhow::Result<WalkF
 
     let changed = entry.is_none_or(|entry| entry.hash != hash);
 
-    let asset = Asset { path, data, kind };
-
     Ok(WalkFileResult { asset, changed })
-}
-
-fn hash_file(data: &[u8]) -> String {
-    let mut hasher = Hasher::new();
-    hasher.update(data);
-    hasher.finalize().to_string()
-}
-
-fn kind_from_ext(ext: &str) -> anyhow::Result<AssetKind> {
-    let kind = match ext {
-        "mp3" => AssetKind::Audio(AudioKind::Mp3),
-        "ogg" => AssetKind::Audio(AudioKind::Ogg),
-        "flac" => AssetKind::Audio(AudioKind::Flac),
-        "wav" => AssetKind::Audio(AudioKind::Wav),
-        "png" | "svg" => AssetKind::Decal(DecalKind::Png),
-        "jpg" => AssetKind::Decal(DecalKind::Jpg),
-        "bmp" => AssetKind::Decal(DecalKind::Bmp),
-        "tga" => AssetKind::Decal(DecalKind::Tga),
-        "fbx" => AssetKind::Model(ModelKind::Model),
-        "rbxm" | "rbxmx" => {
-            let format = if ext == "rbxm" {
-                ModelFileFormat::Binary
-            } else {
-                ModelFileFormat::Xml
-            };
-
-            AssetKind::Model(ModelKind::Animation(format))
-        }
-        _ => bail!("Unknown extension .{ext}"),
-    };
-
-    Ok(kind)
 }

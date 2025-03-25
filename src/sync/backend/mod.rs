@@ -1,7 +1,5 @@
 use super::SyncState;
 use crate::asset::Asset;
-use anyhow::Context;
-use std::path::{Path, PathBuf};
 
 mod cloud;
 mod debug;

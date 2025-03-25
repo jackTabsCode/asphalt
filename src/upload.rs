@@ -13,7 +13,7 @@ use std::time::Duration;
 
 use crate::{
     asset::{Asset, AssetKind},
-    config::Creator,
+    config::{Creator, CreatorType},
 };
 
 const ASSET_DESCRIPTION: &str = "Uploaded by Asphalt";
@@ -128,4 +128,93 @@ async fn get_image_id(asset_id: u64) -> anyhow::Result<u64> {
         .unwrap()
         .parse::<u64>()
         .context("Asset ID wasn't a number")
+}
+
+pub struct AnimationResult {
+    pub asset_id: u64,
+    pub csrf: String,
+}
+
+const ANIMATION_URL: &str = "https://www.roblox.com/ide/publish/uploadnewanimation";
+
+pub async fn upload_animation(
+    asset: &Asset,
+    cookie: String,
+    csrf: Option<String>,
+    creator: &Creator,
+) -> anyhow::Result<AnimationResult> {
+    let display_name = asset.path.to_string_lossy().to_string();
+
+    let client = Client::new();
+
+    let csrf = if let Some(token) = csrf {
+        token
+    } else {
+        get_csrf_token(cookie.clone()).await?
+    };
+
+    let creator_ty = match creator.ty {
+        CreatorType::User => "userId",
+        CreatorType::Group => "groupId",
+    };
+
+    let response = client
+        .post(ANIMATION_URL)
+        .header("Cookie", cookie)
+        .header("x-csrf-token", &csrf)
+        .header("Content-Type", "application/xml")
+        .header(
+            "User-Agent",
+            "RobloxStudio/WinInet RobloxApp/0.483.1.425021 (GlobalDist; RobloxDirectDownload)",
+        )
+        .header("Requester", "Client")
+        .query(&[
+            ("name", display_name),
+            ("description", ASSET_DESCRIPTION.to_string()),
+            ("isGamesAsset", "false".to_string()),
+            (creator_ty, creator.id.to_string()),
+            ("ispublic", "false".to_string()),
+            ("assetTypeName", "animation".to_string()),
+            ("AllID", "1".to_string()),
+            ("allowComments", "false".to_string()),
+        ])
+        .body(asset.data.clone())
+        .send()
+        .await
+        .context("Failed to send animation upload request")?
+        .error_for_status()
+        .context("Failed to upload animation")?;
+
+    let body = response
+        .text()
+        .await
+        .context("Failed to parse request body to text")?;
+
+    let id = body
+        .parse::<u64>()
+        .context("Failed to parse animation ID")?;
+
+    Ok(AnimationResult { asset_id: id, csrf })
+}
+
+pub async fn get_csrf_token(cookie: String) -> anyhow::Result<String> {
+    let client = Client::new();
+
+    let response = client
+        .post(ANIMATION_URL)
+        .header("Cookie", cookie)
+        .header("Content-Type", "application/xml")
+        .header("Requester", "Client")
+        .send()
+        .await
+        .context("Failed to get CSRF token")?;
+
+    let csrf = response
+        .headers()
+        .get("x-csrf-token")
+        .context("Failed to get CSRF token header")?
+        .to_str()
+        .context("Failed to convert CSRF token header to string")?;
+
+    Ok(csrf.to_string())
 }

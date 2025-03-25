@@ -13,7 +13,7 @@ pub struct Lockfile {
     pub entries: BTreeMap<String, LockfileEntry>,
 }
 
-pub static FILE_NAME: &str = "asphalt.lock.toml";
+pub const FILE_NAME: &str = "asphalt.lock.toml";
 
 impl Lockfile {
     pub async fn read() -> anyhow::Result<Self> {
@@ -24,9 +24,9 @@ impl Lockfile {
         }
     }
 
-    pub async fn write(&self, filename: &Path) -> anyhow::Result<()> {
+    pub async fn write(&self, filename: Option<&Path>) -> anyhow::Result<()> {
         let content = toml::to_string(self)?;
-        write(filename, content).await?;
+        write(filename.unwrap_or(Path::new(FILE_NAME)), content).await?;
 
         Ok(())
     }
