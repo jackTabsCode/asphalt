@@ -1,10 +1,7 @@
-use std::path::{Path, PathBuf};
-
-use anyhow::Context;
-
-use crate::asset::Asset;
-
 use super::SyncState;
+use crate::asset::Asset;
+use anyhow::Context;
+use std::path::{Path, PathBuf};
 
 mod cloud;
 mod debug;
