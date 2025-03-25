@@ -7,7 +7,7 @@ use crate::{
 use anyhow::{bail, Context};
 use image::DynamicImage;
 use indicatif::{ProgressBar, ProgressStyle};
-use log::{debug, info};
+use log::{debug, info, warn};
 use rbx_xml::DecodeOptions;
 use std::{io::Cursor, sync::Arc};
 
@@ -41,9 +41,13 @@ pub async fn process_input(
             debug!("File {} changed, syncing", display);
         }
 
-        process_asset(state.clone(), input, &mut asset)
-            .await
-            .context(format!("Failed to process file {}", display))?;
+        if let Err(err) = process_asset(state.clone(), input, &mut asset).await {
+            warn!(
+                "Skipping file {} because it failed processing: {}",
+                display, err
+            );
+            continue;
+        }
     }
 
     Ok(())
