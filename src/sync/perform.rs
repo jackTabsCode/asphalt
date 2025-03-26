@@ -1,6 +1,6 @@
 use super::{
-    backend::{cloud::CloudBackend, debug::DebugBackend, studio::StudioBackend, SyncBackend},
     SyncState,
+    backend::{SyncBackend, cloud::CloudBackend, debug::DebugBackend, studio::StudioBackend},
 };
 use crate::{asset::Asset, cli::SyncTarget, config::Input, sync::SyncResult};
 use indicatif::{ProgressBar, ProgressStyle};

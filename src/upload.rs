@@ -1,10 +1,10 @@
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 use log::{debug, warn};
 use rbxcloud::rbx::{
     self,
     v1::assets::{
-        create_asset_with_contents, get_operation, AssetCreation, AssetCreationContext,
-        CreateAssetParamsWithContents, GetAssetOperationParams,
+        AssetCreation, AssetCreationContext, CreateAssetParamsWithContents,
+        GetAssetOperationParams, create_asset_with_contents, get_operation,
     },
 };
 use serde::Deserialize;

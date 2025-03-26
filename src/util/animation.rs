@@ -1,6 +1,6 @@
 use std::io::Cursor;
 
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 use rbx_xml::DecodeOptions;
 
 use crate::asset::ModelFileFormat;

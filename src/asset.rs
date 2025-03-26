@@ -1,5 +1,5 @@
 use crate::util::{alpha_bleed::alpha_bleed, animation::get_animation, svg::svg_to_png};
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 use blake3::Hasher;
 use image::DynamicImage;
 use rbxcloud::rbx::v1::assets::AssetType;

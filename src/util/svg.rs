@@ -1,6 +1,6 @@
 use resvg::{
     tiny_skia::Pixmap,
-    usvg::{fontdb::Database, Options, Transform, Tree},
+    usvg::{Options, Transform, Tree, fontdb::Database},
 };
 use std::sync::Arc;
 

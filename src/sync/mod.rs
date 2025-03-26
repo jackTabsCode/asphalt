@@ -5,7 +5,7 @@ use crate::{
     config::{Codegen, Config, Input},
     lockfile::{Lockfile, LockfileEntry},
 };
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use backend::BackendSyncResult;
 use codegen::{CodegenInput, CodegenLanguage, CodegenNode};
 use indicatif::MultiProgress;
@@ -14,7 +14,7 @@ use resvg::usvg::fontdb::Database;
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 use tokio::{
     fs,
-    sync::{mpsc, RwLock},
+    sync::{RwLock, mpsc},
     task::JoinHandle,
 };
 use walk::WalkFileResult;

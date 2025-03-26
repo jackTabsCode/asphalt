@@ -8,7 +8,7 @@ use std::{
 };
 
 use globset::{Glob as InnerGlob, GlobMatcher};
-use serde::{de::Error as _, Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as _};
 
 pub use globset::Error;
 
