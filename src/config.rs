@@ -1,8 +1,11 @@
-use anyhow::Context;
+use anyhow::{bail, Context};
 use clap::ValueEnum;
 use rbxcloud::rbx::v1::assets::{AssetCreator, AssetGroupCreator, AssetUserCreator};
 use serde::Deserialize;
-use std::{collections::HashMap, path::PathBuf};
+use std::{
+    collections::{HashMap, HashSet},
+    path::PathBuf,
+};
 
 use crate::glob::Glob;
 
@@ -19,15 +22,25 @@ impl Config {
     pub fn read() -> anyhow::Result<Config> {
         let config = std::fs::read_to_string(FILE_NAME).context("Failed to read config file")?;
         let config: Config = toml::from_str(&config)?;
+
+        let mut input_names = HashSet::new();
+        for input in &config.inputs {
+            if !input_names.insert(&input.name) {
+                bail!("Duplicate input name: {}", input.name);
+            }
+        }
+
         Ok(config)
     }
 }
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Codegen {
-    style: CodegenStyle,
+    pub style: CodegenStyle,
     #[serde(default)]
-    typescript: bool,
+    pub typescript: bool,
+    #[serde(default)]
+    pub strip_extensions: bool,
 }
 
 #[derive(Debug, Deserialize, Clone, ValueEnum)]
@@ -91,7 +104,7 @@ pub struct WebAsset {
 
 #[derive(Debug, Deserialize, Default, Clone)]
 #[serde(rename_all = "snake_case")]
-enum CodegenStyle {
+pub enum CodegenStyle {
     #[default]
     Flat,
     Nested,

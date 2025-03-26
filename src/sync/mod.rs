@@ -2,17 +2,18 @@ use crate::{
     asset::Asset,
     auth::Auth,
     cli::{SyncArgs, SyncTarget},
-    config::{Config, Input},
+    config::{Codegen, Config, Input},
     lockfile::{Lockfile, LockfileEntry},
 };
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use backend::BackendSyncResult;
-use codegen::CodegenInput;
+use codegen::{CodegenInput, CodegenLanguage, CodegenNode};
 use indicatif::MultiProgress;
 use log::debug;
 use resvg::usvg::fontdb::Database;
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 use tokio::{
+    fs,
     sync::{mpsc, RwLock},
     task::JoinHandle,
 };
@@ -44,7 +45,7 @@ pub struct SyncState {
 }
 
 struct CodegenInsertion {
-    output_path: PathBuf,
+    input_name: String,
     asset_path: PathBuf,
     asset_id: String,
 }
@@ -61,6 +62,7 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
     }
 
     let config = Config::read()?;
+
     let lockfile = Lockfile::read().await?;
     let auth = Auth::new(args.api_key.clone())?;
 
@@ -86,13 +88,15 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
         csrf: Arc::new(RwLock::new(None)),
     });
 
-    let mut codegen_inputs: HashMap<PathBuf, CodegenInput> = HashMap::new();
+    let mut codegen_inputs: HashMap<String, CodegenInput> = HashMap::new();
     for input in &config.inputs {
         for (path, asset) in &input.web_assets {
-            codegen_inputs
-                .entry(input.output_path.clone())
-                .or_default()
-                .insert(PathBuf::from(path), format!("rbxassetid://{}", asset.id));
+            let entry = codegen_inputs.entry(input.name.clone()).or_default();
+
+            let path = PathBuf::from(path);
+            let path = path.strip_prefix(input.path.get_prefix()).unwrap_or(&path);
+
+            entry.insert(PathBuf::from(path), format!("rbxassetid://{}", asset.id));
         }
     }
 
@@ -130,7 +134,7 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
 
                 codegen_tx_backend
                     .send(CodegenInsertion {
-                        output_path: result.input.output_path,
+                        input_name: result.input.name,
                         asset_path: result.path,
                         asset_id: format!("rbxassetid://{}", asset_id),
                     })
@@ -138,7 +142,7 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
             } else if let BackendSyncResult::Studio(asset_id) = result.backend {
                 codegen_tx_backend
                     .send(CodegenInsertion {
-                        output_path: result.input.output_path.clone(),
+                        input_name: result.input.name,
                         asset_path: result.path.clone(),
                         asset_id,
                     })
@@ -182,7 +186,7 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
 
                         codegen_tx
                             .send(CodegenInsertion {
-                                output_path: input.output_path.clone(),
+                                input_name: input.name.clone(),
                                 asset_path: path.clone(),
                                 asset_id: format!("rbxassetid://{}", entry.asset_id),
                             })
@@ -219,12 +223,70 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
     }
 
     while let Some(insertion) = codegen_rx.recv().await {
-        let input = codegen_inputs.entry(insertion.output_path).or_default();
+        let codegen_input = codegen_inputs
+            .entry(insertion.input_name.clone())
+            .or_default();
+        let input = config
+            .inputs
+            .iter()
+            .find(|input| input.name == insertion.input_name)
+            .context("Failed to find input for codegen input")?;
 
-        input.insert(insertion.asset_path, insertion.asset_id);
+        let path = insertion
+            .asset_path
+            .strip_prefix(input.path.get_prefix())
+            .unwrap_or(&insertion.asset_path);
+
+        codegen_input.insert(path.to_owned(), insertion.asset_id);
     }
 
-    dbg!(codegen_inputs);
+    for (input_name, codegen_input) in codegen_inputs {
+        let input = config
+            .inputs
+            .iter()
+            .find(|input| input.name == input_name)
+            .context("Failed to find input for codegen input")?;
+
+        generate_from_input(
+            input,
+            &config.codegen,
+            &codegen_input,
+            CodegenLanguage::Luau,
+        )
+        .await?;
+        if config.codegen.typescript {
+            generate_from_input(
+                input,
+                &config.codegen,
+                &codegen_input,
+                CodegenLanguage::TypeScript,
+            )
+            .await?;
+        }
+    }
+
+    Ok(())
+}
+
+async fn generate_from_input(
+    input: &Input,
+    style: &Codegen,
+    codegen_input: &CodegenInput,
+    lang: CodegenLanguage,
+) -> anyhow::Result<()> {
+    let node: CodegenNode = codegen::from_codegen_input(codegen_input, style);
+    let ext = match lang {
+        CodegenLanguage::Luau => "luau",
+        CodegenLanguage::TypeScript => "d.ts",
+    };
+    let code = codegen::generate_code(lang, &input.name, &node)?;
+
+    fs::create_dir_all(&input.output_path).await?;
+    fs::write(
+        input.output_path.join(format!("{}.{}", input.name, ext)),
+        code,
+    )
+    .await?;
 
     Ok(())
 }
