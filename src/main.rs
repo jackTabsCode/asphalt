@@ -1,17 +1,23 @@
-use anyhow::Context;
 use clap::Parser;
 use cli::{Cli, Commands};
-use commands::{init::init, list::list, sync::sync};
 use dotenv::dotenv;
-pub use lockfile::{FileEntry, LockFile};
+use indicatif::MultiProgress;
 use log::LevelFilter;
+use migrate_lockfile::migrate_lockfile;
+use sync::sync;
+use upload_command::upload;
 
-pub mod asset;
-pub mod cli;
-mod commands;
-pub mod lockfile;
-pub mod upload;
-pub mod util;
+mod asset;
+mod auth;
+mod cli;
+mod config;
+mod glob;
+mod lockfile;
+mod migrate_lockfile;
+mod sync;
+mod upload;
+mod upload_command;
+mod util;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -19,25 +25,24 @@ async fn main() -> anyhow::Result<()> {
 
     let args = Cli::parse();
 
-    env_logger::Builder::new()
+    let mut binding = env_logger::Builder::new();
+    let logger = binding
         .filter_level(LevelFilter::Info)
         .filter_module("asphalt", args.verbose.log_level_filter())
         .format_timestamp(None)
         .format_module_path(false)
-        .init();
+        .build();
 
-    let existing_lockfile = LockFile::read().await.context("Failed to read lockfile")?;
+    let level = logger.filter();
+
+    let multi_progress = MultiProgress::new();
+    indicatif_log_bridge::LogWrapper::new(multi_progress.clone(), logger).try_init()?;
+
+    log::set_max_level(level);
 
     match args.command {
-        Commands::Sync(sync_args) => sync(sync_args, existing_lockfile)
-            .await
-            .context("Failed to sync"),
-        Commands::List => list(existing_lockfile).await.context("Failed to list"),
-        Commands::Init => init().await.context("Failed to initialize"),
-        Commands::MigrateTarmacManifest(args) => {
-            commands::migrate_tarmac_manifest::migrate_manifest(args)
-                .await
-                .context("Failed to migrate tarmac-manifest.toml")
-        }
+        Commands::Sync(args) => sync(multi_progress, args).await,
+        Commands::Upload(args) => upload(args).await,
+        Commands::MigrateLockfile(args) => migrate_lockfile(args).await,
     }
 }
