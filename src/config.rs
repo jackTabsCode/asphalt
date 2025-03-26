@@ -72,7 +72,7 @@ pub struct Input {
     pub bleed: bool,
 
     #[serde(default)]
-    pub web_assets: HashMap<String, WebAsset>,
+    pub web: HashMap<String, WebAsset>,
 }
 
 #[derive(Debug, Deserialize, Clone)]

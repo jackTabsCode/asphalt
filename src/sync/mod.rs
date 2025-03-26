@@ -62,7 +62,6 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
     }
 
     let config = Config::read()?;
-    let config_inputs = config.inputs.clone();
     let codegen_config = config.codegen.clone();
 
     let lockfile = Lockfile::read().await?;
@@ -91,8 +90,8 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
     });
 
     let mut codegen_inputs: HashMap<String, CodegenInput> = HashMap::new();
-    for (input_name, input) in &config_inputs {
-        for (path, asset) in &input.web_assets {
+    for (input_name, input) in &config.inputs.clone() {
+        for (path, asset) in &input.web {
             let entry = codegen_inputs.entry(input_name.clone()).or_default();
 
             entry.insert(PathBuf::from(path), format!("rbxassetid://{}", asset.id));
@@ -101,18 +100,18 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
 
     let mut consumer_handles = Vec::<JoinHandle<Result<()>>>::new();
 
-    if matches!(args.target, SyncTarget::Cloud) {
-        consumer_handles.push(tokio::spawn(async move {
-            let mut new_lockfile = Lockfile::default();
+    consumer_handles.push(tokio::spawn(async move {
+        let mut new_lockfile = Lockfile::default();
 
-            while let Some(insertion) = lockfile_rx.recv().await {
+        while let Some(insertion) = lockfile_rx.recv().await {
+            if matches!(args.target, SyncTarget::Cloud) {
                 new_lockfile.insert(insertion.input_name, &insertion.path, insertion.entry);
                 new_lockfile.write(None).await?;
             }
+        }
 
-            Ok(())
-        }));
-    }
+        Ok(())
+    }));
 
     let lockfile_tx_backend = lockfile_tx.clone();
     let codegen_tx_backend = codegen_tx.clone();
@@ -152,9 +151,31 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
         Ok(())
     }));
 
+    let inputs = config.inputs.clone();
+
+    let codegen_handle = tokio::spawn(async move {
+        while let Some(insertion) = codegen_rx.recv().await {
+            let codegen_input = codegen_inputs
+                .entry(insertion.input_name.clone())
+                .or_default();
+            let input = inputs
+                .get(&insertion.input_name)
+                .context("Failed to find input for codegen input")?;
+
+            let path = insertion
+                .asset_path
+                .strip_prefix(input.path.get_prefix())
+                .unwrap_or(&insertion.asset_path);
+
+            codegen_input.insert(path.to_owned(), insertion.asset_id);
+        }
+
+        Ok::<_, anyhow::Error>(codegen_inputs)
+    });
+
     let mut producer_handles = Vec::<JoinHandle<Result<()>>>::new();
 
-    for (input_name, input) in &config_inputs {
+    for (input_name, input) in &config.inputs {
         let state = state.clone();
         let input = input.clone();
         let lockfile_tx = lockfile_tx.clone();
@@ -222,24 +243,11 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
         handle.await??;
     }
 
-    while let Some(insertion) = codegen_rx.recv().await {
-        let codegen_input = codegen_inputs
-            .entry(insertion.input_name.clone())
-            .or_default();
-        let input = config_inputs
-            .get(&insertion.input_name)
-            .context("Failed to find input for codegen input")?;
-
-        let path = insertion
-            .asset_path
-            .strip_prefix(input.path.get_prefix())
-            .unwrap_or(&insertion.asset_path);
-
-        codegen_input.insert(path.to_owned(), insertion.asset_id);
-    }
+    let codegen_inputs = codegen_handle.await??;
 
     for (input_name, codegen_input) in codegen_inputs {
-        let input = config_inputs
+        let input = config
+            .inputs
             .get(&input_name)
             .context("Failed to find input for codegen input")?;
 

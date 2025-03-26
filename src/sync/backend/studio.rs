@@ -92,7 +92,7 @@ impl SyncBackend for StudioBackend {
         Ok(Some(BackendSyncResult::Studio(format!(
             "rbxasset://{}/{}",
             self.identifier,
-            target_path.display()
+            rel_path.display()
         ))))
     }
 }
