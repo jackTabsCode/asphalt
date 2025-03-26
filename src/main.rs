@@ -12,6 +12,7 @@ mod cli;
 mod config;
 mod glob;
 mod lockfile;
+mod migrate_lockfile;
 mod sync;
 mod upload;
 mod upload_command;

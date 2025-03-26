@@ -61,7 +61,7 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
         bail!("A dry run doesn't make sense in this context");
     }
 
-    let config = Config::read()?;
+    let config = Config::read().await?;
     let codegen_config = config.codegen.clone();
 
     let lockfile = Lockfile::read().await?;
@@ -162,12 +162,14 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
                 .get(&insertion.input_name)
                 .context("Failed to find input for codegen input")?;
 
-            let path = insertion
-                .asset_path
-                .strip_prefix(input.path.get_prefix())
-                .unwrap_or(&insertion.asset_path);
+            let asset_path = insertion.asset_path.to_string_lossy().replace("\\", "/");
+            let asset_path = PathBuf::from(&asset_path);
 
-            codegen_input.insert(path.to_owned(), insertion.asset_id);
+            let path = asset_path
+                .strip_prefix(input.path.get_prefix())
+                .unwrap_or(&asset_path);
+
+            codegen_input.insert(path.into(), insertion.asset_id);
         }
 
         Ok::<_, anyhow::Error>(codegen_inputs)

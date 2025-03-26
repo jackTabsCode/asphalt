@@ -4,6 +4,7 @@ use clap::ValueEnum;
 use rbxcloud::rbx::v1::assets::{AssetCreator, AssetGroupCreator, AssetUserCreator};
 use serde::Deserialize;
 use std::{collections::HashMap, path::PathBuf};
+use tokio::fs;
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Config {
@@ -15,8 +16,10 @@ pub struct Config {
 pub const FILE_NAME: &str = "asphalt.toml";
 
 impl Config {
-    pub fn read() -> anyhow::Result<Config> {
-        let config = std::fs::read_to_string(FILE_NAME).context("Failed to read config file")?;
+    pub async fn read() -> anyhow::Result<Config> {
+        let config = fs::read_to_string(FILE_NAME)
+            .await
+            .context("Failed to read config file")?;
         let config: Config = toml::from_str(&config)?;
 
         Ok(config)

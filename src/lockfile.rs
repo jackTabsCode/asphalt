@@ -10,6 +10,8 @@ pub struct LockfileEntry {
 
 #[derive(Debug, Serialize, Deserialize, Default, Clone)]
 pub struct Lockfile {
+    #[serde(default)]
+    pub version: u32,
     entries: BTreeMap<String, LockfileEntry>,
 }
 

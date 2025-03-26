@@ -139,7 +139,7 @@ fn generate_ts_node(node: &CodegenNode, indent: usize) -> String {
             let mut result = String::from("{\n");
             for (k, v) in map {
                 result.push_str(&"\t".repeat(indent + 1));
-                let k = if k.chars().all(|c| c.is_alphanumeric()) {
+                let k = if k.chars().all(valid_identifier) {
                     k.clone()
                 } else {
                     format!("\"{}\"", k)
@@ -169,7 +169,7 @@ fn generate_luau_node(node: &CodegenNode, indent: usize) -> String {
             let mut result = String::from("{\n");
             for (k, v) in map {
                 result.push_str(&"\t".repeat(indent + 1));
-                let k = if k.chars().all(|c| c.is_alphanumeric()) {
+                let k = if k.chars().all(valid_identifier) {
                     k.clone()
                 } else {
                     format!("[\"{}\"]", k)
@@ -186,4 +186,8 @@ fn generate_luau_node(node: &CodegenNode, indent: usize) -> String {
         CodegenNode::String(s) => format!("\"{}\"", s),
         CodegenNode::Number(n) => format!("{}", n),
     }
+}
+
+fn valid_identifier(c: char) -> bool {
+    c.is_alphabetic() || c == '_'
 }
