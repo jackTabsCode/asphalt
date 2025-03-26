@@ -1,6 +1,6 @@
 use anyhow::bail;
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, path::Path};
+use std::{collections::HashMap, path::Path};
 use tokio::fs;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -16,11 +16,11 @@ pub const FILE_NAME: &str = "asphalt.lock.toml";
 #[serde(untagged)]
 pub enum Lockfile {
     V0 {
-        entries: BTreeMap<String, LockfileEntry>,
+        entries: HashMap<String, LockfileEntry>,
     },
     V1 {
         version: u32,
-        inputs: BTreeMap<String, BTreeMap<String, LockfileEntry>>,
+        inputs: HashMap<String, HashMap<String, LockfileEntry>>,
     },
 }
 
@@ -28,7 +28,7 @@ impl Default for Lockfile {
     fn default() -> Self {
         Lockfile::V1 {
             version: CURRENT_VERSION,
-            inputs: BTreeMap::new(),
+            inputs: HashMap::new(),
         }
     }
 }
@@ -83,7 +83,7 @@ impl Lockfile {
         }
     }
 
-    pub fn get_all_if_v0(&self) -> anyhow::Result<BTreeMap<String, LockfileEntry>> {
+    pub fn get_all_if_v0(&self) -> anyhow::Result<HashMap<String, LockfileEntry>> {
         match self {
             Lockfile::V0 { entries } => Ok(entries.clone()),
             Lockfile::V1 { .. } => {
