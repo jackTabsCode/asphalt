@@ -1,6 +1,7 @@
 use clap::Parser;
 use cli::{Cli, Commands};
 use dotenv::dotenv;
+use indicatif::MultiProgress;
 use log::LevelFilter;
 use sync::sync;
 use upload_command::upload;
@@ -27,14 +28,18 @@ async fn main() -> anyhow::Result<()> {
         .filter_level(LevelFilter::Info)
         .filter_module("asphalt", args.verbose.log_level_filter())
         .format_timestamp(None)
-        .format_module_path(false);
+        .format_module_path(false)
+        .build();
 
-    if !matches!(args.command, Commands::Sync(_)) {
-        logger.init();
-    }
+    let level = logger.filter();
+
+    let multi_progress = MultiProgress::new();
+    indicatif_log_bridge::LogWrapper::new(multi_progress.clone(), logger).try_init()?;
+
+    log::set_max_level(level);
 
     match args.command {
-        Commands::Sync(args) => sync(logger.build(), args).await,
+        Commands::Sync(args) => sync(multi_progress, args).await,
         Commands::Upload(args) => upload(args).await,
     }
 }

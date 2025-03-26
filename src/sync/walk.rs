@@ -1,12 +1,12 @@
 use super::SyncState;
-use crate::{asset::Asset, config::Input};
+use crate::{asset::Asset, config::Input, lockfile::LockfileEntry};
 use indicatif::{ProgressBar, ProgressStyle};
-use log::{debug, warn};
+use log::warn;
 use std::{path::PathBuf, sync::Arc};
 use tokio::fs;
 use walkdir::WalkDir;
 
-pub async fn walk(state: Arc<SyncState>, input: &Input) -> anyhow::Result<Vec<Asset>> {
+pub async fn walk(state: Arc<SyncState>, input: &Input) -> anyhow::Result<Vec<WalkFileResult>> {
     let prefix = input.path.get_prefix();
 
     let prefix_display = prefix.to_string_lossy().to_string();
@@ -30,22 +30,14 @@ pub async fn walk(state: Arc<SyncState>, input: &Input) -> anyhow::Result<Vec<As
         .map(|entry| entry.path().to_path_buf())
         .collect::<Vec<_>>();
 
-    let mut files = Vec::new();
+    let mut res = Vec::new();
+
     for path in entries {
         progress_bar.set_message(format!("Reading {}", path.display()));
         progress_bar.tick();
 
         match walk_file(state.clone(), input, path.clone()).await {
-            Ok(WalkFileResult {
-                asset,
-                changed: true,
-            }) => files.push(asset),
-            Ok(WalkFileResult {
-                changed: false,
-                asset: _,
-            }) => {
-                debug!("Skipping file {} because it didn't change", path.display());
-            }
+            Ok(result) => res.push(result),
             Err(err) => {
                 warn!("Skipping file {}: {}", path.display(), err);
             }
@@ -54,12 +46,12 @@ pub async fn walk(state: Arc<SyncState>, input: &Input) -> anyhow::Result<Vec<As
 
     progress_bar.set_message("Done reading files");
 
-    Ok(files)
+    Ok(res)
 }
 
-struct WalkFileResult {
-    asset: Asset,
-    changed: bool,
+pub enum WalkFileResult {
+    NewAsset(Asset),
+    ExistingAsset((PathBuf, LockfileEntry)),
 }
 
 async fn walk_file(
@@ -72,7 +64,8 @@ async fn walk_file(
 
     let entry = state.existing_lockfile.get(input.name.clone(), &path);
 
-    let changed = entry.is_none_or(|entry| entry.hash != asset.hash);
-
-    Ok(WalkFileResult { asset, changed })
+    match entry {
+        Some(entry) => Ok(WalkFileResult::ExistingAsset((path, entry.clone()))),
+        None => Ok(WalkFileResult::NewAsset(asset)),
+    }
 }

@@ -29,8 +29,7 @@ pub async fn perform(
         let display = asset.path.display();
         debug!("Syncing asset {}", display);
 
-        let message = format!("Syncing \"{}\"", display);
-        progress_bar.set_message(message);
+        progress_bar.set_message(format!("Syncing \"{}\"", display));
         progress_bar.inc(1);
 
         let res = match backend {
@@ -38,12 +37,14 @@ pub async fn perform(
             TargetBackend::Cloud(ref backend) => backend.sync(state.clone(), input, asset).await,
         };
 
+        progress_bar.set_message(format!("Writing {}", display));
+
         match res {
             Ok(Some(result)) => {
                 state
                     .result_tx
                     .send(SyncResult {
-                        input_name: input.name.clone(),
+                        input: input.clone(),
                         hash: asset.hash.clone(),
                         path: asset.path.clone(),
                         backend: result,

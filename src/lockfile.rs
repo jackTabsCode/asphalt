@@ -1,6 +1,9 @@
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, path::Path};
-use tokio::fs::{read_to_string, write};
+use std::{
+    collections::{BTreeMap, HashMap},
+    path::{Path, PathBuf},
+};
+use tokio::fs;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct LockfileEntry {
@@ -16,8 +19,14 @@ pub struct Lockfile {
 pub const FILE_NAME: &str = "asphalt.lock.toml";
 
 impl Lockfile {
+    pub fn blank() -> Self {
+        Self {
+            entries: BTreeMap::new(),
+        }
+    }
+
     pub async fn read() -> anyhow::Result<Self> {
-        let content = read_to_string(FILE_NAME).await;
+        let content = fs::read_to_string(FILE_NAME).await;
         match content {
             Ok(content) => Ok(toml::from_str(&content)?),
             Err(_) => Ok(Lockfile::default()),
@@ -39,7 +48,7 @@ impl Lockfile {
 
     pub async fn write(&self, filename: Option<&Path>) -> anyhow::Result<()> {
         let content = toml::to_string(self)?;
-        write(filename.unwrap_or(Path::new(FILE_NAME)), content).await?;
+        fs::write(filename.unwrap_or(Path::new(FILE_NAME)), content).await?;
 
         Ok(())
     }

@@ -2,7 +2,7 @@ use anyhow::Context;
 use clap::ValueEnum;
 use rbxcloud::rbx::v1::assets::{AssetCreator, AssetGroupCreator, AssetUserCreator};
 use serde::Deserialize;
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf};
 
 use crate::glob::Glob;
 
@@ -69,6 +69,14 @@ pub struct Input {
     // pub pack: Option<PackOptions>,
     #[serde(default = "default_true")]
     pub bleed: bool,
+
+    #[serde(default)]
+    pub web_assets: HashMap<String, WebAsset>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct WebAsset {
+    pub id: u64,
 }
 
 // fn default_pack_size() -> u32 {
