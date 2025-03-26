@@ -15,15 +15,12 @@ bit-vec = "0.8"
 blake3 = "1.7.0"
 clap = { version = "4.5.32", features = ["derive"] }
 clap-verbosity-flag = "3.0.2"
-console = { version = "0.15.11", features = ["ansi-parsing"] }
-cookie = "0.18.1"
 dotenv = "0.15.0"
 env_logger = "0.11.7"
 globset = { version = "0.4.16", features = ["serde1"] }
 image = "0.25.5"
 indicatif = "0.17.11"
 indicatif-log-bridge = "0.2.3"
-inquire = "0.7.5"
 log = "0.4.26"
 rbx_binary = { version = "0.7.7", features = ["serde"] }
 rbx_cookie = { version = "0.1.5", default-features = false }
