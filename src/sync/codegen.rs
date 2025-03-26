@@ -139,7 +139,7 @@ fn generate_ts_node(node: &CodegenNode, indent: usize) -> String {
             let mut result = String::from("{\n");
             for (k, v) in map {
                 result.push_str(&"\t".repeat(indent + 1));
-                let k = if k.chars().all(valid_identifier) {
+                let k = if is_valid_identifier(k) {
                     k.clone()
                 } else {
                     format!("\"{}\"", k)
@@ -169,7 +169,7 @@ fn generate_luau_node(node: &CodegenNode, indent: usize) -> String {
             let mut result = String::from("{\n");
             for (k, v) in map {
                 result.push_str(&"\t".repeat(indent + 1));
-                let k = if k.chars().all(valid_identifier) {
+                let k = if is_valid_identifier(k) {
                     k.clone()
                 } else {
                     format!("[\"{}\"]", k)
@@ -188,6 +188,25 @@ fn generate_luau_node(node: &CodegenNode, indent: usize) -> String {
     }
 }
 
-fn valid_identifier(c: char) -> bool {
-    c.is_alphabetic() || c == '_'
+fn is_valid_ident_char_start(value: char) -> bool {
+    value.is_ascii_alphabetic() || value == '_'
+}
+
+fn is_valid_ident_char(value: char) -> bool {
+    value.is_ascii_alphanumeric() || value == '_'
+}
+
+fn is_valid_identifier(value: &str) -> bool {
+    let mut chars = value.chars();
+
+    match chars.next() {
+        Some(first) => {
+            if !is_valid_ident_char_start(first) {
+                return false;
+            }
+        }
+        None => return false,
+    }
+
+    chars.all(is_valid_ident_char)
 }

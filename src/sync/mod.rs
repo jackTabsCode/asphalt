@@ -162,12 +162,10 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
                 .get(&insertion.input_name)
                 .context("Failed to find input for codegen input")?;
 
-            let asset_path = insertion.asset_path.to_string_lossy().replace("\\", "/");
-            let asset_path = PathBuf::from(&asset_path);
-
-            let path = asset_path
+            let path = insertion
+                .asset_path
                 .strip_prefix(input.path.get_prefix())
-                .unwrap_or(&asset_path);
+                .unwrap_or(&insertion.asset_path);
 
             codegen_input.insert(path.into(), insertion.asset_id);
         }

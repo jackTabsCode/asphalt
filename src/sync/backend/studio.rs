@@ -80,7 +80,9 @@ impl SyncBackend for StudioBackend {
             };
         }
 
-        let rel_path = asset.rel_path(&input.path.get_prefix())?;
+        let mut rel_path = asset.rel_path(&input.path.get_prefix())?;
+        rel_path = PathBuf::from(rel_path.to_string_lossy().replace('\\', "/"));
+
         let target_path = self.sync_path.join(&rel_path);
 
         if let Some(parent) = target_path.parent() {
