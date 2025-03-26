@@ -16,6 +16,7 @@ use crate::{
 };
 
 const ASSET_DESCRIPTION: &str = "Uploaded by Asphalt";
+const MAX_DISPLAY_NAME_LENGTH: usize = 50;
 
 pub async fn upload_cloud(
     client: reqwest::Client,
@@ -23,14 +24,12 @@ pub async fn upload_cloud(
     api_key: String,
     creator: &Creator,
 ) -> anyhow::Result<u64> {
-    let display_name = asset.path.to_string_lossy().to_string();
-
     let params = CreateAssetParamsWithContents {
         contents: &asset.data,
         api_key: api_key.clone(),
         asset: AssetCreation {
             asset_type: asset.kind.clone().try_into()?,
-            display_name,
+            display_name: trim_display_name(&asset.path.to_string_lossy()),
             description: ASSET_DESCRIPTION.to_string(),
             creation_context: AssetCreationContext {
                 creator: creator.clone().into(),
@@ -167,7 +166,7 @@ pub async fn upload_animation(
         )
         .header("Requester", "Client")
         .query(&[
-            ("name", display_name),
+            ("name", trim_display_name(&display_name)),
             ("description", ASSET_DESCRIPTION.to_string()),
             ("isGamesAsset", "false".to_string()),
             (creator_ty, creator.id.to_string()),
@@ -213,4 +212,14 @@ pub async fn get_csrf_token(client: reqwest::Client, cookie: String) -> anyhow::
         .context("Failed to convert CSRF token header to string")?;
 
     Ok(csrf.to_string())
+}
+
+fn trim_display_name(name: &str) -> String {
+    let full_path = name.to_string();
+    if full_path.len() > MAX_DISPLAY_NAME_LENGTH {
+        let start_index = full_path.len().saturating_sub(MAX_DISPLAY_NAME_LENGTH);
+        full_path[start_index..].to_string()
+    } else {
+        full_path
+    }
 }
