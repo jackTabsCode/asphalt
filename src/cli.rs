@@ -28,7 +28,7 @@ pub enum SyncTarget {
     Debug,
 }
 
-#[derive(Args)]
+#[derive(Args, Clone)]
 pub struct SyncArgs {
     /// Your Open Cloud API key.
     /// Can also be set with the ASPHALT_API_KEY environment variable.

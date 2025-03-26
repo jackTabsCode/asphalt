@@ -1,3 +1,3 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::{collections::BTreeMap, path::PathBuf};
 
-pub type CodegenInput = HashMap<PathBuf, HashMap<PathBuf, String>>;
+pub type CodegenInput = BTreeMap<PathBuf, String>;

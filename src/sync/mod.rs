@@ -7,10 +7,11 @@ use crate::{
 };
 use anyhow::bail;
 use backend::BackendSyncResult;
+use codegen::CodegenInput;
 use indicatif::MultiProgress;
 use log::debug;
 use resvg::usvg::fontdb::Database;
-use std::{path::PathBuf, sync::Arc};
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
 use tokio::{
     sync::{mpsc, RwLock},
     task::JoinHandle,
@@ -59,14 +60,25 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> anyhow::Resu
         db
     });
 
-    let mut new_lockfile = Lockfile::blank();
+    let mut new_lockfile = Lockfile::default();
+
+    struct CodegenInsertion {
+        output_path: PathBuf,
+        asset_path: PathBuf,
+        asset_id: String,
+    }
+
+    let mut codegen_inputs: HashMap<PathBuf, CodegenInput> = HashMap::new();
+
+    let (codegen_tx, mut codegen_rx) = mpsc::channel::<CodegenInsertion>(100);
+
     let (result_tx, mut result_rx) = mpsc::channel::<SyncResult>(100);
 
     let csrf = Arc::new(RwLock::new(None));
 
     let state = Arc::new(SyncState {
         client: reqwest::Client::new(),
-        args,
+        args: args.clone(),
         multi_progress,
         config: config.clone(),
         existing_lockfile: lockfile.clone(),
@@ -78,33 +90,50 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> anyhow::Resu
 
     type Handle = JoinHandle<anyhow::Result<()>>;
 
-    let (lockfile_tx, mut lockfile_rx) = mpsc::channel::<(String, PathBuf, LockfileEntry)>(100);
+    struct LockfileInsertion {
+        input: Input,
+        path: PathBuf,
+        entry: LockfileEntry,
+    }
+
+    let (lockfile_tx, mut lockfile_rx) = mpsc::channel::<LockfileInsertion>(100);
 
     let mut consumer_handles = Vec::<Handle>::new();
 
-    consumer_handles.push(tokio::spawn(async move {
-        while let Some((input, path, entry)) = lockfile_rx.recv().await {
-            new_lockfile.insert(input, &path, entry);
-            new_lockfile.write(None).await?;
-        }
+    if matches!(args.target, Some(SyncTarget::Cloud)) {
+        consumer_handles.push(tokio::spawn(async move {
+            while let Some(insertion) = lockfile_rx.recv().await {
+                new_lockfile.insert(insertion.input.name, &insertion.path, insertion.entry);
+                new_lockfile.write(None).await?;
+            }
 
-        Ok(())
-    }));
+            Ok(())
+        }));
+    }
 
     let lockfile_tx_backend = lockfile_tx.clone();
+    let codegen_tx_backend = codegen_tx.clone();
 
     consumer_handles.push(tokio::spawn(async move {
         while let Some(tx) = result_rx.recv().await {
             if let BackendSyncResult::Cloud(asset_id) = tx.backend {
                 lockfile_tx_backend
-                    .send((
-                        tx.input.name.clone(),
-                        tx.path,
-                        LockfileEntry {
+                    .send(LockfileInsertion {
+                        input: tx.input.clone(),
+                        path: tx.path.clone(),
+                        entry: LockfileEntry {
                             hash: tx.hash,
                             asset_id,
                         },
-                    ))
+                    })
+                    .await?;
+
+                codegen_tx_backend
+                    .send(CodegenInsertion {
+                        output_path: tx.input.output_path,
+                        asset_path: tx.path,
+                        asset_id: format!("rbxassetid://{}", asset_id),
+                    })
                     .await?;
             }
         }
@@ -114,10 +143,11 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> anyhow::Resu
 
     let mut producer_handles: Vec<Handle> = Vec::new();
 
-    for input in config.inputs {
+    for input in config.inputs.clone() {
         let state = state.clone();
 
         let lockfile_tx_walk = lockfile_tx.clone();
+        let codegen_tx = codegen_tx.clone();
 
         producer_handles.push(tokio::spawn(async move {
             debug!("Walking input {}", input.name);
@@ -132,14 +162,30 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> anyhow::Resu
                         new_assets.push(asset);
                     }
                     WalkFileResult::ExistingAsset(entry) => {
-						not_new_assets += 1;
-						lockfile_tx_walk.send((input.name.clone(), entry.0, entry.1.clone())).await?;
+                        not_new_assets += 1;
+
+                        lockfile_tx_walk
+                            .send(LockfileInsertion {
+                                input: input.clone(),
+                                path: entry.0.clone(),
+                                entry: entry.1.clone(),
+                            })
+                            .await?;
+
+                        codegen_tx
+                            .send(CodegenInsertion {
+                                output_path: input.output_path.clone(),
+                                asset_path: entry.0,
+                                asset_id: format!("rbxassetid://{}", entry.1.asset_id),
+                            })
+                            .await?;
                     }
                 }
             }
 
             debug!(
-                "Discovered {} unchanged files and {} new or changed files for input {}, starting processing",
+                "Discovered {} unchanged files and {} new or changed\
+                files for input {}, starting processing",
                 not_new_assets,
                 new_assets.len(),
                 input.name
@@ -161,10 +207,21 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> anyhow::Resu
 
     drop(lockfile_tx);
     drop(result_tx);
+    drop(codegen_tx);
 
     for handle in consumer_handles {
         handle.await??;
     }
+
+    while let Some(insertion) = codegen_rx.recv().await {
+        let input = codegen_inputs
+            .entry(insertion.output_path.clone())
+            .or_default();
+
+        input.insert(insertion.asset_path, insertion.asset_id);
+    }
+
+    dbg!(codegen_inputs);
 
     Ok(())
 }
