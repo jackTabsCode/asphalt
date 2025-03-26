@@ -19,6 +19,12 @@ pub enum Commands {
 
     /// Uploads a single asset and returns the asset ID.
     Upload(UploadArgs),
+
+    /// Migrates a lockfile from pre-1.0 to 1.0. You can only run this once, and it will overwrite the existing lockfile.
+    /// Keep in mind that because pre-1.0 did not support multiple inputs, you'll need to provide a default input name.
+    /// The migration entails hashing your files again and updating the lockfile with the new hashes.
+    /// We basically pretend nothing has changed, so your assets don't get reuploaded.
+    MigrateLockfile(MigrateLockfileArgs),
 }
 
 #[derive(ValueEnum, Clone)]
@@ -79,4 +85,10 @@ pub struct UploadArgs {
     /// Format it as a link instead of just the asset ID.
     #[arg(long)]
     pub link: bool,
+}
+
+#[derive(Args)]
+pub struct MigrateLockfileArgs {
+    /// The default input name to use.
+    pub input_name: String,
 }

@@ -1,13 +1,50 @@
-use anyhow::bail;
+use std::path::Path;
 
-use crate::lockfile::Lockfile;
+use crate::{
+    cli::MigrateLockfileArgs,
+    lockfile::{Lockfile, LockfileEntry},
+};
+use anyhow::{bail, Context};
+use blake3::Hasher;
+use tokio::fs;
 
-pub async fn migrate_lockfile() -> anyhow::Result<()> {
+pub async fn migrate_lockfile(args: MigrateLockfileArgs) -> anyhow::Result<()> {
     let lockfile = Lockfile::read().await?;
 
     if lockfile.version != 0 {
         bail!("Your lockfile is already up to date");
     }
 
-    todo!()
+    let mut new_lockfile = Lockfile::default();
+
+    let entries = lockfile.get_all().clone();
+
+    for (path, entry) in entries {
+        let path = Path::new(&path);
+        let new_hash = read_and_hash(path)
+            .await
+            .context(format!("Failed to hash {}", path.display()))?;
+
+        new_lockfile.insert(
+            args.input_name.clone(),
+            path,
+            LockfileEntry {
+                hash: new_hash,
+                asset_id: entry.asset_id,
+            },
+        );
+    }
+
+    new_lockfile.version = 1;
+    new_lockfile.write(None).await?;
+
+    Ok(())
+}
+
+async fn read_and_hash(path: &Path) -> anyhow::Result<String> {
+    let file = fs::read(path).await?;
+
+    let mut hasher = Hasher::new();
+    hasher.update(&file);
+    Ok(hasher.finalize().to_string())
 }

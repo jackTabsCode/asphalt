@@ -3,6 +3,7 @@ use cli::{Cli, Commands};
 use dotenv::dotenv;
 use indicatif::MultiProgress;
 use log::LevelFilter;
+use migrate_lockfile::migrate_lockfile;
 use sync::sync;
 use upload_command::upload;
 
@@ -42,5 +43,6 @@ async fn main() -> anyhow::Result<()> {
     match args.command {
         Commands::Sync(args) => sync(multi_progress, args).await,
         Commands::Upload(args) => upload(args).await,
+        Commands::MigrateLockfile(args) => migrate_lockfile(args).await,
     }
 }

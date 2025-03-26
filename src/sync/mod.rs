@@ -3,7 +3,7 @@ use crate::{
     auth::Auth,
     cli::{SyncArgs, SyncTarget},
     config::{Codegen, Config, Input},
-    lockfile::{Lockfile, LockfileEntry},
+    lockfile::{self, Lockfile, LockfileEntry},
 };
 use anyhow::{bail, Context, Result};
 use backend::BackendSyncResult;
@@ -65,6 +65,11 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
     let codegen_config = config.codegen.clone();
 
     let lockfile = Lockfile::read().await?;
+
+    if lockfile.version != lockfile::CURRENT_VERSION {
+        bail!("Your lockfile is out of date, please run `asphalt migrate-lockfile`");
+    }
+
     let auth = Auth::new(args.api_key.clone())?;
 
     let font_db = Arc::new({
