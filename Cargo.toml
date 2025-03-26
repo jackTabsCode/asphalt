@@ -1,7 +1,7 @@
 [package]
 name = "asphalt"
 version = "1.0.0-pre.1"
-edition = "2021"
+edition = "2024"
 license = "MIT"
 authors = ["Jack T <jack@jackt.space>"]
 description = "Upload and reference Roblox assets in code"
