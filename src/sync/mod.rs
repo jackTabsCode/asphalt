@@ -3,7 +3,7 @@ use crate::{
     auth::Auth,
     cli::{SyncArgs, SyncTarget},
     config::{Codegen, Config, Input},
-    lockfile::{self, Lockfile, LockfileEntry},
+    lockfile::{Lockfile, LockfileEntry},
 };
 use anyhow::{bail, Context, Result};
 use backend::BackendSyncResult;
