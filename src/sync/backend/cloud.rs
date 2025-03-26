@@ -21,6 +21,7 @@ impl SyncBackend for CloudBackend {
     async fn sync(
         &self,
         state: Arc<SyncState>,
+        _input_name: String,
         _input: &Input,
         asset: &Asset,
     ) -> anyhow::Result<Option<BackendSyncResult>> {

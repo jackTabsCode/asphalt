@@ -7,12 +7,13 @@ use std::sync::Arc;
 
 pub async fn process(
     state: Arc<SyncState>,
+    input_name: String,
     input: &Input,
     assets: &mut Vec<Asset>,
 ) -> anyhow::Result<()> {
     let progress_bar = state.multi_progress.add(
         ProgressBar::new(assets.len() as u64)
-            .with_prefix(input.name.clone())
+            .with_prefix(input_name.clone())
             .with_style(
                 ProgressStyle::default_bar()
                     .template("Input \"{prefix}\"\n {msg}\n Progress: {pos}/{len} | ETA: {eta}\n[{bar:40.cyan/blue}]")

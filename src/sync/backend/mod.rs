@@ -20,6 +20,7 @@ pub trait SyncBackend {
     async fn sync(
         &self,
         state: Arc<SyncState>,
+        input_name: String,
         input: &Input,
         asset: &Asset,
     ) -> anyhow::Result<Option<BackendSyncResult>>;

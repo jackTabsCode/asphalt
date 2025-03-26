@@ -28,7 +28,7 @@ mod walk;
 pub struct SyncResult {
     hash: String,
     path: PathBuf,
-    input: Input,
+    input_name: String,
     backend: BackendSyncResult,
 }
 
@@ -51,7 +51,7 @@ struct CodegenInsertion {
 }
 
 struct LockfileInsertion {
-    input: Input,
+    input_name: String,
     path: PathBuf,
     entry: LockfileEntry,
 }
@@ -62,6 +62,8 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
     }
 
     let config = Config::read()?;
+    let config_inputs = config.inputs.clone();
+    let codegen_config = config.codegen.clone();
 
     let lockfile = Lockfile::read().await?;
     let auth = Auth::new(args.api_key.clone())?;
@@ -89,12 +91,9 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
     });
 
     let mut codegen_inputs: HashMap<String, CodegenInput> = HashMap::new();
-    for input in &config.inputs {
+    for (input_name, input) in &config_inputs {
         for (path, asset) in &input.web_assets {
-            let entry = codegen_inputs.entry(input.name.clone()).or_default();
-
-            let path = PathBuf::from(path);
-            let path = path.strip_prefix(input.path.get_prefix()).unwrap_or(&path);
+            let entry = codegen_inputs.entry(input_name.clone()).or_default();
 
             entry.insert(PathBuf::from(path), format!("rbxassetid://{}", asset.id));
         }
@@ -107,7 +106,7 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
             let mut new_lockfile = Lockfile::default();
 
             while let Some(insertion) = lockfile_rx.recv().await {
-                new_lockfile.insert(insertion.input.name, &insertion.path, insertion.entry);
+                new_lockfile.insert(insertion.input_name, &insertion.path, insertion.entry);
                 new_lockfile.write(None).await?;
             }
 
@@ -123,7 +122,7 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
             if let BackendSyncResult::Cloud(asset_id) = result.backend {
                 lockfile_tx_backend
                     .send(LockfileInsertion {
-                        input: result.input.clone(),
+                        input_name: result.input_name.clone(),
                         path: result.path.clone(),
                         entry: LockfileEntry {
                             hash: result.hash,
@@ -134,7 +133,7 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
 
                 codegen_tx_backend
                     .send(CodegenInsertion {
-                        input_name: result.input.name,
+                        input_name: result.input_name,
                         asset_path: result.path,
                         asset_id: format!("rbxassetid://{}", asset_id),
                     })
@@ -142,7 +141,7 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
             } else if let BackendSyncResult::Studio(asset_id) = result.backend {
                 codegen_tx_backend
                     .send(CodegenInsertion {
-                        input_name: result.input.name,
+                        input_name: result.input_name,
                         asset_path: result.path.clone(),
                         asset_id,
                     })
@@ -155,15 +154,16 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
 
     let mut producer_handles = Vec::<JoinHandle<Result<()>>>::new();
 
-    for input in &config.inputs {
+    for (input_name, input) in &config_inputs {
         let state = state.clone();
         let input = input.clone();
         let lockfile_tx = lockfile_tx.clone();
         let codegen_tx = codegen_tx.clone();
+        let input_name = input_name.clone();
 
         producer_handles.push(tokio::spawn(async move {
-            debug!("Walking input {}", input.name);
-            let walk_results = walk::walk(state.clone(), &input).await?;
+            debug!("Walking input {}", input_name);
+            let walk_results = walk::walk(state.clone(), input_name.clone(), &input).await?;
 
             let mut new_assets = Vec::<Asset>::new();
             let mut not_new_count = 0;
@@ -178,7 +178,7 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
 
                         lockfile_tx
                             .send(LockfileInsertion {
-                                input: input.clone(),
+                                input_name: input_name.clone(),
                                 path: path.clone(),
                                 entry: entry.clone(),
                             })
@@ -186,7 +186,7 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
 
                         codegen_tx
                             .send(CodegenInsertion {
-                                input_name: input.name.clone(),
+                                input_name: input_name.clone(),
                                 asset_path: path.clone(),
                                 asset_id: format!("rbxassetid://{}", entry.asset_id),
                             })
@@ -200,11 +200,11 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
                 changed files for input {}, starting processing",
                 not_new_count,
                 new_assets.len(),
-                input.name
+                input_name
             );
 
-            process::process(state.clone(), &input, &mut new_assets).await?;
-            perform::perform(state, &input, &new_assets).await?;
+            process::process(state.clone(), input_name.clone(), &input, &mut new_assets).await?;
+            perform::perform(state, input_name.clone(), &input, &new_assets).await?;
 
             Ok(())
         }));
@@ -226,10 +226,8 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
         let codegen_input = codegen_inputs
             .entry(insertion.input_name.clone())
             .or_default();
-        let input = config
-            .inputs
-            .iter()
-            .find(|input| input.name == insertion.input_name)
+        let input = config_inputs
+            .get(&insertion.input_name)
             .context("Failed to find input for codegen input")?;
 
         let path = insertion
@@ -241,23 +239,23 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
     }
 
     for (input_name, codegen_input) in codegen_inputs {
-        let input = config
-            .inputs
-            .iter()
-            .find(|input| input.name == input_name)
+        let input = config_inputs
+            .get(&input_name)
             .context("Failed to find input for codegen input")?;
 
         generate_from_input(
+            &input_name,
             input,
-            &config.codegen,
+            &codegen_config,
             &codegen_input,
             CodegenLanguage::Luau,
         )
         .await?;
-        if config.codegen.typescript {
+        if codegen_config.typescript {
             generate_from_input(
+                &input_name,
                 input,
-                &config.codegen,
+                &codegen_config,
                 &codegen_input,
                 CodegenLanguage::TypeScript,
             )
@@ -269,6 +267,7 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
 }
 
 async fn generate_from_input(
+    input_name: &str,
     input: &Input,
     style: &Codegen,
     codegen_input: &CodegenInput,
@@ -279,11 +278,11 @@ async fn generate_from_input(
         CodegenLanguage::Luau => "luau",
         CodegenLanguage::TypeScript => "d.ts",
     };
-    let code = codegen::generate_code(lang, &input.name, &node)?;
+    let code = codegen::generate_code(lang, input_name, &node)?;
 
     fs::create_dir_all(&input.output_path).await?;
     fs::write(
-        input.output_path.join(format!("{}.{}", input.name, ext)),
+        input.output_path.join(format!("{}.{}", input_name, ext)),
         code,
     )
     .await?;

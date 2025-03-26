@@ -1,19 +1,15 @@
-use anyhow::{bail, Context};
+use crate::glob::Glob;
+use anyhow::Context;
 use clap::ValueEnum;
 use rbxcloud::rbx::v1::assets::{AssetCreator, AssetGroupCreator, AssetUserCreator};
 use serde::Deserialize;
-use std::{
-    collections::{HashMap, HashSet},
-    path::PathBuf,
-};
-
-use crate::glob::Glob;
+use std::{collections::HashMap, path::PathBuf};
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Config {
     pub creator: Creator,
     pub codegen: Codegen,
-    pub inputs: Vec<Input>,
+    pub inputs: HashMap<String, Input>,
 }
 
 pub const FILE_NAME: &str = "asphalt.toml";
@@ -22,13 +18,6 @@ impl Config {
     pub fn read() -> anyhow::Result<Config> {
         let config = std::fs::read_to_string(FILE_NAME).context("Failed to read config file")?;
         let config: Config = toml::from_str(&config)?;
-
-        let mut input_names = HashSet::new();
-        for input in &config.inputs {
-            if !input_names.insert(&input.name) {
-                bail!("Duplicate input name: {}", input.name);
-            }
-        }
 
         Ok(config)
     }
@@ -76,7 +65,6 @@ fn default_true() -> bool {
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Input {
-    pub name: String,
     pub path: Glob,
     pub output_path: PathBuf,
     // pub pack: Option<PackOptions>,

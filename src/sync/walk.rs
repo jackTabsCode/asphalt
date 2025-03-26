@@ -6,7 +6,11 @@ use std::{path::PathBuf, sync::Arc};
 use tokio::fs;
 use walkdir::WalkDir;
 
-pub async fn walk(state: Arc<SyncState>, input: &Input) -> anyhow::Result<Vec<WalkFileResult>> {
+pub async fn walk(
+    state: Arc<SyncState>,
+    input_name: String,
+    input: &Input,
+) -> anyhow::Result<Vec<WalkFileResult>> {
     let prefix = input.path.get_prefix();
 
     let prefix_display = prefix.to_string_lossy().to_string();
@@ -36,7 +40,7 @@ pub async fn walk(state: Arc<SyncState>, input: &Input) -> anyhow::Result<Vec<Wa
         progress_bar.set_message(format!("Reading {}", path.display()));
         progress_bar.tick();
 
-        match walk_file(state.clone(), input, path.clone()).await {
+        match walk_file(state.clone(), input_name.clone(), path.clone()).await {
             Ok(result) => res.push(result),
             Err(err) => {
                 warn!("Skipping file {}: {}", path.display(), err);
@@ -56,13 +60,13 @@ pub enum WalkFileResult {
 
 async fn walk_file(
     state: Arc<SyncState>,
-    input: &Input,
+    input_name: String,
     path: PathBuf,
 ) -> anyhow::Result<WalkFileResult> {
     let data = fs::read(&path).await?;
     let asset = Asset::new(path.clone(), data)?;
 
-    let entry = state.existing_lockfile.get(input.name.clone(), &path);
+    let entry = state.existing_lockfile.get(input_name, &path);
 
     match (entry, &state.args.target) {
         (Some(entry), SyncTarget::Cloud) => {

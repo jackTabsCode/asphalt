@@ -9,6 +9,7 @@ use std::sync::Arc;
 
 pub async fn perform(
     state: Arc<SyncState>,
+    input_name: String,
     input: &Input,
     assets: &Vec<Asset>,
 ) -> anyhow::Result<()> {
@@ -16,7 +17,7 @@ pub async fn perform(
 
     let progress_bar = state.multi_progress.add(
         ProgressBar::new(assets.len() as u64)
-            .with_prefix(input.name.clone())
+            .with_prefix(input_name.clone())
             .with_style(
                 ProgressStyle::default_bar()
                     .template("Input \"{prefix}\"\n {msg}\n Progress: {pos}/{len} | ETA: {eta}\n[{bar:40.cyan/blue}]")
@@ -26,6 +27,8 @@ pub async fn perform(
     );
 
     for asset in assets {
+        let input_name = input_name.clone();
+
         let display = asset.path.display();
         debug!("Syncing asset {}", display);
 
@@ -33,9 +36,21 @@ pub async fn perform(
         progress_bar.inc(1);
 
         let res = match backend {
-            TargetBackend::Debug(ref backend) => backend.sync(state.clone(), input, asset).await,
-            TargetBackend::Cloud(ref backend) => backend.sync(state.clone(), input, asset).await,
-            TargetBackend::Studio(ref backend) => backend.sync(state.clone(), input, asset).await,
+            TargetBackend::Debug(ref backend) => {
+                backend
+                    .sync(state.clone(), input_name.clone(), input, asset)
+                    .await
+            }
+            TargetBackend::Cloud(ref backend) => {
+                backend
+                    .sync(state.clone(), input_name.clone(), input, asset)
+                    .await
+            }
+            TargetBackend::Studio(ref backend) => {
+                backend
+                    .sync(state.clone(), input_name.clone(), input, asset)
+                    .await
+            }
         };
 
         progress_bar.set_message(format!("Writing {}", display));
@@ -45,7 +60,7 @@ pub async fn perform(
                 state
                     .result_tx
                     .send(SyncResult {
-                        input: input.clone(),
+                        input_name: input_name.clone(),
                         hash: asset.hash.clone(),
                         path: asset.path.clone(),
                         backend: result,

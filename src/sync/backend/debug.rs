@@ -35,6 +35,7 @@ impl SyncBackend for DebugBackend {
     async fn sync(
         &self,
         _state: Arc<SyncState>,
+        _input_name: String,
         input: &Input,
         asset: &Asset,
     ) -> anyhow::Result<Option<BackendSyncResult>> {

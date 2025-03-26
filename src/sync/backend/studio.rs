@@ -52,13 +52,14 @@ impl SyncBackend for StudioBackend {
     async fn sync(
         &self,
         state: Arc<SyncState>,
+        input_name: String,
         input: &Input,
         asset: &Asset,
     ) -> anyhow::Result<Option<BackendSyncResult>> {
         if let AssetKind::Model(ModelKind::Animation(_)) = asset.kind {
             let existing_id = state
                 .existing_lockfile
-                .get(input.name.clone(), &asset.path)
+                .get(input_name, &asset.path)
                 .and_then(|entry| {
                     if entry.hash == asset.hash {
                         Some(entry.asset_id)
