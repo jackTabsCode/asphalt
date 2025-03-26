@@ -149,6 +149,13 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> anyhow::Resu
         let lockfile_tx_walk = lockfile_tx.clone();
         let codegen_tx = codegen_tx.clone();
 
+        for (path, asset) in &input.web_assets {
+            codegen_inputs
+                .entry(input.output_path.clone())
+                .or_default()
+                .insert(PathBuf::from(path), format!("rbxassetid://{}", asset.id));
+        }
+
         producer_handles.push(tokio::spawn(async move {
             debug!("Walking input {}", input.name);
             let walk_res = walk::walk(state.clone(), &input).await?;
