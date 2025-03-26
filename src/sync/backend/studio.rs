@@ -59,7 +59,7 @@ impl SyncBackend for StudioBackend {
         if let AssetKind::Model(ModelKind::Animation(_)) = asset.kind {
             let existing_id = state
                 .existing_lockfile
-                .get(input_name, &asset.path)
+                .get(&input_name, &asset.path)
                 .and_then(|entry| {
                     if entry.hash == asset.hash {
                         Some(entry.asset_id)

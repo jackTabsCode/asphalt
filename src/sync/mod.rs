@@ -54,6 +54,7 @@ struct LockfileInsertion {
     input_name: String,
     path: PathBuf,
     entry: LockfileEntry,
+    write: bool,
 }
 
 pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
@@ -66,8 +67,8 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
 
     let lockfile = Lockfile::read().await?;
 
-    if lockfile.version != lockfile::CURRENT_VERSION {
-        bail!("Your lockfile is out of date, please run `asphalt migrate-lockfile`");
+    if let Lockfile::V0 { .. } = lockfile {
+        bail!("Your lockfile is out of date, please run asphalt migrate-lockfile")
     }
 
     let auth = Auth::new(args.api_key.clone())?;
@@ -105,18 +106,20 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
 
     let mut consumer_handles = Vec::<JoinHandle<Result<()>>>::new();
 
-    consumer_handles.push(tokio::spawn(async move {
+    let lockfile_handle = tokio::spawn(async move {
         let mut new_lockfile = Lockfile::default();
 
         while let Some(insertion) = lockfile_rx.recv().await {
             if matches!(args.target, SyncTarget::Cloud) {
-                new_lockfile.insert(insertion.input_name, &insertion.path, insertion.entry);
-                new_lockfile.write(None).await?;
+                new_lockfile.insert(&insertion.input_name, &insertion.path, insertion.entry);
+                if insertion.write {
+                    new_lockfile.write(None).await?;
+                }
             }
         }
 
-        Ok(())
-    }));
+        Ok::<_, anyhow::Error>(new_lockfile)
+    });
 
     let lockfile_tx_backend = lockfile_tx.clone();
     let codegen_tx_backend = codegen_tx.clone();
@@ -132,6 +135,7 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
                             hash: result.hash,
                             asset_id,
                         },
+                        write: true,
                     })
                     .await?;
 
@@ -207,6 +211,8 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
                                 input_name: input_name.clone(),
                                 path: path.clone(),
                                 entry: entry.clone(),
+                                // This takes too long, and we're not really losing anything here.
+                                write: false,
                             })
                             .await?;
 
@@ -247,6 +253,10 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
     for handle in consumer_handles {
         handle.await??;
     }
+
+    let new_lockfile = lockfile_handle.await??;
+
+    new_lockfile.write(None).await?;
 
     let codegen_inputs = codegen_handle.await??;
 

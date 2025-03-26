@@ -4,20 +4,18 @@ use crate::{
     cli::MigrateLockfileArgs,
     lockfile::{Lockfile, LockfileEntry},
 };
-use anyhow::{bail, Context};
+use anyhow::Context;
 use blake3::Hasher;
 use tokio::fs;
 
 pub async fn migrate_lockfile(args: MigrateLockfileArgs) -> anyhow::Result<()> {
     let lockfile = Lockfile::read().await?;
 
-    if lockfile.version != 0 {
-        bail!("Your lockfile is already up to date");
-    }
+    let entries = lockfile
+        .get_all_if_v0()
+        .context("Your lockfile is already up to date")?;
 
     let mut new_lockfile = Lockfile::default();
-
-    let entries = lockfile.get_all().clone();
 
     for (path, entry) in entries {
         let path = Path::new(&path);
@@ -26,7 +24,7 @@ pub async fn migrate_lockfile(args: MigrateLockfileArgs) -> anyhow::Result<()> {
             .context(format!("Failed to hash {}", path.display()))?;
 
         new_lockfile.insert(
-            args.input_name.clone(),
+            &args.input_name,
             path,
             LockfileEntry {
                 hash: new_hash,
@@ -35,7 +33,6 @@ pub async fn migrate_lockfile(args: MigrateLockfileArgs) -> anyhow::Result<()> {
         );
     }
 
-    new_lockfile.version = 1;
     new_lockfile.write(None).await?;
 
     Ok(())

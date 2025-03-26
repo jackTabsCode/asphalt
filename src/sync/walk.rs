@@ -66,7 +66,7 @@ async fn walk_file(
     let data = fs::read(&path).await?;
     let asset = Asset::new(path.clone(), data)?;
 
-    let entry = state.existing_lockfile.get(input_name, &path);
+    let entry = state.existing_lockfile.get(&input_name, &path);
 
     match (entry, &state.args.target) {
         (Some(entry), SyncTarget::Cloud) => {
