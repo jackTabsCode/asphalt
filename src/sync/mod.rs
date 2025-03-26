@@ -56,7 +56,7 @@ struct LockfileInsertion {
 }
 
 pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
-    if args.dry_run && !matches!(&args.target, Some(SyncTarget::Cloud)) {
+    if args.dry_run && !matches!(&args.target, SyncTarget::Cloud) {
         bail!("A dry run doesn't make sense in this context");
     }
 
@@ -98,7 +98,7 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
 
     let mut consumer_handles = Vec::<JoinHandle<Result<()>>>::new();
 
-    if matches!(args.target, Some(SyncTarget::Cloud)) {
+    if matches!(args.target, SyncTarget::Cloud) {
         consumer_handles.push(tokio::spawn(async move {
             let mut new_lockfile = Lockfile::default();
 
@@ -135,6 +135,14 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
                         asset_id: format!("rbxassetid://{}", asset_id),
                     })
                     .await?;
+            } else if let BackendSyncResult::Studio(asset_id) = result.backend {
+                codegen_tx_backend
+                    .send(CodegenInsertion {
+                        output_path: result.input.output_path.clone(),
+                        asset_path: result.path.clone(),
+                        asset_id,
+                    })
+                    .await?;
             }
         }
 
@@ -160,7 +168,7 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
                 match result {
                     WalkFileResult::NewAsset(asset) => {
                         new_assets.push(asset);
-                    },
+                    }
                     WalkFileResult::ExistingAsset((path, entry)) => {
                         not_new_count += 1;
 
@@ -184,7 +192,8 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
             }
 
             debug!(
-                "Discovered {} unchanged files and {} new or changed files for input {}, starting processing",
+                "Discovered {} unchanged files and {} new or\
+                changed files for input {}, starting processing",
                 not_new_count,
                 new_assets.len(),
                 input.name

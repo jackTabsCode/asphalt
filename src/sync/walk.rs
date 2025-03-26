@@ -1,5 +1,5 @@
 use super::SyncState;
-use crate::{asset::Asset, config::Input, lockfile::LockfileEntry};
+use crate::{asset::Asset, cli::SyncTarget, config::Input, lockfile::LockfileEntry};
 use indicatif::{ProgressBar, ProgressStyle};
 use log::warn;
 use std::{path::PathBuf, sync::Arc};
@@ -64,8 +64,12 @@ async fn walk_file(
 
     let entry = state.existing_lockfile.get(input.name.clone(), &path);
 
-    match entry {
-        Some(entry) => Ok(WalkFileResult::ExistingAsset((path, entry.clone()))),
-        None => Ok(WalkFileResult::NewAsset(asset)),
+    match (entry, &state.args.target) {
+        (Some(entry), SyncTarget::Cloud) => {
+            Ok(WalkFileResult::ExistingAsset((path, entry.clone())))
+        }
+        (Some(_), SyncTarget::Studio) => Ok(WalkFileResult::NewAsset(asset)),
+        (None, _) => Ok(WalkFileResult::NewAsset(asset)),
+        _ => unreachable!(),
     }
 }

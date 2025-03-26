@@ -41,8 +41,8 @@ pub struct SyncArgs {
     pub cookie: Option<String>,
 
     /// Where Asphalt should sync assets to.
-    #[arg(short, long)]
-    pub target: Option<SyncTarget>,
+    #[arg(short, long, default_value = "cloud")]
+    pub target: SyncTarget,
 
     /// Skip asset syncing and only display what assets will be synced.
     #[arg(long, action)]

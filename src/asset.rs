@@ -79,6 +79,7 @@ impl Asset {
         let ext = self.path.extension().context("File has no extension")?;
         if ext == "svg" {
             self.data = svg_to_png(&self.data, font_db.clone()).await?;
+            self.ext = "png".to_string();
         }
 
         match self.kind {

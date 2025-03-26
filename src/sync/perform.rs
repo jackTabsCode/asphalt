@@ -1,5 +1,5 @@
 use super::{
-    backend::{cloud::CloudBackend, debug::DebugBackend, SyncBackend},
+    backend::{cloud::CloudBackend, debug::DebugBackend, studio::StudioBackend, SyncBackend},
     SyncState,
 };
 use crate::{asset::Asset, cli::SyncTarget, config::Input, sync::SyncResult};
@@ -12,7 +12,7 @@ pub async fn perform(
     input: &Input,
     assets: &Vec<Asset>,
 ) -> anyhow::Result<()> {
-    let backend = pick_backend(&state.args.target.clone().unwrap_or(SyncTarget::Cloud)).await?;
+    let backend = pick_backend(&state.args.target.clone()).await?;
 
     let progress_bar = state.multi_progress.add(
         ProgressBar::new(assets.len() as u64)
@@ -35,6 +35,7 @@ pub async fn perform(
         let res = match backend {
             TargetBackend::Debug(ref backend) => backend.sync(state.clone(), input, asset).await,
             TargetBackend::Cloud(ref backend) => backend.sync(state.clone(), input, asset).await,
+            TargetBackend::Studio(ref backend) => backend.sync(state.clone(), input, asset).await,
         };
 
         progress_bar.set_message(format!("Writing {}", display));
@@ -64,12 +65,13 @@ pub async fn perform(
 enum TargetBackend {
     Debug(DebugBackend),
     Cloud(CloudBackend),
+    Studio(StudioBackend),
 }
 
 async fn pick_backend(target: &SyncTarget) -> anyhow::Result<TargetBackend> {
     match target {
         SyncTarget::Debug => Ok(TargetBackend::Debug(DebugBackend::new().await?)),
         SyncTarget::Cloud => Ok(TargetBackend::Cloud(CloudBackend::new().await?)),
-        SyncTarget::Studio => todo!(),
+        SyncTarget::Studio => Ok(TargetBackend::Studio(StudioBackend::new().await?)),
     }
 }
