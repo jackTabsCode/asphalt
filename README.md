@@ -50,7 +50,7 @@ Guides you through setting up a new Asphalt project in the current directory.
 
 ### `asphalt sync`
 
-Syncs all assets in `asset_dir`.
+Syncs all of your assets defined in your inputs.
 
 There are three targets you can use to sync assets:
 
@@ -58,7 +58,7 @@ There are three targets you can use to sync assets:
 
 -   `studio`: Syncs assets locally to Roblox Studio. This is useful for testing assets in Studio before uploading them to Roblox.
 
--   `debug`: Syncs assets to an `.asphalt-debug` folder in the current directory.
+-   `debug`: Syncs assets to an `.asphalt-debug` folder in the current directory. You can use this option see how Asphalt will process your files.
 
 ```bash
 asphalt sync # Equivalent to --target cloud
@@ -66,15 +66,11 @@ asphalt sync --target studio
 asphalt sync --target debug
 ```
 
-You can also perform a dry run to verify which assets will be synced. This displays the assets that would be synced without syncing them.
+You can also perform a dry run to verify which assets will be synced. This exits with a non-zero status code if any asset hashes have changed. You can use this for CI checks to ensure that your assets are up-to-date.
 
 ```bash
 asphalt sync --dry-run
 ```
-
-### `asphalt list`
-
-Lists asset paths from the lockfile and their corresponding Roblox asset IDs.
 
 ### `asphalt migrate-tarmac-manifest`
 
@@ -88,21 +84,19 @@ Asphalt is configured with a project file called `asphalt.toml`. It is required 
 <summary>Example</summary>
 
 ```toml
-asset_dir = "assets/"
-exclude_assets = ["**/*.txt", "**/*.DS_Store"]
-
-write_dir = "src/shared/"
-
-[codegen]
-typescript = true
-style = "flat"
-output_name = "assets"
-
 [creator]
 type = "user"
 id = 9670971
 
-[existing]
+[codegen]
+typescript = true
+style = "flat"
+
+[inputs.assets]
+path = "assets/**/*"
+output_path = "src/shared"
+
+[inputs.assets.web]
 "some_sound_on_roblox.ogg" = { id = 123456789 }
 "some_image_on_roblox.png" = { id = 987654321 }
 ```
@@ -111,22 +105,17 @@ id = 9670971
 
 ### Format
 
--   `asset_dir`: path
-    -   The directory of assets to upload to Roblox.
--	`exclude_assets`: array<string> (optional)
-	-	An array of glob patterns to exclude when processing the assets directory.
--   `write_dir`: path
-    -   The directory to output the generated code to. This should probably be somewhere in your game's source folder.
 -   `creator`: Creator
-    -   The Roblox creator to upload the assets under.
+	-   The Roblox creator to upload the assets under.
 -   `codegen`: Codegen
-    -   Code generation options.
--   `existing`: map<string, ExistingAsset> (optional)
+	-   Code generation options.
+-	`inputs`: map<string, Input>
+	-   A map of input names to input configurations.
 
 #### Creator
 
--   `type`: "user" or "group"
--   `id`: number
+-	`type`: "user" or "group"
+-	`id`: number
 
 #### Codegen
 
@@ -134,12 +123,18 @@ id = 9670971
     -   Generate a Typescript definition file.
 -   `style`: "flat" | "nested" (optional)
     -   The code-generation style to use. Defaults to `flat`, which makes accessing assets feel like writing file paths. You may consider using `nested` if you are not a TypeScript user, however, as Luau does not support template literal types.
--   `output_name`: string (optional)
-    -   The name for the generated files. Defaults to `assets`.
 -   `strip_extension`: boolean (optional)
-    -   Whether to strip the file extension. Defaults to `false`. We recommend `true` if using the `nested` codegen style.
+    -   Whether to strip the file extension. Defaults to `false` for the same reason described above.
 
-#### ExistingAsset
+#### Input
+-	`path`: glob
+	-	A glob pattern to match files to upload.
+-	`output_path`: string
+	-	The directory path to output the generated code.
+-	`web`: map<string, WebAsset>
+	-	A map of paths relative to the input path to existing assets on Roblox.
+
+#### WebAsset
 
 -   `id`: number
 
