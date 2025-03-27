@@ -70,7 +70,11 @@ asphalt sync --dry-run
 
 ### `asphalt migrate-lockfile`
 
-Will migrate over a pre-1.0 lockfile to the new format. See [the release](https://github.com/jackTabsCode/asphalt/releases/tag/v1.0.0-pre.0) for more details.
+Will migrate over a pre-1.0 lockfile to the new format. See `asphalt migrate-lockfile --help` for more information.
+
+### `asphalt upload`
+
+Uploads a single asset to Roblox. See `asphalt upload --help` for more information.
 
 ## Configuration
 
