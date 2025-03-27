@@ -72,9 +72,9 @@ You can also perform a dry run to verify which assets will be synced. This exits
 asphalt sync --dry-run
 ```
 
-### `asphalt migrate-tarmac-manifest`
+### `asphalt migrate-lockfile`
 
-Will migrate over an existing `tarmac-manifest.toml` to `asphalt.lock.toml`.
+Will migrate over a pre-1.0 lockfile to the new format. See [the release](https://github.com/jackTabsCode/asphalt/releases/tag/v1.0.0-pre.0) for more details.
 
 ## Configuration
 
@@ -123,7 +123,7 @@ output_path = "src/shared"
     -   Generate a Typescript definition file.
 -   `style`: "flat" | "nested" (optional)
     -   The code-generation style to use. Defaults to `flat`, which makes accessing assets feel like writing file paths. You may consider using `nested` if you are not a TypeScript user, however, as Luau does not support template literal types.
--   `strip_extension`: boolean (optional)
+-   `strip_extensions`: boolean (optional)
     -   Whether to strip the file extension. Defaults to `false` for the same reason described above.
 
 #### Input
