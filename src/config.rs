@@ -27,11 +27,10 @@ impl Config {
 }
 
 #[derive(Debug, Deserialize, Clone, Default)]
+#[serde(default)]
 pub struct Codegen {
     pub style: CodegenStyle,
-    #[serde(default)]
     pub typescript: bool,
-    #[serde(default)]
     pub strip_extensions: bool,
 }
 
