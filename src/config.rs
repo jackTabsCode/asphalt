@@ -26,7 +26,7 @@ impl Config {
     }
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, Default)]
 pub struct Codegen {
     pub style: CodegenStyle,
     #[serde(default)]
