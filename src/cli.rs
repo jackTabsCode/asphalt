@@ -27,7 +27,7 @@ pub enum Commands {
     MigrateLockfile(MigrateLockfileArgs),
 }
 
-#[derive(ValueEnum, Clone)]
+#[derive(ValueEnum, Clone, Copy)]
 pub enum SyncTarget {
     Cloud,
     Studio,

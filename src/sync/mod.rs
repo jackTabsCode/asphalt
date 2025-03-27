@@ -58,7 +58,7 @@ struct LockfileInsertion {
 }
 
 pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
-    if args.dry_run && !matches!(&args.target, SyncTarget::Cloud) {
+    if args.dry_run && !matches!(args.target, SyncTarget::Cloud) {
         bail!("A dry run doesn't make sense in this context");
     }
 
@@ -256,7 +256,9 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
 
     let new_lockfile = lockfile_handle.await??;
 
-    new_lockfile.write(None).await?;
+    if matches!(args.target, SyncTarget::Cloud) {
+        new_lockfile.write(None).await?;
+    }
 
     let codegen_inputs = codegen_handle.await??;
 
