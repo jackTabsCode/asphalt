@@ -44,10 +44,6 @@ cargo install asphalt
 
 ## Commands
 
-### `asphalt init`
-
-Guides you through setting up a new Asphalt project in the current directory.
-
 ### `asphalt sync`
 
 Syncs all of your assets defined in your inputs.
