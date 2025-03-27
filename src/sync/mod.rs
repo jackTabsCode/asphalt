@@ -71,7 +71,8 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
         bail!("Your lockfile is out of date, please run asphalt migrate-lockfile")
     }
 
-    let auth = Auth::new(args.api_key.clone())?;
+    let key_required = matches!(args.target, SyncTarget::Cloud) && !args.dry_run;
+    let auth = Auth::new(args.api_key.clone(), key_required)?;
 
     let font_db = Arc::new({
         let mut db = Database::new();

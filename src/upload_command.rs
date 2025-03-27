@@ -26,7 +26,7 @@ pub async fn upload(args: UploadArgs) -> anyhow::Result<()> {
         id: args.creator_id,
     };
 
-    let auth = Auth::new(args.api_key)?;
+    let auth = Auth::new(args.api_key, true)?;
 
     let client = reqwest::Client::new();
 
