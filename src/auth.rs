@@ -12,23 +12,20 @@ impl Auth {
 
         let cookie = rbx_cookie::get();
 
-        match (arg_key, env_key, key_required) {
-            (Some(key), _, true) => Ok(Self {
-                api_key: key,
-                cookie,
-            }),
-            (_, Some(key), true) => Ok(Self {
-                api_key: key,
-                cookie,
-            }),
-            (None, None, false) => Ok(Self {
-                api_key: String::new(), // Heh heh heh heh
-                cookie,
-            }),
-            _ => bail!(
-                "Either the API Key argument or ASPHALT_API_KEY variable must be set to \
-                use Asphalt.\nAcquire one here: https://create.roblox.com/dashboard/credentials"
-            ),
-        }
+        let api_key = match (arg_key, env_key) {
+            (Some(key), _) => key,
+            (None, Some(key)) => key,
+            (None, None) => {
+                if key_required {
+                    bail!(
+                        "Either the API Key argument or ASPHALT_API_KEY variable must be set to use Asphalt.\nAcquire one here: https://create.roblox.com/dashboard/credentials"
+                    )
+                } else {
+                    String::new() // Heh heh heh heh
+                }
+            }
+        };
+
+        Ok(Self { api_key, cookie })
     }
 }
