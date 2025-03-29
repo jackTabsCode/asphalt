@@ -7,6 +7,7 @@ use crate::{
 };
 use anyhow::bail;
 use std::sync::Arc;
+use tokio::time;
 
 pub struct CloudBackend;
 
@@ -25,6 +26,11 @@ impl SyncBackend for CloudBackend {
         _input: &Input,
         asset: &Asset,
     ) -> anyhow::Result<Option<BackendSyncResult>> {
+        if cfg!(feature = "mock_cloud") {
+            time::sleep(time::Duration::from_secs(1)).await;
+            return Ok(Some(BackendSyncResult::Cloud(1337)));
+        }
+
         let asset_id = match asset.kind {
             AssetKind::Decal(_) | AssetKind::Audio(_) | AssetKind::Model(ModelKind::Model) => {
                 upload_cloud(

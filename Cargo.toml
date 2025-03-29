@@ -39,6 +39,9 @@ tokio = { version = "1.44.1", features = ["full"] }
 toml = "0.8.20"
 walkdir = "2.5.0"
 
+[features]
+mock_cloud = []
+
 # The profile that 'cargo dist' will build with
 [profile.dist]
 inherits = "release"
