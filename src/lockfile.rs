@@ -1,7 +1,7 @@
 use anyhow::bail;
+use fs_err::tokio as fs;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, path::Path};
-use tokio::fs;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct LockfileEntry {

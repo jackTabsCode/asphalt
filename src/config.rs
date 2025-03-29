@@ -1,10 +1,10 @@
 use crate::glob::Glob;
 use anyhow::Context;
 use clap::ValueEnum;
+use fs_err::tokio as fs;
 use rbxcloud::rbx::v1::assets::{AssetCreator, AssetGroupCreator, AssetUserCreator};
 use serde::Deserialize;
 use std::{collections::HashMap, path::PathBuf};
-use tokio::fs;
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Config {

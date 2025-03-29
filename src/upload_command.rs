@@ -6,9 +6,9 @@ use crate::{
     upload::{upload_animation, upload_cloud},
 };
 use anyhow::bail;
+use fs_err::tokio as fs;
 use resvg::usvg::fontdb::Database;
 use std::{path::PathBuf, sync::Arc};
-use tokio::fs;
 
 pub async fn upload(args: UploadArgs) -> anyhow::Result<()> {
     let path = PathBuf::from(&args.path);

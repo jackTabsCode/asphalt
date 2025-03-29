@@ -6,7 +6,7 @@ use crate::{
 };
 use anyhow::Context;
 use blake3::Hasher;
-use tokio::fs;
+use fs_err::tokio as fs;
 
 pub async fn migrate_lockfile(args: MigrateLockfileArgs) -> anyhow::Result<()> {
     let lockfile = Lockfile::read().await?;

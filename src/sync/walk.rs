@@ -1,9 +1,9 @@
 use super::SyncState;
 use crate::{asset::Asset, cli::SyncTarget, config::Input, lockfile::LockfileEntry};
+use fs_err::tokio as fs;
 use indicatif::{ProgressBar, ProgressStyle};
 use log::warn;
 use std::{path::PathBuf, sync::Arc};
-use tokio::fs;
 use walkdir::WalkDir;
 
 pub async fn walk(

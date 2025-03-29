@@ -6,10 +6,10 @@ use crate::{
 
 use super::{BackendSyncResult, SyncBackend};
 use anyhow::Context;
+use fs_err::tokio as fs;
 use log::{info, warn};
 use roblox_install::RobloxStudio;
 use std::{env, path::PathBuf, sync::Arc};
-use tokio::fs;
 
 pub struct StudioBackend {
     identifier: String,

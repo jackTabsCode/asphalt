@@ -1,9 +1,9 @@
 use super::{BackendSyncResult, SyncBackend};
 use crate::{asset::Asset, config::Input, sync::SyncState};
 use anyhow::Context;
+use fs_err::tokio as fs;
 use log::info;
 use std::{env, path::PathBuf, sync::Arc};
-use tokio::fs;
 
 pub struct DebugBackend {
     sync_path: PathBuf,
