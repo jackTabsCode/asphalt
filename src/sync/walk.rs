@@ -70,7 +70,11 @@ async fn walk_file(
 
     match (entry, &state.args.target) {
         (Some(entry), SyncTarget::Cloud) => {
-            Ok(WalkFileResult::ExistingAsset((path, entry.clone())))
+            if asset.hash == entry.hash {
+                Ok(WalkFileResult::ExistingAsset((path, entry.clone())))
+            } else {
+                Ok(WalkFileResult::NewAsset(asset))
+            }
         }
         (Some(_), SyncTarget::Studio) => Ok(WalkFileResult::NewAsset(asset)),
         (None, _) => Ok(WalkFileResult::NewAsset(asset)),
