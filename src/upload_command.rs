@@ -30,15 +30,15 @@ pub async fn upload(args: UploadArgs) -> anyhow::Result<()> {
 
     let client = reqwest::Client::new();
 
+    let Some(cookie) = auth.cookie.clone() else {
+        bail!("Cookie required for uploading assets");
+    };
+
     let asset_id = match asset.kind {
         AssetKind::Decal(_) | AssetKind::Audio(_) | AssetKind::Model(ModelKind::Model) => {
-            upload_cloud(client, &asset, auth.api_key, &creator).await?
+            upload_cloud(client, &asset, cookie, None, auth.api_key, &creator).await?
         }
         AssetKind::Model(ModelKind::Animation(_)) => {
-            let Some(cookie) = auth.cookie.clone() else {
-                bail!("Cookie required for uploading animations")
-            };
-
             upload_animation(client, &asset, cookie, None, &creator)
                 .await?
                 .asset_id

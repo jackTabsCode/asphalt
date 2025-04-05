@@ -21,6 +21,8 @@ const MAX_DISPLAY_NAME_LENGTH: usize = 50;
 pub async fn upload_cloud(
     client: reqwest::Client,
     asset: &Asset,
+    cookie: String,
+    csrf: Option<String>,
     api_key: String,
     creator: &Creator,
 ) -> anyhow::Result<u64> {
@@ -47,7 +49,7 @@ pub async fn upload_cloud(
         .to_string();
 
     let get_params = GetAssetOperationParams {
-        api_key,
+        api_key: api_key.clone(),
         operation_id: id,
     };
 
@@ -60,7 +62,7 @@ pub async fn upload_cloud(
                     let id = id_str.parse::<u64>().context("Asset ID wasn't a number")?;
 
                     return match asset.kind {
-                        AssetKind::Decal(_) => get_image_id(client, id).await,
+                        AssetKind::Decal(_) => get_image_id(client, cookie, csrf, id).await,
                         _ => Ok(id),
                     };
                 }
@@ -82,50 +84,63 @@ pub async fn upload_cloud(
     }
 }
 
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "PascalCase")]
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct Roblox {
-    item: Item,
+    data: Vec<Data>,
 }
 
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "PascalCase")]
-struct Item {
-    properties: Properties,
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Data {
+    asset: CreatorAsset,
 }
 
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "PascalCase")]
-struct Properties {
-    content: Content,
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CreatorAsset {
+    texture_id: Option<u64>,
 }
 
-#[derive(Deserialize, Debug)]
-struct Content {
-    url: String,
-}
+async fn get_image_id(
+    client: reqwest::Client,
+    cookie: String,
+    csrf: Option<String>,
+    asset_id: u64,
+) -> anyhow::Result<u64> {
+    let url = "https://apis.roblox.com/toolbox-service/v1/items/details";
 
-async fn get_image_id(client: reqwest::Client, asset_id: u64) -> anyhow::Result<u64> {
-    let url = format!("https://assetdelivery.roblox.com/v1/asset?id={}", asset_id);
+    let csrf = if let Some(token) = csrf {
+        token
+    } else {
+        get_csrf_token(&client, cookie.clone()).await?
+    };
 
     let response = client
         .get(url)
+        .header("Cookie", cookie)
+        .header("x-csrf-token", &csrf)
+        .header(
+            "User-Agent",
+            "RobloxStudio/WinInet RobloxApp/0.483.1.425021 (GlobalDist; RobloxDirectDownload)",
+        )
+        .header("Requester", "Client")
+        .query(&[("assetIds", asset_id.to_string())])
         .send()
         .await
         .context("Failed to get image ID")?;
 
     let body = response.text().await?;
-    let roblox: Roblox = serde_xml_rs::from_str(&body)?;
 
-    roblox
-        .item
-        .properties
-        .content
-        .url
-        .strip_prefix("http://www.roblox.com/asset/?id=")
-        .unwrap()
-        .parse::<u64>()
-        .context("Asset ID wasn't a number")
+    let roblox: Roblox = serde_json::from_str(&body).context("Failed to parse response body")?;
+
+    let image_id = roblox
+        .data
+        .get(0)
+        .and_then(|d| d.asset.texture_id)
+        .context("Failed to get texture ID")?;
+
+    Ok(image_id)
 }
 
 pub struct AnimationResult {
@@ -147,7 +162,7 @@ pub async fn upload_animation(
     let csrf = if let Some(token) = csrf {
         token
     } else {
-        get_csrf_token(client.clone(), cookie.clone()).await?
+        get_csrf_token(&client, cookie.clone()).await?
     };
 
     let creator_ty = match creator.ty {
@@ -194,7 +209,7 @@ pub async fn upload_animation(
     Ok(AnimationResult { asset_id: id, csrf })
 }
 
-pub async fn get_csrf_token(client: reqwest::Client, cookie: String) -> anyhow::Result<String> {
+pub async fn get_csrf_token(client: &reqwest::Client, cookie: String) -> anyhow::Result<String> {
     let response = client
         .post(ANIMATION_URL)
         .header("Cookie", cookie)

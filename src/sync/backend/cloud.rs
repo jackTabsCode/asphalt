@@ -36,6 +36,8 @@ impl SyncBackend for CloudBackend {
                 upload_cloud(
                     state.client.clone(),
                     asset,
+                    state.auth.cookie.clone().unwrap(),
+                    state.csrf.read().await.as_ref().cloned(),
                     state.auth.api_key.clone(),
                     &state.config.creator,
                 )

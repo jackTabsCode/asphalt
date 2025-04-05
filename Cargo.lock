@@ -164,6 +164,7 @@ dependencies = [
  "roblox_install",
  "serde",
  "serde-xml-rs",
+ "serde_json",
  "tokio",
  "toml",
  "walkdir",
