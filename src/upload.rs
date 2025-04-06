@@ -23,7 +23,7 @@ pub async fn upload_cloud(
     asset: &Asset,
     api_key: String,
     creator: &Creator,
-    cookie: Option<String>, // New parameter
+    cookie: Option<String>,
 ) -> anyhow::Result<u64> {
     let params = CreateAssetParamsWithContents {
         contents: &asset.data,
