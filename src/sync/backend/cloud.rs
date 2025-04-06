@@ -5,7 +5,7 @@ use crate::{
     sync::SyncState,
     upload::{upload_animation, upload_cloud},
 };
-use anyhow::bail;
+use anyhow::{Context, bail};
 use std::sync::Arc;
 use tokio::time;
 
@@ -39,7 +39,8 @@ impl SyncBackend for CloudBackend {
                     state.auth.api_key.clone(),
                     &state.config.creator,
                 )
-                .await?
+                .await
+                .context("Failed to upload asset")?
             }
             AssetKind::Model(ModelKind::Animation(_)) => {
                 let Some(cookie) = state.auth.cookie.clone() else {

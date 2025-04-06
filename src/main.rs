@@ -11,6 +11,7 @@ mod asset;
 mod auth;
 mod cli;
 mod config;
+mod err;
 mod glob;
 mod lockfile;
 mod migrate_lockfile;

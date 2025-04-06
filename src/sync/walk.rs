@@ -1,5 +1,7 @@
 use super::SyncState;
-use crate::{asset::Asset, cli::SyncTarget, config::Input, lockfile::LockfileEntry};
+use crate::{
+    asset::Asset, cli::SyncTarget, config::Input, err::format_anyhow_chain, lockfile::LockfileEntry,
+};
 use fs_err::tokio as fs;
 use indicatif::{ProgressBar, ProgressStyle};
 use log::warn;
@@ -43,7 +45,11 @@ pub async fn walk(
         match walk_file(state.clone(), input_name.clone(), path.clone()).await {
             Ok(result) => res.push(result),
             Err(err) => {
-                warn!("Skipping file {}: {}", path.display(), err);
+                warn!(
+                    "Skipping file {}: {}",
+                    path.display(),
+                    format_anyhow_chain(&err)
+                );
             }
         }
     }

@@ -47,7 +47,7 @@ pub async fn upload_cloud(
         .to_string();
 
     let get_params = GetAssetOperationParams {
-        api_key,
+        api_key: api_key.clone(),
         operation_id: id,
     };
 
@@ -60,7 +60,9 @@ pub async fn upload_cloud(
                     let id = id_str.parse::<u64>().context("Asset ID wasn't a number")?;
 
                     return match asset.kind {
-                        AssetKind::Decal(_) => get_image_id(client, id).await,
+                        AssetKind::Decal(_) => get_image_id(client, id, api_key)
+                            .await
+                            .context("Failed to get image ID"),
                         _ => Ok(id),
                     };
                 }
@@ -83,39 +85,59 @@ pub async fn upload_cloud(
 }
 
 #[derive(Deserialize, Debug)]
-#[serde(rename_all = "PascalCase")]
-struct Roblox {
-    item: Item,
+struct AssetDeliveryResponse {
+    location: String,
 }
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "PascalCase")]
-struct Item {
-    properties: Properties,
+struct XMLAsset {
+    item: XMLItem,
 }
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "PascalCase")]
-struct Properties {
-    content: Content,
+struct XMLItem {
+    properties: XMLProperties,
 }
 
 #[derive(Deserialize, Debug)]
-struct Content {
+#[serde(rename_all = "PascalCase")]
+struct XMLProperties {
+    content: XMLContent,
+}
+
+#[derive(Deserialize, Debug)]
+struct XMLContent {
     url: String,
 }
 
-async fn get_image_id(client: reqwest::Client, asset_id: u64) -> anyhow::Result<u64> {
-    let url = format!("https://assetdelivery.roblox.com/v1/asset?id={}", asset_id);
+async fn get_image_id(
+    client: reqwest::Client,
+    asset_id: u64,
+    api_key: String,
+) -> anyhow::Result<u64> {
+    let url = format!(
+        "https://apis.roblox.com/asset-delivery-api/v1/assetId/{}",
+        asset_id
+    );
 
     let response = client
-        .get(url)
+        .get(&url)
+        .header("x-api-key", &api_key)
         .send()
-        .await
-        .context("Failed to get image ID")?;
+        .await?;
 
-    let body = response.text().await?;
-    let roblox: Roblox = serde_xml_rs::from_str(&body)?;
+    let delivery_response: AssetDeliveryResponse = response
+        .json()
+        .await
+        .context("Failed to parse asset delivery response")?;
+
+    let xml_response = client.get(&delivery_response.location).send().await?;
+    let body = xml_response.text().await?;
+
+    let roblox: XMLAsset =
+        serde_xml_rs::from_str(&body).context("Failed to parse asset XML response")?;
 
     roblox
         .item

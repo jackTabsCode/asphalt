@@ -1,5 +1,5 @@
 use super::SyncState;
-use crate::{asset::Asset, config::Input};
+use crate::{asset::Asset, config::Input, err::format_anyhow_chain};
 use anyhow::bail;
 use indicatif::{ProgressBar, ProgressStyle};
 use log::{debug, info, warn};
@@ -50,7 +50,8 @@ pub async fn process(
         if let Err(err) = asset.process(state.font_db.clone(), input.bleed).await {
             warn!(
                 "Skipping file {} because it failed processing: {}",
-                display, err
+                display,
+                format_anyhow_chain(&err)
             );
             continue;
         }

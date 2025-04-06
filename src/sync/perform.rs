@@ -2,7 +2,9 @@ use super::{
     SyncState,
     backend::{SyncBackend, cloud::CloudBackend, debug::DebugBackend, studio::StudioBackend},
 };
-use crate::{asset::Asset, cli::SyncTarget, config::Input, sync::SyncResult};
+use crate::{
+    asset::Asset, cli::SyncTarget, config::Input, err::format_anyhow_chain, sync::SyncResult,
+};
 use indicatif::{ProgressBar, ProgressStyle};
 use log::{debug, warn};
 use std::sync::Arc;
@@ -68,7 +70,11 @@ pub async fn perform(
                     .await?;
             }
             Err(err) => {
-                warn!("Failed to sync asset {}: {}", display, err);
+                warn!(
+                    "Failed to sync asset {}: {}",
+                    display,
+                    format_anyhow_chain(&err)
+                );
             }
             _ => {}
         };
