@@ -23,6 +23,7 @@ pub async fn upload_cloud(
     asset: &Asset,
     api_key: String,
     creator: &Creator,
+    cookie: Option<String>, // New parameter
 ) -> anyhow::Result<u64> {
     let params = CreateAssetParamsWithContents {
         contents: &asset.data,
@@ -60,7 +61,7 @@ pub async fn upload_cloud(
                     let id = id_str.parse::<u64>().context("Asset ID wasn't a number")?;
 
                     return match asset.kind {
-                        AssetKind::Decal(_) => get_image_id(client, id).await,
+                        AssetKind::Decal(_) => get_image_id(client, id, cookie.clone()).await,
                         _ => Ok(id),
                     };
                 }
@@ -68,8 +69,9 @@ pub async fn upload_cloud(
             Ok(_) => {
                 debug!("Asset operation not done, retrying...");
             }
-            Err(rbx::error::Error::HttpStatusError { code: 404, .. }) => {
-                debug!("Asset not found, retrying...");
+            Err(rbx::error::Error::HttpStatusError { code, .. }) if code >= 500 => {
+                warn!("Server error ({code}), retrying...");
+                backoff = (backoff * 2).min(Duration::from_secs(5));
             }
             Err(rbx::error::Error::HttpStatusError { code: 429, .. }) => {
                 warn!("Rate limited, retrying...");
@@ -105,11 +107,20 @@ struct Content {
     url: String,
 }
 
-async fn get_image_id(client: reqwest::Client, asset_id: u64) -> anyhow::Result<u64> {
+async fn get_image_id(
+    client: reqwest::Client,
+    asset_id: u64,
+    cookie: Option<String>,
+) -> anyhow::Result<u64> {
     let url = format!("https://assetdelivery.roblox.com/v1/asset?id={}", asset_id);
 
-    let response = client
-        .get(url)
+    let mut request = client.get(&url);
+    
+    if let Some(cookie) = cookie {
+        request = request.header("Cookie", cookie);
+    }
+
+    let response = request
         .send()
         .await
         .context("Failed to get image ID")?;
@@ -123,9 +134,8 @@ async fn get_image_id(client: reqwest::Client, asset_id: u64) -> anyhow::Result<
         .content
         .url
         .strip_prefix("http://www.roblox.com/asset/?id=")
-        .unwrap()
-        .parse::<u64>()
-        .context("Asset ID wasn't a number")
+        .and_then(|s| s.parse().ok())
+        .context("Failed to parse asset ID from XML response")
 }
 
 pub struct AnimationResult {

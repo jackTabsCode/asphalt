@@ -38,6 +38,7 @@ impl SyncBackend for CloudBackend {
                     asset,
                     state.auth.api_key.clone(),
                     &state.config.creator,
+                    state.auth.cookie.clone(), // Added cookie parameter
                 )
                 .await?
             }

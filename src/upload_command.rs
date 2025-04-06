@@ -32,7 +32,7 @@ pub async fn upload(args: UploadArgs) -> anyhow::Result<()> {
 
     let asset_id = match asset.kind {
         AssetKind::Decal(_) | AssetKind::Audio(_) | AssetKind::Model(ModelKind::Model) => {
-            upload_cloud(client, &asset, auth.api_key, &creator).await?
+            upload_cloud(client, &asset, auth.api_key, &creator, auth.cookie.clone()).await?
         }
         AssetKind::Model(ModelKind::Animation(_)) => {
             let Some(cookie) = auth.cookie.clone() else {
