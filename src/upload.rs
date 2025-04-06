@@ -115,15 +115,12 @@ async fn get_image_id(
     let url = format!("https://assetdelivery.roblox.com/v1/asset?id={}", asset_id);
 
     let mut request = client.get(&url);
-    
+
     if let Some(cookie) = cookie {
         request = request.header("Cookie", cookie);
     }
 
-    let response = request
-        .send()
-        .await
-        .context("Failed to get image ID")?;
+    let response = request.send().await.context("Failed to get image ID")?;
 
     let body = response.text().await?;
     let roblox: Roblox = serde_xml_rs::from_str(&body)?;
