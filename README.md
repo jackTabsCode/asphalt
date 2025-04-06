@@ -151,7 +151,12 @@ Therefore, it is recommended to add Asphalt's generated files to your linter/for
 
 You will need an API key to sync with Asphalt. You can specify this using the `--api-key` argument, or the `ASPHALT_API_KEY` environment variable.
 
-You can get one from the [Creator Dashboard](https://create.roblox.com/dashboard/credentials). Make sure you select the correct group and Asset-related permissions.
+You can get one from the [Creator Dashboard](https://create.roblox.com/dashboard/credentials).
+
+The following permissions are required:
+- `asset:read`
+- `asset:write`
+- `legacy-asset:manage`
 
 ## Cookie
 You will need a cookie to upload animations to Roblox. This is because the Open Cloud API does not support them. It will automatically detected from the current Roblox Studio installation. Otherwise, you can specify this using the `--cookie` argument, or the `ASPHALT_COOKIE` environment variable.
