@@ -82,8 +82,7 @@ async fn walk_file(
                 Ok(WalkFileResult::NewAsset(asset))
             }
         }
-        (Some(_), SyncTarget::Studio) => Ok(WalkFileResult::NewAsset(asset)),
+        (Some(_), SyncTarget::Studio | SyncTarget::Debug) => Ok(WalkFileResult::NewAsset(asset)),
         (None, _) => Ok(WalkFileResult::NewAsset(asset)),
-        _ => unreachable!(),
     }
 }
