@@ -51,7 +51,7 @@ impl SyncBackend for CloudBackend {
                     state.client.clone(),
                     asset,
                     cookie,
-                    Some(state.csrf.read().await.as_ref().unwrap().clone()),
+                    state.csrf.read().await.clone(),
                     &state.config.creator,
                 )
                 .await?;
