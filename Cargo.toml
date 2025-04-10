@@ -35,7 +35,7 @@ resvg = "0.45.0"
 roblox_install = "1.0.0"
 serde = { version = "1.0.219", features = ["derive"] }
 serde-xml-rs = "0.6.0"
-tokio = { version = "1.44.1", features = ["full"] }
+tokio = { version = "1.44.2", features = ["full"] }
 toml = "0.8.20"
 walkdir = "2.5.0"
 
