@@ -156,7 +156,7 @@ You can get one from the [Creator Dashboard](https://create.roblox.com/dashboard
 The following permissions are required:
 - `asset:read`
 - `asset:write`
-- `legacy-asset:manage`
+- `legacy-assets:manage`
 
 ## Cookie
 You will need a cookie to upload animations to Roblox. This is because the Open Cloud API does not support them. It will automatically detected from the current Roblox Studio installation. Otherwise, you can specify this using the `--cookie` argument, or the `ASPHALT_COOKIE` environment variable.
