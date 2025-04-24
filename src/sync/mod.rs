@@ -52,7 +52,7 @@ struct CodegenInsertion {
 
 struct LockfileInsertion {
     input_name: String,
-    path: PathBuf,
+    hash: String,
     entry: LockfileEntry,
     write: bool,
 }
@@ -67,7 +67,7 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
 
     let lockfile = Lockfile::read().await?;
 
-    if let Lockfile::V0 { .. } = lockfile {
+    if !lockfile.is_up_to_date() {
         bail!("Your lockfile is out of date, please run asphalt migrate-lockfile")
     }
 
@@ -112,7 +112,7 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
 
         while let Some(insertion) = lockfile_rx.recv().await {
             if matches!(args.target, SyncTarget::Cloud) {
-                new_lockfile.insert(&insertion.input_name, &insertion.path, insertion.entry);
+                new_lockfile.insert(&insertion.input_name, &insertion.hash, insertion.entry);
                 if insertion.write {
                     new_lockfile.write(None).await?;
                 }
@@ -131,11 +131,8 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
                 lockfile_tx_backend
                     .send(LockfileInsertion {
                         input_name: result.input_name.clone(),
-                        path: result.path.clone(),
-                        entry: LockfileEntry {
-                            hash: result.hash,
-                            asset_id,
-                        },
+                        hash: result.hash,
+                        entry: LockfileEntry { asset_id },
                         write: true,
                     })
                     .await?;
@@ -204,13 +201,13 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
                     WalkFileResult::NewAsset(asset) => {
                         new_assets.push(asset);
                     }
-                    WalkFileResult::ExistingAsset((path, entry)) => {
+                    WalkFileResult::ExistingAsset((path, hash, entry)) => {
                         not_new_count += 1;
 
                         lockfile_tx
                             .send(LockfileInsertion {
                                 input_name: input_name.clone(),
-                                path: path.clone(),
+                                hash,
                                 entry: entry.clone(),
                                 // This takes too long, and we're not really losing anything here.
                                 write: false,

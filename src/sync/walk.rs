@@ -55,7 +55,7 @@ pub async fn walk(
 
 pub enum WalkFileResult {
     NewAsset(Asset),
-    ExistingAsset((PathBuf, LockfileEntry)),
+    ExistingAsset((PathBuf, String, LockfileEntry)),
 }
 
 async fn walk_file(
@@ -66,16 +66,14 @@ async fn walk_file(
     let data = fs::read(&path).await?;
     let asset = Asset::new(path.clone(), data)?;
 
-    let entry = state.existing_lockfile.get(&input_name, &path);
+    let entry = state.existing_lockfile.get(&input_name, &asset.hash);
 
     match (entry, &state.args.target) {
-        (Some(entry), SyncTarget::Cloud) => {
-            if asset.hash == entry.hash {
-                Ok(WalkFileResult::ExistingAsset((path, entry.clone())))
-            } else {
-                Ok(WalkFileResult::NewAsset(asset))
-            }
-        }
+        (Some(entry), SyncTarget::Cloud) => Ok(WalkFileResult::ExistingAsset((
+            path,
+            asset.hash,
+            entry.clone(),
+        ))),
         (Some(_), SyncTarget::Studio | SyncTarget::Debug) => Ok(WalkFileResult::NewAsset(asset)),
         (None, _) => Ok(WalkFileResult::NewAsset(asset)),
     }

@@ -57,21 +57,10 @@ impl SyncBackend for StudioBackend {
         asset: &Asset,
     ) -> anyhow::Result<Option<BackendSyncResult>> {
         if let AssetKind::Model(ModelKind::Animation(_)) = asset.kind {
-            let existing_id = state
-                .existing_lockfile
-                .get(&input_name, &asset.path)
-                .and_then(|entry| {
-                    if entry.hash == asset.hash {
-                        Some(entry.asset_id)
-                    } else {
-                        None
-                    }
-                });
-
-            return match existing_id {
-                Some(id) => Ok(Some(BackendSyncResult::Studio(format!(
+            return match state.existing_lockfile.get(&input_name, &asset.hash) {
+                Some(entry) => Ok(Some(BackendSyncResult::Studio(format!(
                     "rbxassetid://{}",
-                    id
+                    entry.asset_id
                 )))),
                 None => {
                     warn!("Animations cannot be synced in this context");
