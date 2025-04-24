@@ -22,6 +22,7 @@ pub async fn upload_cloud(
     client: reqwest::Client,
     asset: &Asset,
     api_key: String,
+    cookie: String,
     creator: &Creator,
 ) -> anyhow::Result<u64> {
     let params = CreateAssetParamsWithContents {
@@ -60,7 +61,7 @@ pub async fn upload_cloud(
                     let id = id_str.parse::<u64>().context("Asset ID wasn't a number")?;
 
                     return match asset.kind {
-                        AssetKind::Decal(_) => get_image_id(client, id, api_key)
+                        AssetKind::Decal(_) => get_image_id(client, id, cookie)
                             .await
                             .context("Failed to get image ID"),
                         _ => Ok(id),
@@ -82,11 +83,6 @@ pub async fn upload_cloud(
         tokio::time::sleep(backoff).await;
         backoff = (backoff * 2).min(Duration::from_secs(5));
     }
-}
-
-#[derive(Deserialize, Debug)]
-struct AssetDeliveryResponse {
-    location: String,
 }
 
 #[derive(Deserialize, Debug)]
@@ -115,29 +111,20 @@ struct XMLContent {
 async fn get_image_id(
     client: reqwest::Client,
     asset_id: u64,
-    api_key: String,
+    cookie: String,
 ) -> anyhow::Result<u64> {
-    let url = format!(
-        "https://apis.roblox.com/asset-delivery-api/v1/assetId/{}",
-        asset_id
-    );
-
     let response = client
-        .get(&url)
-        .header("x-api-key", &api_key)
+        .get(format!(
+            "https://assetdelivery.roblox.com/v1/asset?id={asset_id}"
+        ))
+        .header("Cookie", &cookie)
         .send()
         .await?;
 
-    let delivery_response: AssetDeliveryResponse = response
-        .json()
-        .await
-        .context("Failed to parse asset delivery response")?;
+    let body = response.text().await?;
 
-    let xml_response = client.get(&delivery_response.location).send().await?;
-    let body = xml_response.text().await?;
-
-    let roblox: XMLAsset =
-        serde_xml_rs::from_str(&body).context("Failed to parse asset XML response")?;
+    let roblox: XMLAsset = serde_xml_rs::from_str(&body)
+        .with_context(|| format!("Failed to parse asset XML response:\n{}", &body))?;
 
     roblox
         .item
@@ -154,8 +141,6 @@ pub struct AnimationResult {
     pub asset_id: u64,
     pub csrf: String,
 }
-
-const ANIMATION_URL: &str = "https://www.roblox.com/ide/publish/uploadnewanimation";
 
 pub async fn upload_animation(
     client: reqwest::Client,
@@ -178,7 +163,7 @@ pub async fn upload_animation(
     };
 
     let response = client
-        .post(ANIMATION_URL)
+        .post("https://www.roblox.com/ide/publish/uploadnewanimation")
         .header("Cookie", cookie)
         .header("x-csrf-token", &csrf)
         .header("Content-Type", "application/xml")
@@ -218,7 +203,7 @@ pub async fn upload_animation(
 
 pub async fn get_csrf_token(client: reqwest::Client, cookie: String) -> anyhow::Result<String> {
     let response = client
-        .post(ANIMATION_URL)
+        .post("https://www.roblox.com/ide/publish/uploadnewanimation")
         .header("Cookie", cookie)
         .header("Content-Type", "application/xml")
         .header("Requester", "Client")

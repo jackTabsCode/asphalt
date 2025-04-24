@@ -3,6 +3,8 @@
 Asphalt is a command line tool used to upload assets to Roblox and easily reference them in code.
 It's a modern alternative to [Tarmac](https://github.com/Roblox/Tarmac).
 
+Note: This documentation is for the pre-release of Asphalt 1.0. Asphalt <0.9 is no longer supported or working due to Roblox API changes.
+
 ## Features
 
 -   Syncs your images, sounds, models, and animations to Roblox
@@ -139,6 +141,7 @@ output_path = "src/shared"
 -   `id`: number
 
 ## Code Generation
+
 The formatting of code generation (such as spaces, tabs, width, and semicolons) is not guaranteed by Asphalt and may change between releases without being noted as a breaking change.
 
 Therefore, it is recommended to add Asphalt's generated files to your linter/formatter's "ignore" list. Here are instructions for the most commonly used tools:
@@ -147,31 +150,37 @@ Therefore, it is recommended to add Asphalt's generated files to your linter/for
 - [Biome](https://biomejs.dev/guides/configure-biome/#ignore-files)
 - [ESLint](https://eslint.org/docs/latest/use/configure/ignore)
 
-## API Key
+## Authentication
 
-You will need an API key to sync with Asphalt. You can specify this using the `--api-key` argument, or the `ASPHALT_API_KEY` environment variable.
+Both a Cookie and a properly scoped API key are required to use Asphalt.
+
+Previously, only an API key was required to upload images, sounds, and models to Roblox. Unfortunately, due to recent changes in Roblox's web APIs, we can no longer acquire image IDs from Roblox without cookie authentication (while still retaining the ability to upload to groups). I'd appreciate an upvote on [my DevForum post](https://devforum.roblox.com/t/provide-a-stable-open-cloud-api-to-get-an-image-id-from-a-decal-id/3594046) which outlines the issue.
+
+### API Key
+
+You can specify this using the `--api-key` argument, or the `ASPHALT_API_KEY` environment variable.
 
 You can get one from the [Creator Dashboard](https://create.roblox.com/dashboard/credentials).
 
 The following permissions are required:
 - `asset:read`
 - `asset:write`
-- `legacy-assets:manage`
 
-## Cookie
-You will need a cookie to upload animations to Roblox. This is because the Open Cloud API does not support them. It will automatically detected from the current Roblox Studio installation. Otherwise, you can specify this using the `--cookie` argument, or the `ASPHALT_COOKIE` environment variable.
+Make sure that you select an appropriate IP and that your API key is under the Creator (user, or group) that you've defined in `asphalt.toml`.
+
+### Cookie
+
+Your cookie will be pulled from your `.ROBLOSECURITY` environment variable. If not present, it be automatically detected from the current Roblox Studio installation.
 
 You will probably want to [disable Session Protection](https://create.roblox.com/settings/advanced) if you are using Asphalt in an environment where your IP address changes frequently, but we don't recommend this on your main Roblox account, as it makes your account less secure.
 
 ## Animations
 
 > [!WARNING]
-> This feature is experimental, and Roblox may break the API we use or change its behavior without warning.
-
-To upload animations, make sure you specify a cookie as noted above.
+> This feature uses a private Studio API, so this feature may break without warning.
 
 Asphalt expects a single [KeyframeSequence](https://create.roblox.com/docs/reference/engine/classes/KeyframeSequence) to be saved as either a `.rbxm` or `.rbxmx` file.
 
 ## Attributions
 
-Thank you to [Tarmac](https://github.com/Roblox/tarmac) for the alpha bleeding and nested codegen implementations, which were used in this project.
+Thank you to [Tarmac](https://github.com/Roblox/tarmac) for the alpha bleeding implementation, which was used in this project.

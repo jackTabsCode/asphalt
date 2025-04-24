@@ -41,11 +41,6 @@ pub struct SyncArgs {
     #[arg(short, long)]
     pub api_key: Option<String>,
 
-    /// Your cookie.
-    /// This is only required if you are uploading animations with Asphalt.
-    #[arg(long)]
-    pub cookie: Option<String>,
-
     /// Where Asphalt should sync assets to.
     #[arg(short, long, default_value = "cloud")]
     pub target: SyncTarget,
@@ -73,16 +68,11 @@ pub struct UploadArgs {
     #[arg(short, long)]
     pub api_key: Option<String>,
 
-    /// Your cookie.
-    /// This is only required if you are uploading animations with Asphalt.
-    #[arg(long)]
-    pub cookie: Option<String>,
-
     /// Whether to alpha bleed if it's an image.
     #[arg(long, default_value = "true")]
     pub bleed: bool,
 
-    /// Format it as a link instead of just the asset ID.
+    /// Format the response as a link.
     #[arg(long)]
     pub link: bool,
 }
