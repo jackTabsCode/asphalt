@@ -29,7 +29,8 @@ unix-archive = ".zip"
 # Checksums to generate for each App
 checksum = "false"
 
+allow-dirty = ["ci"]
+
+
 [dist.github_custom_runners]
 x86_64-unknown-linux-gnu = "ubuntu-latest"
-
-allow-dirty = ["ci"]
