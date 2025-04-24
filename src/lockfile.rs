@@ -22,6 +22,10 @@ pub enum Lockfile {
         version: u32,
         inputs: BTreeMap<String, BTreeMap<String, LockfileEntry>>,
     },
+    V2 {
+        version: u32,
+        inputs: BTreeMap<String, BTreeMap<String, LockfileEntry>>,
+    },
 }
 
 impl Default for Lockfile {
@@ -45,49 +49,35 @@ impl Lockfile {
         }
     }
 
-    pub fn get(&self, input_name: &str, path: &Path) -> Option<&LockfileEntry> {
+    pub fn get(&self, input_name: &str, hash: &str) -> Option<&LockfileEntry> {
         match self {
-            Lockfile::V0 { .. } => None,
-            Lockfile::V1 { inputs, .. } => {
-                let path_str = path.to_string_lossy().replace("\\", "/");
-                inputs
-                    .get(input_name)
-                    .and_then(|assets| assets.get(&path_str))
+            Lockfile::V0 { .. } => unreachable!(),
+            Lockfile::V1 { .. } => unreachable!(),
+            Lockfile::V2 { inputs, .. } => {
+                inputs.get(input_name).and_then(|assets| assets.get(hash))
             }
         }
     }
 
-    pub fn insert(&mut self, input_name: &str, path: &Path, entry: LockfileEntry) {
+    pub fn insert(&mut self, input_name: &str, hash: &str, entry: LockfileEntry) {
         match self {
-            Lockfile::V0 { .. } => {
-                panic!("Cannot insert into version 0 lockfile!");
-            }
-            Lockfile::V1 { inputs, .. } => {
-                let path_str = path.to_string_lossy().replace("\\", "/");
+            Lockfile::V0 { .. } => unreachable!(),
+            Lockfile::V1 { .. } => unreachable!(),
+            Lockfile::V2 { inputs, .. } => {
                 let input_map = inputs.entry(input_name.to_string()).or_default();
-                input_map.insert(path_str, entry);
+                input_map.insert(hash.to_string(), entry);
             }
         }
     }
 
     pub async fn write(&self, filename: Option<&Path>) -> anyhow::Result<()> {
         match self {
-            Lockfile::V0 { .. } => {
-                anyhow::bail!("Cannot write out a version 0 lockfile!");
-            }
-            Lockfile::V1 { .. } => {
+            Lockfile::V0 { .. } => unreachable!(),
+            Lockfile::V1 { .. } => unreachable!(),
+            Lockfile::V2 { .. } => {
                 let content = toml::to_string(self)?;
                 fs::write(filename.unwrap_or(Path::new(FILE_NAME)), content).await?;
                 Ok(())
-            }
-        }
-    }
-
-    pub fn get_all_if_v0(&self) -> anyhow::Result<BTreeMap<String, LockfileEntry>> {
-        match self {
-            Lockfile::V0 { entries } => Ok(entries.clone()),
-            Lockfile::V1 { .. } => {
-                bail!("Cannot flatten V1 lockfile into V0 format");
             }
         }
     }
