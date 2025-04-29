@@ -73,7 +73,7 @@ asphalt sync --dry-run
 
 ### `asphalt migrate-lockfile`
 
-Will migrate over a pre-1.0 lockfile to the new format. See `asphalt migrate-lockfile --help` for more information.
+Will migrate your lockfile to the newest format, if there is one. See `asphalt migrate-lockfile --help` for more information.
 
 ### `asphalt upload`
 
@@ -136,6 +136,8 @@ output_path = "src/shared"
 	-	The directory path to output the generated code.
 -	`web`: map<string, WebAsset>
 	-	A map of paths relative to the input path to existing assets on Roblox.
+- 	`bleed`: boolean (optional)
+	- 	Whether to alpha bleed images. Defaults to true. Keep in mind that enabling this won't invalidate your lockfile or reupload your images. If this is desired behavior, remove those assets from your lockfile.
 
 #### WebAsset
 
