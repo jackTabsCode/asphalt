@@ -1,94 +1,152 @@
-use anyhow::bail;
+use anyhow::{Context, Result, bail};
+use blake3::Hasher;
 use fs_err::tokio as fs;
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, path::Path};
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+};
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub struct LockfileEntry {
-    pub hash: String,
-    pub asset_id: u64,
-}
-
-pub const CURRENT_VERSION: u32 = 1;
 pub const FILE_NAME: &str = "asphalt.lock.toml";
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Lockfile {
+    version: u32,
+    inputs: BTreeMap<String, BTreeMap<String, LockfileEntry>>,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(untagged)]
-pub enum Lockfile {
-    V0 {
-        entries: BTreeMap<String, LockfileEntry>,
-    },
-    V1 {
-        version: u32,
-        inputs: BTreeMap<String, BTreeMap<String, LockfileEntry>>,
-    },
+pub struct LockfileEntry {
+    pub asset_id: u64,
 }
 
 impl Default for Lockfile {
     fn default() -> Self {
-        Lockfile::V1 {
-            version: CURRENT_VERSION,
+        Self {
+            version: 2,
             inputs: BTreeMap::new(),
         }
     }
 }
 
 impl Lockfile {
-    pub async fn read() -> anyhow::Result<Self> {
-        let content = fs::read_to_string(FILE_NAME).await;
-        match content {
-            Ok(content) => {
-                let parsed = toml::from_str(&content)?;
-                Ok(parsed)
-            }
-            Err(_) => Ok(Lockfile::default()),
+    pub fn get(&self, input_name: &str, hash: &str) -> Option<&LockfileEntry> {
+        self.inputs.get(input_name).and_then(|m| m.get(hash))
+    }
+
+    pub fn insert(&mut self, input_name: &str, hash: &str, entry: LockfileEntry) {
+        self.inputs
+            .entry(input_name.to_string())
+            .or_default()
+            .insert(hash.to_owned(), entry);
+    }
+
+    pub async fn write(&self, filename: Option<&Path>) -> Result<()> {
+        let content = toml::to_string(self)?;
+        fs::write(filename.unwrap_or(Path::new(FILE_NAME)), content).await?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct OldLockfileEntry {
+    pub hash: String,
+    pub asset_id: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LockfileV0 {
+    entries: BTreeMap<PathBuf, OldLockfileEntry>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LockfileV1 {
+    version: u32,
+    inputs: BTreeMap<String, BTreeMap<PathBuf, OldLockfileEntry>>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum RawLockfile {
+    V0(LockfileV0),
+    V1(LockfileV1),
+    V2(Lockfile),
+}
+
+impl Default for RawLockfile {
+    fn default() -> Self {
+        Self::V2(Lockfile::default())
+    }
+}
+
+impl RawLockfile {
+    pub async fn read() -> Result<Self> {
+        match fs::read_to_string(FILE_NAME).await {
+            Ok(content) => Ok(toml::from_str(&content)?),
+            Err(_) => Ok(Self::default()),
         }
     }
 
-    pub fn get(&self, input_name: &str, path: &Path) -> Option<&LockfileEntry> {
+    pub fn into_lockfile(self) -> anyhow::Result<Lockfile> {
         match self {
-            Lockfile::V0 { .. } => None,
-            Lockfile::V1 { inputs, .. } => {
-                let path_str = path.to_string_lossy().replace("\\", "/");
-                inputs
-                    .get(input_name)
-                    .and_then(|assets| assets.get(&path_str))
-            }
+            Self::V2(lockfile) => Ok(lockfile),
+            _ => anyhow::bail!("Your lockfile is out of date, please run asphalt migrate-lockfile"),
         }
     }
 
-    pub fn insert(&mut self, input_name: &str, path: &Path, entry: LockfileEntry) {
-        match self {
-            Lockfile::V0 { .. } => {
-                panic!("Cannot insert into version 0 lockfile!");
+    pub async fn migrate(self, input_name: Option<&str>) -> Result<Lockfile> {
+        match (self, input_name) {
+            (Self::V2(_), _) => bail!("Your lockfile is already up to date"),
+            (Self::V1(v1), _) => Ok(migrate_from_v1(&v1)),
+            (Self::V0(v0), Some(name)) => migrate_from_v0(&v0, name).await,
+            (Self::V0(_), None) => {
+                bail!("An input name must be passed in order to migrate from v0 to v1")
             }
-            Lockfile::V1 { inputs, .. } => {
-                let path_str = path.to_string_lossy().replace("\\", "/");
-                let input_map = inputs.entry(input_name.to_string()).or_default();
-                input_map.insert(path_str, entry);
-            }
+        }
+    }
+}
+
+fn migrate_from_v1(lockfile: &LockfileV1) -> Lockfile {
+    let mut new_lockfile = Lockfile::default();
+
+    for (input_name, entries) in &lockfile.inputs {
+        for entry in entries.values() {
+            new_lockfile.insert(
+                input_name,
+                &entry.hash,
+                LockfileEntry {
+                    asset_id: entry.asset_id,
+                },
+            )
         }
     }
 
-    pub async fn write(&self, filename: Option<&Path>) -> anyhow::Result<()> {
-        match self {
-            Lockfile::V0 { .. } => {
-                anyhow::bail!("Cannot write out a version 0 lockfile!");
-            }
-            Lockfile::V1 { .. } => {
-                let content = toml::to_string(self)?;
-                fs::write(filename.unwrap_or(Path::new(FILE_NAME)), content).await?;
-                Ok(())
-            }
-        }
+    new_lockfile
+}
+
+async fn migrate_from_v0(lockfile: &LockfileV0, input_name: &str) -> anyhow::Result<Lockfile> {
+    let mut new_lockfile = Lockfile::default();
+
+    for (path, entry) in &lockfile.entries {
+        let new_hash = read_and_hash(path)
+            .await
+            .context(format!("Failed to hash {}", path.display()))?;
+
+        new_lockfile.insert(
+            input_name,
+            &new_hash,
+            LockfileEntry {
+                asset_id: entry.asset_id,
+            },
+        )
     }
 
-    pub fn get_all_if_v0(&self) -> anyhow::Result<BTreeMap<String, LockfileEntry>> {
-        match self {
-            Lockfile::V0 { entries } => Ok(entries.clone()),
-            Lockfile::V1 { .. } => {
-                bail!("Cannot flatten V1 lockfile into V0 format");
-            }
-        }
-    }
+    Ok(new_lockfile)
+}
+
+async fn read_and_hash(path: &Path) -> Result<String> {
+    let bytes = fs::read(path).await?;
+    let mut hasher = Hasher::new();
+    hasher.update(&bytes);
+    Ok(hasher.finalize().to_string())
 }

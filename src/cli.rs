@@ -20,9 +20,9 @@ pub enum Commands {
     /// Uploads a single asset and returns the asset ID.
     Upload(UploadArgs),
 
-    /// Migrates a lockfile from pre-1.0 to 1.0. You can only run this once, and it will overwrite the existing lockfile.
-    /// Keep in mind that because pre-1.0 did not support multiple inputs, you'll need to provide a default input name.
-    /// The migration entails hashing your files again and updating the lockfile with the new hashes.
+    /// Migrates a lockfile to the latest version. You can only run this once per upgrade, and it will overwrite the existing lockfile.
+    /// Keep in mind that because pre-1.0 did not support multiple inputs, you'll need to provide a default input name for that migration.
+    /// The pre-1.0 migration entails hashing your files again and updating the lockfile with the new hashes.
     /// We basically pretend nothing has changed, so your assets don't get reuploaded.
     MigrateLockfile(MigrateLockfileArgs),
 }
@@ -46,8 +46,12 @@ pub struct SyncArgs {
     pub target: SyncTarget,
 
     /// Skip asset syncing and only display what assets will be synced.
-    #[arg(long, action)]
+    #[arg(long)]
     pub dry_run: bool,
+
+    /// Suppress warnings of duplicate assets. This does not disable the total duplicate count warning.
+    #[arg(long, default_value_t = false)]
+    pub suppress_duplicate_warnings: bool,
 }
 
 #[derive(Args)]
@@ -79,6 +83,6 @@ pub struct UploadArgs {
 
 #[derive(Args)]
 pub struct MigrateLockfileArgs {
-    /// The default input name to use.
-    pub input_name: String,
+    /// The default input name to use. Only applies when upgrading from V0 to V1.
+    pub input_name: Option<String>,
 }

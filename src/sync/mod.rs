@@ -3,7 +3,7 @@ use crate::{
     auth::Auth,
     cli::{SyncArgs, SyncTarget},
     config::{Codegen, Config, Input},
-    lockfile::{Lockfile, LockfileEntry},
+    lockfile::{Lockfile, LockfileEntry, RawLockfile},
 };
 use anyhow::{Context, Result, bail};
 use backend::BackendSyncResult;
@@ -17,7 +17,7 @@ use tokio::{
     sync::{RwLock, mpsc},
     task::JoinHandle,
 };
-use walk::WalkFileResult;
+use walk::WalkResult;
 
 mod backend;
 mod codegen;
@@ -33,13 +33,17 @@ pub struct SyncResult {
 }
 
 pub struct SyncState {
-    client: reqwest::Client,
     args: SyncArgs,
     config: Config,
+
     existing_lockfile: Lockfile,
     result_tx: mpsc::Sender<SyncResult>,
+
     multi_progress: MultiProgress,
+
     font_db: Arc<Database>,
+
+    client: reqwest::Client,
     auth: Auth,
     csrf: Arc<RwLock<Option<String>>>,
 }
@@ -52,7 +56,7 @@ struct CodegenInsertion {
 
 struct LockfileInsertion {
     input_name: String,
-    path: PathBuf,
+    hash: String,
     entry: LockfileEntry,
     write: bool,
 }
@@ -65,11 +69,7 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
     let config = Config::read().await?;
     let codegen_config = config.codegen.clone();
 
-    let lockfile = Lockfile::read().await?;
-
-    if let Lockfile::V0 { .. } = lockfile {
-        bail!("Your lockfile is out of date, please run asphalt migrate-lockfile")
-    }
+    let lockfile = RawLockfile::read().await?.into_lockfile()?;
 
     let key_required = matches!(args.target, SyncTarget::Cloud) && !args.dry_run;
     let auth = Auth::new(args.api_key.clone(), key_required)?;
@@ -85,13 +85,17 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
     let (codegen_tx, mut codegen_rx) = mpsc::channel::<CodegenInsertion>(100);
 
     let state = Arc::new(SyncState {
-        client: reqwest::Client::new(),
         args: args.clone(),
-        multi_progress,
         config: config.clone(),
+
         existing_lockfile: lockfile,
         result_tx,
+
+        multi_progress,
+
         font_db,
+
+        client: reqwest::Client::new(),
         auth,
         csrf: Arc::new(RwLock::new(None)),
     });
@@ -112,7 +116,7 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
 
         while let Some(insertion) = lockfile_rx.recv().await {
             if matches!(args.target, SyncTarget::Cloud) {
-                new_lockfile.insert(&insertion.input_name, &insertion.path, insertion.entry);
+                new_lockfile.insert(&insertion.input_name, &insertion.hash, insertion.entry);
                 if insertion.write {
                     new_lockfile.write(None).await?;
                 }
@@ -131,11 +135,8 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
                 lockfile_tx_backend
                     .send(LockfileInsertion {
                         input_name: result.input_name.clone(),
-                        path: result.path.clone(),
-                        entry: LockfileEntry {
-                            hash: result.hash,
-                            asset_id,
-                        },
+                        hash: result.hash,
+                        entry: LockfileEntry { asset_id },
                         write: true,
                     })
                     .await?;
@@ -201,16 +202,16 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
 
             for result in walk_results {
                 match result {
-                    WalkFileResult::NewAsset(asset) => {
+                    WalkResult::New(asset) => {
                         new_assets.push(asset);
                     }
-                    WalkFileResult::ExistingAsset((path, entry)) => {
+                    WalkResult::Existing((path, hash, entry)) => {
                         not_new_count += 1;
 
                         lockfile_tx
                             .send(LockfileInsertion {
                                 input_name: input_name.clone(),
-                                path: path.clone(),
+                                hash,
                                 entry: entry.clone(),
                                 // This takes too long, and we're not really losing anything here.
                                 write: false,
