@@ -12,7 +12,6 @@ pub async fn walk(
     input: &Input,
 ) -> anyhow::Result<Vec<WalkResult>> {
     let mut seen_hashes = HashMap::<String, PathBuf>::new();
-    let mut num_dupes = 0;
 
     let prefix = input.path.get_prefix();
 
@@ -52,25 +51,10 @@ pub async fn walk(
         .await
         {
             Ok(result) => res.push(result),
-            Err(WalkError::DuplicateAsset(original_path)) => {
-                num_dupes += 1;
-
-                if !state.args.suppress_duplicate_warnings {
-                    warn!(
-                        "Skipping duplicate file {} (original at {})",
-                        path.display(),
-                        original_path.display()
-                    );
-                }
-            }
-            Err(WalkError::Other(err)) => {
+            Err(err) => {
                 warn!("Skipping file {}: {:?}", path.display(), err);
             }
         }
-    }
-
-    if num_dupes > 0 {
-        warn!("{} duplicate assets found", num_dupes);
     }
 
     progress_bar.set_message("Done reading files");
@@ -78,15 +62,21 @@ pub async fn walk(
     Ok(res)
 }
 
-pub enum WalkResult {
-    New(Asset),
-    Existing((PathBuf, String, LockfileEntry)),
+pub struct ExistingResult {
+    pub path: PathBuf,
+    pub hash: String,
+    pub entry: LockfileEntry,
 }
 
-#[derive(Debug)]
-pub enum WalkError {
-    DuplicateAsset(PathBuf),
-    Other(anyhow::Error),
+pub struct DuplicateResult {
+    pub path: PathBuf,
+    pub original_path: PathBuf,
+}
+
+pub enum WalkResult {
+    New(Asset),
+    Existing(ExistingResult),
+    Duplicate(DuplicateResult),
 }
 
 async fn walk_file(
@@ -94,19 +84,16 @@ async fn walk_file(
     input_name: String,
     path: PathBuf,
     seen_hashes: &mut HashMap<String, PathBuf>,
-) -> anyhow::Result<WalkResult, WalkError> {
-    let data = match fs::read(&path).await {
-        Ok(it) => it,
-        Err(err) => return Err(WalkError::Other(err.into())),
-    };
-    let asset = match Asset::new(path.clone(), data) {
-        Ok(it) => it,
-        Err(err) => return Err(WalkError::Other(err)),
-    };
+) -> anyhow::Result<WalkResult> {
+    let data = fs::read(&path).await?;
+    let asset = Asset::new(path.clone(), data)?;
 
     let seen = seen_hashes.get(&asset.hash);
     if let Some(seen_path) = seen {
-        return Err(WalkError::DuplicateAsset(seen_path.clone()));
+        return Ok(WalkResult::Duplicate(DuplicateResult {
+            path: path.clone(),
+            original_path: seen_path.clone(),
+        }));
     }
 
     seen_hashes.insert(asset.hash.clone(), path.clone());
@@ -114,9 +101,11 @@ async fn walk_file(
     let entry = state.existing_lockfile.get(&input_name, &asset.hash);
 
     match (entry, &state.args.target) {
-        (Some(entry), SyncTarget::Cloud) => {
-            Ok(WalkResult::Existing((path, asset.hash, entry.clone())))
-        }
+        (Some(entry), SyncTarget::Cloud) => Ok(WalkResult::Existing(ExistingResult {
+            path: path.clone(),
+            hash: asset.hash.clone(),
+            entry: entry.clone(),
+        })),
         (Some(_), SyncTarget::Studio | SyncTarget::Debug) => Ok(WalkResult::New(asset)),
         (None, _) => Ok(WalkResult::New(asset)),
     }

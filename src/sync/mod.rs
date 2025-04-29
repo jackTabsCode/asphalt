@@ -9,7 +9,7 @@ use anyhow::{Context, Result, bail};
 use backend::BackendSyncResult;
 use codegen::{CodegenInput, CodegenLanguage, CodegenNode};
 use indicatif::MultiProgress;
-use log::debug;
+use log::{debug, warn};
 use resvg::usvg::fontdb::Database;
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 use tokio::{
@@ -17,7 +17,7 @@ use tokio::{
     sync::{RwLock, mpsc},
     task::JoinHandle,
 };
-use walk::WalkResult;
+use walk::{DuplicateResult, WalkResult};
 
 mod backend;
 mod codegen;
@@ -59,6 +59,11 @@ struct LockfileInsertion {
     hash: String,
     entry: LockfileEntry,
     write: bool,
+}
+
+struct DuplicateInsertion {
+    input_name: String,
+    inner: DuplicateResult,
 }
 
 pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
@@ -176,7 +181,7 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
             let path = insertion
                 .asset_path
                 .strip_prefix(input.path.get_prefix())
-                .unwrap_or(&insertion.asset_path);
+                .unwrap();
 
             codegen_input.insert(path.into(), insertion.asset_id);
         }
@@ -186,12 +191,51 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
 
     let mut producer_handles = Vec::<JoinHandle<Result<()>>>::new();
 
+    let (duplicate_tx, mut duplicate_rx) = mpsc::channel::<DuplicateInsertion>(100);
+
+    let inputs = config.inputs.clone();
+
+    let duplicate_handle = tokio::spawn(async move {
+        let mut duplicate_assets = HashMap::<String, Vec<DuplicateResult>>::new();
+
+        while let Some(insertion) = duplicate_rx.recv().await {
+            let input = inputs
+                .get(&insertion.input_name)
+                .context("Failed to find input for codegen input")?;
+
+            let original_path = insertion
+                .inner
+                .original_path
+                .strip_prefix(input.path.get_prefix())
+                .unwrap()
+                .to_owned();
+
+            let path = insertion
+                .inner
+                .path
+                .strip_prefix(input.path.get_prefix())
+                .unwrap()
+                .to_owned();
+
+            duplicate_assets
+                .entry(insertion.input_name)
+                .or_default()
+                .push(DuplicateResult {
+                    original_path,
+                    path,
+                });
+        }
+
+        Ok::<_, anyhow::Error>(duplicate_assets)
+    });
+
     for (input_name, input) in &config.inputs {
         let state = state.clone();
         let input = input.clone();
         let lockfile_tx = lockfile_tx.clone();
         let codegen_tx = codegen_tx.clone();
         let input_name = input_name.clone();
+        let duplicate_tx = duplicate_tx.clone();
 
         producer_handles.push(tokio::spawn(async move {
             debug!("Walking input {}", input_name);
@@ -199,20 +243,21 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
 
             let mut new_assets = Vec::<Asset>::new();
             let mut not_new_count = 0;
+            let mut dupe_count = 0;
 
             for result in walk_results {
                 match result {
                     WalkResult::New(asset) => {
                         new_assets.push(asset);
                     }
-                    WalkResult::Existing((path, hash, entry)) => {
+                    WalkResult::Existing(existing) => {
                         not_new_count += 1;
 
                         lockfile_tx
                             .send(LockfileInsertion {
                                 input_name: input_name.clone(),
-                                hash,
-                                entry: entry.clone(),
+                                hash: existing.hash,
+                                entry: existing.entry.clone(),
                                 // This takes too long, and we're not really losing anything here.
                                 write: false,
                             })
@@ -221,12 +266,36 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
                         codegen_tx
                             .send(CodegenInsertion {
                                 input_name: input_name.clone(),
-                                asset_path: path.clone(),
-                                asset_id: format!("rbxassetid://{}", entry.asset_id),
+                                asset_path: existing.path.clone(),
+                                asset_id: format!("rbxassetid://{}", existing.entry.asset_id),
+                            })
+                            .await?;
+                    }
+                    WalkResult::Duplicate(dupe) => {
+                        if !state.args.suppress_duplicate_warnings {
+                            warn!(
+                                "Duplicate file found: {} (original at {})",
+                                dupe.path.display(),
+                                dupe.original_path.display()
+                            );
+                        }
+
+                        dupe_count += 1;
+
+                        duplicate_tx
+                            .send(DuplicateInsertion {
+                                input_name: input_name.clone(),
+                                inner: dupe,
                             })
                             .await?;
                     }
                 }
+            }
+
+            if dupe_count > 0 {
+                warn!(
+                    "{dupe_count} duplicate files found. Code will still be generated for them.",
+                );
             }
 
             debug!(
@@ -251,18 +320,27 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
     drop(state);
     drop(lockfile_tx);
     drop(codegen_tx);
+    drop(duplicate_tx);
 
     for handle in consumer_handles {
         handle.await??;
     }
 
     let new_lockfile = lockfile_handle.await??;
-
     if matches!(args.target, SyncTarget::Cloud) {
         new_lockfile.write(None).await?;
     }
 
-    let codegen_inputs = codegen_handle.await??;
+    let mut codegen_inputs = codegen_handle.await??;
+    let duplicate_inputs = duplicate_handle.await??;
+
+    for (input_name, dupes) in duplicate_inputs {
+        let input = codegen_inputs.get_mut(&input_name).unwrap();
+        for dupe in dupes {
+            let original = input.get(&dupe.original_path).unwrap();
+            input.insert(dupe.path, original.clone());
+        }
+    }
 
     for (input_name, codegen_input) in codegen_inputs {
         let input = config
