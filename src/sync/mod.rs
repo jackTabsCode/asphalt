@@ -3,7 +3,7 @@ use crate::{
     auth::Auth,
     cli::{SyncArgs, SyncTarget},
     config::{Codegen, Config, Input},
-    lockfile::{Lockfile, LockfileEntry},
+    lockfile::{Lockfile, LockfileEntry, RawLockfile},
 };
 use anyhow::{Context, Result, bail};
 use backend::BackendSyncResult;
@@ -69,11 +69,7 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
     let config = Config::read().await?;
     let codegen_config = config.codegen.clone();
 
-    let lockfile = Lockfile::read().await?;
-
-    if !lockfile.is_up_to_date() {
-        bail!("Your lockfile is out of date, please run asphalt migrate-lockfile")
-    }
+    let lockfile = RawLockfile::read().await?.into_lockfile()?;
 
     let key_required = matches!(args.target, SyncTarget::Cloud) && !args.dry_run;
     let auth = Auth::new(args.api_key.clone(), key_required)?;

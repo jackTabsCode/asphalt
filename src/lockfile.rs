@@ -1,4 +1,4 @@
-use anyhow::{Context, bail};
+use anyhow::{Context, Result, bail};
 use blake3::Hasher;
 use fs_err::tokio as fs;
 use serde::{Deserialize, Serialize};
@@ -7,10 +7,12 @@ use std::{
     path::{Path, PathBuf},
 };
 
+pub const FILE_NAME: &str = "asphalt.lock.toml";
+
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
-pub struct OldLockfileEntry {
-    pub hash: String,
-    pub asset_id: u64,
+pub struct Lockfile {
+    version: u32,
+    inputs: BTreeMap<String, BTreeMap<String, LockfileEntry>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
@@ -18,7 +20,39 @@ pub struct LockfileEntry {
     pub asset_id: u64,
 }
 
-pub const FILE_NAME: &str = "asphalt.lock.toml";
+impl Default for Lockfile {
+    fn default() -> Self {
+        Self {
+            version: 2,
+            inputs: BTreeMap::new(),
+        }
+    }
+}
+
+impl Lockfile {
+    pub fn get(&self, input_name: &str, hash: &str) -> Option<&LockfileEntry> {
+        self.inputs.get(input_name).and_then(|m| m.get(hash))
+    }
+
+    pub fn insert(&mut self, input_name: &str, hash: &str, entry: LockfileEntry) {
+        self.inputs
+            .entry(input_name.to_string())
+            .or_default()
+            .insert(hash.to_owned(), entry);
+    }
+
+    pub async fn write(&self, filename: Option<&Path>) -> Result<()> {
+        let content = toml::to_string(self)?;
+        fs::write(filename.unwrap_or(Path::new(FILE_NAME)), content).await?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct OldLockfileEntry {
+    pub hash: String,
+    pub asset_id: u64,
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct LockfileV0 {
@@ -32,94 +66,42 @@ pub struct LockfileV1 {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
-pub struct LockfileV2 {
-    version: u32,
-    inputs: BTreeMap<String, BTreeMap<String, LockfileEntry>>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(untagged)]
-pub enum Lockfile {
+pub enum RawLockfile {
     V0(LockfileV0),
     V1(LockfileV1),
-    V2(LockfileV2),
+    V2(Lockfile),
 }
 
-impl Default for Lockfile {
+impl Default for RawLockfile {
     fn default() -> Self {
-        Lockfile::V2(LockfileV2 {
-            version: 2,
-            inputs: BTreeMap::new(),
-        })
+        Self::V2(Lockfile::default())
     }
 }
 
-impl Lockfile {
-    pub async fn read() -> anyhow::Result<Self> {
-        let content = fs::read_to_string(FILE_NAME).await;
-        match content {
-            Ok(content) => {
-                let parsed = toml::from_str(&content)?;
-                Ok(parsed)
-            }
-            Err(_) => Ok(Lockfile::default()),
+impl RawLockfile {
+    pub async fn read() -> Result<Self> {
+        match fs::read_to_string(FILE_NAME).await {
+            Ok(content) => Ok(toml::from_str(&content)?),
+            Err(_) => Ok(Self::default()),
         }
     }
 
-    pub fn get(&self, input_name: &str, hash: &str) -> Option<&LockfileEntry> {
+    pub fn into_lockfile(self) -> anyhow::Result<Lockfile> {
         match self {
-            Lockfile::V0(_) => unreachable!(),
-            Lockfile::V1(_) => unreachable!(),
-            Lockfile::V2(lockfile) => lockfile
-                .inputs
-                .get(input_name)
-                .and_then(|assets| assets.get(hash)),
+            Self::V2(lockfile) => Ok(lockfile),
+            _ => anyhow::bail!("Your lockfile is out of date, please run asphalt migrate-lockfile"),
         }
     }
 
-    pub fn insert(&mut self, input_name: &str, hash: &str, entry: LockfileEntry) {
-        match self {
-            Lockfile::V0(_) => unreachable!(),
-            Lockfile::V1(_) => unreachable!(),
-            Lockfile::V2(lockfile) => {
-                let input_map = lockfile.inputs.entry(input_name.to_string()).or_default();
-                input_map.insert(hash.to_string(), entry);
-            }
-        }
-    }
-
-    pub async fn write(&self, filename: Option<&Path>) -> anyhow::Result<()> {
-        match self {
-            Lockfile::V0(_) => unreachable!(),
-            Lockfile::V1(_) => unreachable!(),
-            Lockfile::V2(_) => {
-                let content = toml::to_string(self)?;
-                fs::write(filename.unwrap_or(Path::new(FILE_NAME)), content).await?;
-                Ok(())
-            }
-        }
-    }
-
-    pub async fn migrate(&mut self, input_name: Option<String>) -> anyhow::Result<()> {
-        *self = match (&self, input_name) {
-            (Lockfile::V0(lockfile), Some(input_name)) => {
-                migrate_from_v0(lockfile, &input_name).await?
-            }
-            (Lockfile::V0(_), None) => {
+    pub async fn migrate(self, input_name: Option<&str>) -> Result<Lockfile> {
+        match (self, input_name) {
+            (Self::V2(_), _) => bail!("Your lockfile is already up to date"),
+            (Self::V1(v1), _) => Ok(migrate_from_v1(&v1)),
+            (Self::V0(v0), Some(name)) => migrate_from_v0(&v0, name).await,
+            (Self::V0(_), None) => {
                 bail!("An input name must be passed in order to migrate from v0 to v1")
             }
-            (Lockfile::V1(lockfile), _) => migrate_from_v1(lockfile),
-            (Lockfile::V2(_), _) => bail!("Your lockfile is already up to date"),
-        };
-
-        Ok(())
-    }
-
-    pub fn is_up_to_date(&self) -> bool {
-        match self {
-            Lockfile::V0(_) => false,
-            Lockfile::V1(_) => false,
-            Lockfile::V2(_) => true,
         }
     }
 }
@@ -162,10 +144,9 @@ async fn migrate_from_v0(lockfile: &LockfileV0, input_name: &str) -> anyhow::Res
     Ok(new_lockfile)
 }
 
-async fn read_and_hash(path: &Path) -> anyhow::Result<String> {
-    let file = fs::read(path).await?;
-
+async fn read_and_hash(path: &Path) -> Result<String> {
+    let bytes = fs::read(path).await?;
     let mut hasher = Hasher::new();
-    hasher.update(&file);
+    hasher.update(&bytes);
     Ok(hasher.finalize().to_string())
 }
