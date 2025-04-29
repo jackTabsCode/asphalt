@@ -111,9 +111,9 @@ async fn walk_file(
 
     seen_hashes.insert(asset.hash.clone(), path.clone());
 
-    let existing_entry = state.existing_lockfile.get(&input_name, &asset.hash);
+    let entry = state.existing_lockfile.get(&input_name, &asset.hash);
 
-    match (existing_entry, &state.args.target) {
+    match (entry, &state.args.target) {
         (Some(entry), SyncTarget::Cloud) => {
             Ok(WalkResult::Existing((path, asset.hash, entry.clone())))
         }
