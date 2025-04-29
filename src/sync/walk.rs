@@ -48,12 +48,13 @@ pub async fn walk(
             input_name.clone(),
             path.clone(),
             &mut seen_hashes,
-            &mut num_dupes,
         )
         .await
         {
             Ok(result) => res.push(result),
             Err(WalkError::DuplicateAsset(original_path)) => {
+                num_dupes += 1;
+
                 if !state.args.suppress_duplicate_warnings {
                     warn!(
                         "Skipping duplicate file {} (original at {})",
@@ -93,7 +94,6 @@ async fn walk_file(
     input_name: String,
     path: PathBuf,
     seen_hashes: &mut HashMap<String, PathBuf>,
-    num_dupes: &mut u32,
 ) -> anyhow::Result<WalkResult, WalkError> {
     let data = match fs::read(&path).await {
         Ok(it) => it,
@@ -106,7 +106,6 @@ async fn walk_file(
 
     let seen = seen_hashes.get(&asset.hash);
     if let Some(seen_path) = seen {
-        *num_dupes += 1;
         return Err(WalkError::DuplicateAsset(seen_path.clone()));
     }
 
