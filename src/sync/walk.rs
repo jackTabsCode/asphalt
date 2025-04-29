@@ -37,7 +37,7 @@ pub async fn walk(
         .map(|entry| entry.path().to_path_buf())
         .collect::<Vec<_>>();
 
-    let mut res = Vec::new();
+    let mut res = Vec::with_capacity(entries.len());
 
     for path in entries {
         progress_bar.set_message(format!("Reading {}", path.display()));
