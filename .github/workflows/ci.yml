@@ -1,67 +1,63 @@
 name: CI
 
-on:
-    push:
-    pull_request:
-        branches:
-            - main
+on: push
 
 jobs:
-    build:
-        name: Build and Test
-        runs-on: ${{ matrix.os }}
+  build:
+    name: Build and Test
+    runs-on: ${{ matrix.os }}
 
-        strategy:
-            matrix:
-                os: [ubuntu-latest, windows-latest, macos-latest]
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
 
-        steps:
-            - uses: actions/checkout@v3
-              with:
-                  submodules: true
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
 
-            - name: Install Rust
-              uses: actions-rs/toolchain@v1
-              with:
-                  toolchain: stable
-                  override: true
-                  profile: minimal
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+          profile: minimal
 
-            - name: Rust cache
-              uses: Swatinem/rust-cache@v2
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
 
-            - name: Build
-              run: cargo build --locked --verbose
+      - name: Build
+        run: cargo build --locked --verbose
 
-            - name: Test
-              run: cargo test --locked --verbose
+      - name: Test
+        run: cargo test --locked --verbose
 
-            - name: Machete
-              uses: bnjbvr/cargo-machete@main
+      - name: Machete
+        uses: bnjbvr/cargo-machete@main
 
-    lint:
-        name: Rustfmt & Clippy
-        runs-on: ubuntu-latest
-        env:
-          RUSTFLAGS: "-Dwarnings"
+  lint:
+    name: Rustfmt & Clippy
+    runs-on: ubuntu-latest
+    env:
+      RUSTFLAGS: "-Dwarnings"
 
-        steps:
-            - uses: actions/checkout@v3
-              with:
-                  submodules: true
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
 
-            - name: Install Rust
-              uses: actions-rs/toolchain@v1
-              with:
-                  toolchain: stable
-                  override: true
-                  components: rustfmt, clippy
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+          components: rustfmt, clippy
 
-            - name: Rust cache
-              uses: Swatinem/rust-cache@v2
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
 
-            - name: Rustfmt
-              run: cargo fmt -- --check
+      - name: Rustfmt
+        run: cargo fmt -- --check
 
-            - name: Clippy
-              run: cargo clippy
+      - name: Clippy
+        run: cargo clippy
