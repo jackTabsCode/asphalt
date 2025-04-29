@@ -17,7 +17,7 @@ use tokio::{
     sync::{RwLock, mpsc},
     task::JoinHandle,
 };
-use walk::WalkFileResult;
+use walk::WalkResult;
 
 mod backend;
 mod codegen;
@@ -33,13 +33,17 @@ pub struct SyncResult {
 }
 
 pub struct SyncState {
-    client: reqwest::Client,
     args: SyncArgs,
     config: Config,
+
     existing_lockfile: Lockfile,
     result_tx: mpsc::Sender<SyncResult>,
+
     multi_progress: MultiProgress,
+
     font_db: Arc<Database>,
+
+    client: reqwest::Client,
     auth: Auth,
     csrf: Arc<RwLock<Option<String>>>,
 }
@@ -85,13 +89,17 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
     let (codegen_tx, mut codegen_rx) = mpsc::channel::<CodegenInsertion>(100);
 
     let state = Arc::new(SyncState {
-        client: reqwest::Client::new(),
         args: args.clone(),
-        multi_progress,
         config: config.clone(),
+
         existing_lockfile: lockfile,
         result_tx,
+
+        multi_progress,
+
         font_db,
+
+        client: reqwest::Client::new(),
         auth,
         csrf: Arc::new(RwLock::new(None)),
     });
@@ -198,10 +206,10 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
 
             for result in walk_results {
                 match result {
-                    WalkFileResult::NewAsset(asset) => {
+                    WalkResult::New(asset) => {
                         new_assets.push(asset);
                     }
-                    WalkFileResult::ExistingAsset((path, hash, entry)) => {
+                    WalkResult::Existing((path, hash, entry)) => {
                         not_new_count += 1;
 
                         lockfile_tx

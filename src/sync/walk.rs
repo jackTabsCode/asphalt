@@ -3,14 +3,17 @@ use crate::{asset::Asset, cli::SyncTarget, config::Input, lockfile::LockfileEntr
 use fs_err::tokio as fs;
 use indicatif::{ProgressBar, ProgressStyle};
 use log::warn;
-use std::{path::PathBuf, sync::Arc};
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
 use walkdir::WalkDir;
 
 pub async fn walk(
     state: Arc<SyncState>,
     input_name: String,
     input: &Input,
-) -> anyhow::Result<Vec<WalkFileResult>> {
+) -> anyhow::Result<Vec<WalkResult>> {
+    let mut seen_hashes = HashMap::<String, PathBuf>::new();
+    let mut num_dupes = 0;
+
     let prefix = input.path.get_prefix();
 
     let prefix_display = prefix.to_string_lossy().to_string();
@@ -40,12 +43,33 @@ pub async fn walk(
         progress_bar.set_message(format!("Reading {}", path.display()));
         progress_bar.tick();
 
-        match walk_file(state.clone(), input_name.clone(), path.clone()).await {
+        match walk_file(
+            state.clone(),
+            input_name.clone(),
+            path.clone(),
+            &mut seen_hashes,
+            &mut num_dupes,
+        )
+        .await
+        {
             Ok(result) => res.push(result),
-            Err(err) => {
+            Err(WalkError::DuplicateAsset(original_path)) => {
+                if !state.args.suppress_duplicate_warnings {
+                    warn!(
+                        "Skipping duplicate file {} (original at {})",
+                        path.display(),
+                        original_path.display()
+                    );
+                }
+            }
+            Err(WalkError::Other(err)) => {
                 warn!("Skipping file {}: {:?}", path.display(), err);
             }
         }
+    }
+
+    if num_dupes > 0 {
+        warn!("{} duplicate assets found", num_dupes);
     }
 
     progress_bar.set_message("Done reading files");
@@ -53,28 +77,48 @@ pub async fn walk(
     Ok(res)
 }
 
-pub enum WalkFileResult {
-    NewAsset(Asset),
-    ExistingAsset((PathBuf, String, LockfileEntry)),
+pub enum WalkResult {
+    New(Asset),
+    Existing((PathBuf, String, LockfileEntry)),
+}
+
+#[derive(Debug)]
+pub enum WalkError {
+    DuplicateAsset(PathBuf),
+    Other(anyhow::Error),
 }
 
 async fn walk_file(
     state: Arc<SyncState>,
     input_name: String,
     path: PathBuf,
-) -> anyhow::Result<WalkFileResult> {
-    let data = fs::read(&path).await?;
-    let asset = Asset::new(path.clone(), data)?;
+    seen_hashes: &mut HashMap<String, PathBuf>,
+    num_dupes: &mut u32,
+) -> anyhow::Result<WalkResult, WalkError> {
+    let data = match fs::read(&path).await {
+        Ok(it) => it,
+        Err(err) => return Err(WalkError::Other(err.into())),
+    };
+    let asset = match Asset::new(path.clone(), data) {
+        Ok(it) => it,
+        Err(err) => return Err(WalkError::Other(err)),
+    };
 
-    let entry = state.existing_lockfile.get(&input_name, &asset.hash);
+    let seen = seen_hashes.get(&asset.hash);
+    if let Some(seen_path) = seen {
+        *num_dupes += 1;
+        return Err(WalkError::DuplicateAsset(seen_path.clone()));
+    }
 
-    match (entry, &state.args.target) {
-        (Some(entry), SyncTarget::Cloud) => Ok(WalkFileResult::ExistingAsset((
-            path,
-            asset.hash,
-            entry.clone(),
-        ))),
-        (Some(_), SyncTarget::Studio | SyncTarget::Debug) => Ok(WalkFileResult::NewAsset(asset)),
-        (None, _) => Ok(WalkFileResult::NewAsset(asset)),
+    seen_hashes.insert(asset.hash.clone(), path.clone());
+
+    let existing_entry = state.existing_lockfile.get(&input_name, &asset.hash);
+
+    match (existing_entry, &state.args.target) {
+        (Some(entry), SyncTarget::Cloud) => {
+            Ok(WalkResult::Existing((path, asset.hash, entry.clone())))
+        }
+        (Some(_), SyncTarget::Studio | SyncTarget::Debug) => Ok(WalkResult::New(asset)),
+        (None, _) => Ok(WalkResult::New(asset)),
     }
 }
