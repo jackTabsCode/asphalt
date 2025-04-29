@@ -9,13 +9,13 @@ use std::{
 
 pub const FILE_NAME: &str = "asphalt.lock.toml";
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Lockfile {
     version: u32,
     inputs: BTreeMap<String, BTreeMap<String, LockfileEntry>>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct LockfileEntry {
     pub asset_id: u64,
 }
@@ -48,24 +48,24 @@ impl Lockfile {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct OldLockfileEntry {
     pub hash: String,
     pub asset_id: u64,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct LockfileV0 {
     entries: BTreeMap<PathBuf, OldLockfileEntry>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct LockfileV1 {
     version: u32,
     inputs: BTreeMap<String, BTreeMap<PathBuf, OldLockfileEntry>>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum RawLockfile {
     V0(LockfileV0),
