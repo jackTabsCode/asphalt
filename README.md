@@ -110,7 +110,7 @@ output_path = "src/shared"
 
 -   `creator`: Creator
 	-   The Roblox creator to upload the assets under.
--   `codegen`: Codegen
+-   `codegen`: Codegen (optional)
 	-   Code generation options.
 -	`inputs`: map<string, Input>
 	-   A map of input names to input configurations.
