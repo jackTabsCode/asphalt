@@ -6,9 +6,11 @@ use crate::{
     upload::{upload_animation, upload_cloud},
 };
 use anyhow::Context;
+use log::debug;
 use std::sync::Arc;
 use tokio::time;
 
+#[derive(Clone)]
 pub struct CloudBackend;
 
 impl SyncBackend for CloudBackend {
@@ -27,7 +29,14 @@ impl SyncBackend for CloudBackend {
         asset: &Asset,
     ) -> anyhow::Result<Option<BackendSyncResult>> {
         if cfg!(feature = "mock_cloud") {
-            time::sleep(time::Duration::from_secs(1)).await;
+            use rand::rngs::SmallRng;
+            use rand::{Rng, SeedableRng};
+
+            let mut rng = SmallRng::seed_from_u64(asset.data.len() as u64); // `SmallRng` **is** `Send`
+
+            let duration = time::Duration::from_secs(rng.random_range(0..10));
+
+            time::sleep(duration).await;
             return Ok(Some(BackendSyncResult::Cloud(1337)));
         }
 

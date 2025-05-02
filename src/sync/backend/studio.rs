@@ -11,6 +11,7 @@ use log::{info, warn};
 use roblox_install::RobloxStudio;
 use std::{env, path::PathBuf, sync::Arc};
 
+#[derive(Clone)]
 pub struct StudioBackend {
     identifier: String,
     sync_path: PathBuf,

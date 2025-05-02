@@ -5,6 +5,7 @@ use fs_err::tokio as fs;
 use log::info;
 use std::{env, path::PathBuf, sync::Arc};
 
+#[derive(Clone)]
 pub struct DebugBackend {
     sync_path: PathBuf,
 }
