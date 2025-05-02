@@ -9,7 +9,10 @@ use std::{collections::HashMap, path::PathBuf};
 #[derive(Debug, Deserialize, Clone)]
 pub struct Config {
     pub creator: Creator,
+
+    #[serde(default)]
     pub codegen: Codegen,
+
     pub inputs: HashMap<String, Input>,
 }
 
