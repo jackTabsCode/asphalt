@@ -109,6 +109,7 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
     for (input_name, input) in &config.inputs.clone() {
         for (path, asset) in &input.web {
             let entry = codegen_inputs.entry(input_name.clone()).or_default();
+            let path = path.replace('\\', "/");
 
             entry.insert(PathBuf::from(path), format!("rbxassetid://{}", asset.id));
         }
@@ -182,6 +183,8 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
                 .asset_path
                 .strip_prefix(input.path.get_prefix())
                 .unwrap();
+
+            let path = path.to_string_lossy().replace('\\', "/");
 
             codegen_input.insert(path.into(), insertion.asset_id);
         }
