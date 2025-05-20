@@ -20,7 +20,9 @@ pub enum Commands {
     /// Uploads a single asset and returns the asset ID.
     Upload(UploadArgs),
 
-    /// Migrates a lockfile to the latest version. You can only run this once per upgrade, and it will overwrite the existing lockfile.
+    /// Migrates a lockfile to the latest version.
+    ///
+    /// You can only run this once per upgrade, and it will overwrite the existing lockfile.
     /// Keep in mind that because pre-1.0 did not support multiple inputs, you'll need to provide a default input name for that migration.
     /// The pre-1.0 migration entails hashing your files again and updating the lockfile with the new hashes.
     /// We basically pretend nothing has changed, so your assets don't get reuploaded.
