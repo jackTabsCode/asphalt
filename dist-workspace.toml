@@ -26,8 +26,6 @@ pr-run-mode = "skip"
 windows-archive = ".zip"
 # The archive format to use for non-windows builds (defaults .tar.xz)
 unix-archive = ".zip"
-# Checksums to generate for each App
-checksum = []
 
 [dist.github-custom-runners]
 global = "ubuntu-22.04"
