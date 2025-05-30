@@ -80,10 +80,15 @@ impl Default for RawLockfile {
 }
 
 impl RawLockfile {
-    pub async fn read() -> Result<Self> {
-        match fs::read_to_string(FILE_NAME).await {
-            Ok(content) => Ok(toml::from_str(&content)?),
-            Err(_) => Ok(Self::default()),
+    pub async fn read() -> Result<RawLockfile> {
+        let content = fs::read_to_string(FILE_NAME).await?;
+        let raw: toml::Value = toml::from_str(&content)?;
+
+        match raw.get("version").and_then(|v| v.as_integer()) {
+            Some(2) => Ok(RawLockfile::V2(toml::from_str(&content)?)),
+            Some(1) => Ok(RawLockfile::V1(toml::from_str(&content)?)),
+            Some(0) | None => Ok(RawLockfile::V0(toml::from_str(&content)?)),
+            _ => bail!("Unsupported lockfile version"),
         }
     }
 
