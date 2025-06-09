@@ -18,9 +18,9 @@ pub fn get_animation(data: &[u8], format: &ModelFileFormat) -> anyhow::Result<Ve
         .get_by_ref(first_ref)
         .context("Failed to get first child")?;
 
-    if first.class != "KeyframeSequence" {
+    if first.class != "KeyframeSequence" && first.class != "CurveAnimation" {
         bail!(
-            r"Root class name of this model is not KeyframeSequence. Asphalt expects Roblox model files (.rbxm/.rbxmx) to be animations (regular models can't be uploaded with Open Cloud). If you did not expect this error, don't include this file in this input."
+            r"Root class name of this model is not AnimationClip. Asphalt expects Roblox model files (.rbxm/.rbxmx) to be animations (regular models can't be uploaded with Open Cloud). If you did not expect this error, don't include this file in this input."
         )
     }
 
