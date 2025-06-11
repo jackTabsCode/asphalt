@@ -173,7 +173,7 @@ Make sure that you select an appropriate IP and that your API key is under the C
 
 ### Cookie
 
-Your cookie will be pulled from your `.ROBLOSECURITY` environment variable. If not present, it be automatically detected from the current Roblox Studio installation.
+Your cookie will be pulled from your `ROBLOSECURITY` environment variable. If not present, it be automatically detected from the current Roblox Studio installation.
 
 You will probably want to [disable Session Protection](https://create.roblox.com/settings/advanced) if you are using Asphalt in an environment where your IP address changes frequently, but we don't recommend this on your main Roblox account, as it makes your account less secure.
 
