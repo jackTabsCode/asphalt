@@ -81,7 +81,13 @@ impl Default for RawLockfile {
 
 impl RawLockfile {
     pub async fn read() -> Result<RawLockfile> {
-        let content = fs::read_to_string(FILE_NAME).await?;
+        let content = fs::read_to_string(FILE_NAME).await;
+
+        let content = match content {
+            Err(_) => return Ok(Self::default()),
+            Ok(content) => content,
+        };
+
         let raw: toml::Value = toml::from_str(&content)?;
 
         match raw.get("version").and_then(|v| v.as_integer()) {
