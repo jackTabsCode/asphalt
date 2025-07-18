@@ -37,23 +37,21 @@ pub async fn process(
             display
         );
         progress_bar.set_message(message);
-        progress_bar.inc(1);
 
         if state.args.dry_run {
-            info!("File {} would be synced", display);
+            info!("File {display} would be synced");
             dry_run_count += 1;
             continue;
         } else {
-            debug!("File {} changed, syncing", display);
+            debug!("File {display} changed, syncing");
         }
 
         if let Err(err) = asset.process(state.font_db.clone(), input.bleed).await {
-            warn!(
-                "Skipping file {} because it failed processing: {:?}",
-                display, err
-            );
+            warn!("Skipping file {display} because it failed processing: {err:?}");
             continue;
         }
+
+        progress_bar.inc(1);
     }
 
     if state.args.dry_run && dry_run_count > 0 {

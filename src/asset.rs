@@ -2,8 +2,8 @@ use crate::util::{alpha_bleed::alpha_bleed, animation::get_animation, svg::svg_t
 use anyhow::{Context, bail};
 use blake3::Hasher;
 use image::DynamicImage;
-use rbxcloud::rbx::v1::assets::AssetType;
 use resvg::usvg::fontdb::Database;
+use serde::Serialize;
 use std::{
     io::Cursor,
     path::{Path, PathBuf},
@@ -13,7 +13,7 @@ use std::{
 pub struct Asset {
     pub path: PathBuf,
     pub data: Vec<u8>,
-    pub kind: AssetKind,
+    pub ty: AssetType,
     processed: bool,
     ext: String,
     /// The hash before processing
@@ -29,16 +29,16 @@ impl Asset {
             .context("Extension is not valid UTF-8")?
             .to_string();
 
-        let kind = match ext.as_str() {
-            "mp3" => AssetKind::Audio(AudioKind::Mp3),
-            "ogg" => AssetKind::Audio(AudioKind::Ogg),
-            "flac" => AssetKind::Audio(AudioKind::Flac),
-            "wav" => AssetKind::Audio(AudioKind::Wav),
-            "png" | "svg" => AssetKind::Decal(DecalKind::Png),
-            "jpg" => AssetKind::Decal(DecalKind::Jpg),
-            "bmp" => AssetKind::Decal(DecalKind::Bmp),
-            "tga" => AssetKind::Decal(DecalKind::Tga),
-            "fbx" => AssetKind::Model(ModelKind::Model),
+        let ty = match ext.as_str() {
+            "mp3" => AssetType::Audio(AudioType::Mp3),
+            "ogg" => AssetType::Audio(AudioType::Ogg),
+            "flac" => AssetType::Audio(AudioType::Flac),
+            "wav" => AssetType::Audio(AudioType::Wav),
+            "png" | "svg" => AssetType::Image(ImageType::Png),
+            "jpg" | "jpeg" => AssetType::Image(ImageType::Jpg),
+            "bmp" => AssetType::Image(ImageType::Bmp),
+            "tga" => AssetType::Image(ImageType::Tga),
+            "fbx" => AssetType::Model(ModelType::Model),
             "rbxm" | "rbxmx" => {
                 let format = if ext == "rbxm" {
                     ModelFileFormat::Binary
@@ -46,8 +46,10 @@ impl Asset {
                     ModelFileFormat::Xml
                 };
 
-                AssetKind::Model(ModelKind::Animation(format))
+                AssetType::Model(ModelType::Animation(format))
             }
+            "mp4" => AssetType::Video(VideoType::Mp4),
+            "mov" => AssetType::Video(VideoType::Mov),
             _ => bail!("Unknown extension .{ext}"),
         };
 
@@ -58,7 +60,7 @@ impl Asset {
         Ok(Self {
             path,
             data,
-            kind,
+            ty,
             processed: false,
             ext,
             hash,
@@ -82,11 +84,11 @@ impl Asset {
             self.ext = "png".to_string();
         }
 
-        match self.kind {
-            AssetKind::Model(ModelKind::Animation(ref format)) => {
+        match self.ty {
+            AssetType::Model(ModelType::Animation(ref format)) => {
                 self.data = get_animation(&self.data, format)?;
             }
-            AssetKind::Decal(_) if bleed => {
+            AssetType::Image(_) if bleed => {
                 let mut image: DynamicImage = image::load_from_memory(&self.data)?;
                 alpha_bleed(&mut image);
 
@@ -104,7 +106,54 @@ impl Asset {
 }
 
 #[derive(Debug, Clone)]
-pub enum AudioKind {
+pub enum AssetType {
+    Image(ImageType),
+    Audio(AudioType),
+    Model(ModelType),
+    Video(VideoType),
+}
+
+impl AssetType {
+    // https://create.roblox.com/docs/cloud/guides/usage-assets#supported-asset-types-and-limits
+
+    pub fn asset_type(&self) -> &'static str {
+        match self {
+            AssetType::Model(_) => "Model",
+            AssetType::Image(_) => "Image",
+            AssetType::Audio(_) => "Audio",
+            AssetType::Video(_) => "Video",
+        }
+    }
+
+    pub fn file_type(&self) -> anyhow::Result<&'static str> {
+        match self {
+            AssetType::Model(ModelType::Model) => Ok("model/fbx"),
+            AssetType::Image(ImageType::Png) => Ok("image/png"),
+            AssetType::Image(ImageType::Jpg) => Ok("image/jpeg"),
+            AssetType::Image(ImageType::Bmp) => Ok("image/bmp"),
+            AssetType::Image(ImageType::Tga) => Ok("image/tga"),
+            AssetType::Audio(AudioType::Mp3) => Ok("audio/mpeg"),
+            AssetType::Audio(AudioType::Ogg) => Ok("audio/ogg"),
+            AssetType::Audio(AudioType::Flac) => Ok("audio/flac"),
+            AssetType::Audio(AudioType::Wav) => Ok("audio/wav"),
+            AssetType::Video(VideoType::Mp4) => Ok("video/mp4"),
+            AssetType::Video(VideoType::Mov) => Ok("video/mov"), // Interesting
+            _ => bail!("Unsupported asset type"),
+        }
+    }
+}
+
+impl Serialize for AssetType {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(self.asset_type())
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum AudioType {
     Mp3,
     Ogg,
     Flac,
@@ -112,7 +161,7 @@ pub enum AudioKind {
 }
 
 #[derive(Debug, Clone)]
-pub enum DecalKind {
+pub enum ImageType {
     Png,
     Jpg,
     Bmp,
@@ -120,41 +169,19 @@ pub enum DecalKind {
 }
 
 #[derive(Debug, Clone)]
-pub enum ModelKind {
+pub enum ModelType {
     Model,
     Animation(ModelFileFormat), // not uploadable with Open Cloud!
-}
-
-#[derive(Debug, Clone)]
-pub enum AssetKind {
-    Decal(DecalKind),
-    Audio(AudioKind),
-    Model(ModelKind),
-}
-
-impl TryFrom<AssetKind> for AssetType {
-    type Error = anyhow::Error;
-
-    fn try_from(value: AssetKind) -> anyhow::Result<Self> {
-        match value {
-            AssetKind::Audio(AudioKind::Flac) => Ok(AssetType::AudioFlac),
-            AssetKind::Audio(AudioKind::Mp3) => Ok(AssetType::AudioMp3),
-            AssetKind::Audio(AudioKind::Ogg) => Ok(AssetType::AudioOgg),
-            AssetKind::Audio(AudioKind::Wav) => Ok(AssetType::AudioWav),
-            AssetKind::Decal(DecalKind::Bmp) => Ok(AssetType::DecalBmp),
-            AssetKind::Decal(DecalKind::Jpg) => Ok(AssetType::DecalJpeg),
-            AssetKind::Decal(DecalKind::Png) => Ok(AssetType::DecalPng),
-            AssetKind::Decal(DecalKind::Tga) => Ok(AssetType::DecalTga),
-            AssetKind::Model(ModelKind::Animation(_)) => {
-                bail!("Animations cannot be uploaded with Open Cloud")
-            }
-            AssetKind::Model(ModelKind::Model) => Ok(AssetType::ModelFbx),
-        }
-    }
 }
 
 #[derive(Debug, Clone)]
 pub enum ModelFileFormat {
     Binary,
     Xml,
+}
+
+#[derive(Debug, Clone)]
+pub enum VideoType {
+    Mp4,
+    Mov,
 }
