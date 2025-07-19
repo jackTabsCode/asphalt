@@ -118,27 +118,29 @@ impl AssetType {
 
     pub fn asset_type(&self) -> &'static str {
         match self {
-            AssetType::Model(_) => "Model",
+            AssetType::Model(ModelType::Model) => "Model",
+            AssetType::Model(ModelType::Animation(_)) => "Animation",
             AssetType::Image(_) => "Image",
             AssetType::Audio(_) => "Audio",
             AssetType::Video(_) => "Video",
         }
     }
 
-    pub fn file_type(&self) -> anyhow::Result<&'static str> {
+    pub fn file_type(&self) -> &'static str {
         match self {
-            AssetType::Model(ModelType::Model) => Ok("model/fbx"),
-            AssetType::Image(ImageType::Png) => Ok("image/png"),
-            AssetType::Image(ImageType::Jpg) => Ok("image/jpeg"),
-            AssetType::Image(ImageType::Bmp) => Ok("image/bmp"),
-            AssetType::Image(ImageType::Tga) => Ok("image/tga"),
-            AssetType::Audio(AudioType::Mp3) => Ok("audio/mpeg"),
-            AssetType::Audio(AudioType::Ogg) => Ok("audio/ogg"),
-            AssetType::Audio(AudioType::Flac) => Ok("audio/flac"),
-            AssetType::Audio(AudioType::Wav) => Ok("audio/wav"),
-            AssetType::Video(VideoType::Mp4) => Ok("video/mp4"),
-            AssetType::Video(VideoType::Mov) => Ok("video/mov"), // Interesting
-            _ => bail!("Unsupported asset type"),
+            AssetType::Model(ModelType::Model) => "model/fbx",
+            AssetType::Model(ModelType::Animation(ModelFileFormat::Binary)) => "model/x-rbxm",
+            AssetType::Model(ModelType::Animation(ModelFileFormat::Xml)) => "model/x-rbxmx",
+            AssetType::Image(ImageType::Png) => "image/png",
+            AssetType::Image(ImageType::Jpg) => "image/jpeg",
+            AssetType::Image(ImageType::Bmp) => "image/bmp",
+            AssetType::Image(ImageType::Tga) => "image/tga",
+            AssetType::Audio(AudioType::Mp3) => "audio/mpeg",
+            AssetType::Audio(AudioType::Ogg) => "audio/ogg",
+            AssetType::Audio(AudioType::Flac) => "audio/flac",
+            AssetType::Audio(AudioType::Wav) => "audio/wav",
+            AssetType::Video(VideoType::Mp4) => "video/mp4",
+            AssetType::Video(VideoType::Mov) => "video/mov",
         }
     }
 }

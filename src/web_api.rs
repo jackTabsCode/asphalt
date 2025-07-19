@@ -3,14 +3,20 @@ use crate::{
     auth::Auth,
     config::{Creator, CreatorType},
 };
-use anyhow::{Context, bail};
+use anyhow::bail;
 use bytes::Bytes;
 use log::{debug, warn};
-use reqwest::{RequestBuilder, Response, StatusCode, header, multipart};
+use reqwest::{
+    RequestBuilder, Response, StatusCode,
+    header::{self, HeaderValue},
+    multipart,
+};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
+use tokio::sync::Mutex;
 
 const UPLOAD_URL: &str = "https://apis.roblox.com/assets/v1/assets";
+const ANIMATION_UPLOAD_URL: &str = "https://apis.roblox.com/assets/user-auth/v1/assets";
 const OPERATION_URL: &str = "https://apis.roblox.com/assets/v1/operations";
 const ASSET_DESCRIPTION: &str = "Uploaded by Asphalt";
 const MAX_DISPLAY_NAME_LENGTH: usize = 50;
@@ -19,6 +25,7 @@ pub struct WebApiClient {
     inner: reqwest::Client,
     auth: Auth,
     creator: Creator,
+    csrf_token: Mutex<Option<HeaderValue>>,
 }
 
 impl WebApiClient {
@@ -27,6 +34,7 @@ impl WebApiClient {
             inner: reqwest::Client::new(),
             auth,
             creator,
+            csrf_token: Mutex::new(None),
         }
     }
 
@@ -43,28 +51,28 @@ impl WebApiClient {
             description: ASSET_DESCRIPTION,
         };
 
-        match asset.ty {
-            AssetType::Model(ModelType::Animation(_)) => {
-                self.upload_animation(req, file_name, &asset.data).await
-            }
-            _ => self.upload_cloud_asset(req, file_name, &asset.data).await,
-        }
-    }
-
-    async fn upload_cloud_asset(
-        &self,
-        req: WebAssetRequest,
-        file_name: &str,
-        data: &[u8],
-    ) -> anyhow::Result<u64> {
-        let bytes = Bytes::copy_from_slice(data);
+        let bytes = Bytes::copy_from_slice(&asset.data);
         let len = bytes.len() as u64;
         let req_json = serde_json::to_string(&req)?;
-        let mime = req.asset_type.file_type()?.to_owned();
+        let mime = req.asset_type.file_type().to_owned();
         let name = file_name.to_owned();
 
+        let is_animation = matches!(req.asset_type, AssetType::Model(ModelType::Animation(_)));
+
+        let auth_header = if is_animation {
+            ("Cookie", self.auth.cookie.to_owned())
+        } else {
+            ("x-api-key", self.auth.api_key.to_owned())
+        };
+
+        let url = if is_animation {
+            ANIMATION_UPLOAD_URL
+        } else {
+            UPLOAD_URL
+        };
+
         let res = self
-            .send_with_retry(|| {
+            .send_with_retry_and_xsrf(|| {
                 let file_part =
                     multipart::Part::stream_with_length(reqwest::Body::from(bytes.clone()), len)
                         .file_name(name.clone())
@@ -76,8 +84,8 @@ impl WebApiClient {
                     .part("fileContent", file_part);
 
                 self.inner
-                    .post(UPLOAD_URL)
-                    .header("x-api-key", &self.auth.api_key)
+                    .post(url)
+                    .header(auth_header.0, &auth_header.1)
                     .multipart(form)
             })
             .await?;
@@ -104,7 +112,7 @@ impl WebApiClient {
 
         for attempt in 0..MAX_POLLS {
             let res = self
-                .send_with_retry(|| {
+                .send_with_retry_and_xsrf(|| {
                     self.inner
                         .get(format!("{OPERATION_URL}/{id}"))
                         .header("x-api-key", &self.auth.api_key)
@@ -138,7 +146,7 @@ impl WebApiClient {
         bail!("Operation polling exceeded maximum retries")
     }
 
-    async fn send_with_retry<F>(&self, make_req: F) -> anyhow::Result<Response>
+    async fn send_with_retry_and_xsrf<F>(&self, make_req: F) -> anyhow::Result<Response>
     where
         F: Fn() -> RequestBuilder,
     {
@@ -146,36 +154,43 @@ impl WebApiClient {
         let mut attempt = 0;
 
         loop {
-            let res = make_req().send().await?;
-            if res.status() != StatusCode::TOO_MANY_REQUESTS || attempt >= MAX {
-                return Ok(res);
+            let mut req = make_req();
+            if let Some(token) = self.csrf_token.lock().await.as_ref() {
+                req = req.header("X-CSRF-Token", token.clone());
             }
 
-            let wait = res
-                .headers()
-                .get(header::RETRY_AFTER)
-                .and_then(|h| h.to_str().ok())
-                .and_then(|s| s.parse::<u64>().ok())
-                .map(Duration::from_secs)
-                .unwrap_or_else(|| Duration::from_secs(1 << attempt));
+            let res = req.send().await?;
 
-            warn!(
-                "Rate limit exceeded, retrying in {} seconds",
-                wait.as_millis() / 1000
-            );
+            match res.status() {
+                StatusCode::FORBIDDEN => {
+                    if let Some(csrf) = res.headers().get("x-csrf-token").cloned() {
+                        *self.csrf_token.lock().await = Some(csrf);
+                        continue;
+                    }
+                    return Ok(res);
+                }
+                StatusCode::TOO_MANY_REQUESTS if attempt < MAX => {
+                    let wait = res
+                        .headers()
+                        .get(header::RETRY_AFTER)
+                        .and_then(|h| h.to_str().ok())
+                        .and_then(|s| s.parse::<u64>().ok())
+                        .map(Duration::from_secs)
+                        .unwrap_or_else(|| Duration::from_secs(1 << attempt));
 
-            tokio::time::sleep(wait).await;
-            attempt += 1;
+                    tokio::time::sleep(wait).await;
+                    attempt += 1;
+
+                    warn!(
+                        "Rate limited, retrying in {} seconds",
+                        wait.as_millis() / 1000
+                    );
+
+                    continue;
+                }
+                _ => return Ok(res),
+            }
         }
-    }
-
-    async fn upload_animation(
-        &self,
-        req: WebAssetRequest,
-        file_name: &str,
-        data: &[u8],
-    ) -> anyhow::Result<u64> {
-        todo!()
     }
 }
 
