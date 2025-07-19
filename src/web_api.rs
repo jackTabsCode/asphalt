@@ -3,7 +3,7 @@ use crate::{
     auth::Auth,
     config::{Creator, CreatorType},
 };
-use anyhow::bail;
+use anyhow::{Context, bail};
 use bytes::Bytes;
 use log::{debug, warn};
 use reqwest::{
@@ -60,7 +60,8 @@ impl WebApiClient {
         let is_animation = matches!(req.asset_type, AssetType::Model(ModelType::Animation(_)));
 
         let auth_header = if is_animation {
-            ("Cookie", self.auth.cookie.to_owned())
+            let cookie = self.auth.cookie.clone().context("Cookie not present")?;
+            ("Cookie", cookie)
         } else {
             ("x-api-key", self.auth.api_key.to_owned())
         };
