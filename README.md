@@ -155,9 +155,8 @@ Therefore, it is recommended to add Asphalt's generated files to your linter/for
 
 ## Authentication
 
-Both a Cookie and a properly scoped API key are required to use Asphalt.
-
-Previously, only an API key was required to upload images, sounds, and models to Roblox. Unfortunately, due to recent changes in Roblox's web APIs, we can no longer acquire image IDs from Roblox without cookie authentication (while still retaining the ability to upload to groups). I'd appreciate an upvote on [my DevForum post](https://devforum.roblox.com/t/provide-a-stable-open-cloud-api-to-get-an-image-id-from-a-decal-id/3594046) which outlines the issue.
+- A properly scoped API key is always required.
+- A cookie is required for animation uploads.
 
 ### API Key
 
