@@ -29,9 +29,5 @@ unix-archive = ".zip"
 
 [dist.github-custom-runners]
 global = "ubuntu-22.04"
-
-[dist.github-custom-runners.x86_64-unknown-linux-gnu]
-runner = "ubuntu-22.04"
-
-[dist.github-custom-runners.x86_64-pc-windows-msvc]
-runner = "windows-2022"
+x86_64-unknown-linux-gnu = "ubuntu-22.04"
+x86_64-pc-windows-msvc = "windows-2022"
