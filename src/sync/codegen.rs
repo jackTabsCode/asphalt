@@ -130,7 +130,7 @@ pub fn generate_code(
 
 fn generate_typescript(name: &str, node: &CodegenNode) -> String {
     let body = generate_ts_node(node, 0);
-    format!("declare const {}: {}\n\nexport = {}", name, body, name)
+    format!("declare const {name}: {body}\n\nexport = {name}")
 }
 
 fn generate_ts_node(node: &CodegenNode, indent: usize) -> String {
@@ -142,7 +142,7 @@ fn generate_ts_node(node: &CodegenNode, indent: usize) -> String {
                 let k = if is_valid_identifier(k) {
                     k.clone()
                 } else {
-                    format!("\"{}\"", k)
+                    format!("\"{k}\"")
                 };
                 result.push_str(&k);
                 result.push_str(": ");
@@ -160,7 +160,7 @@ fn generate_ts_node(node: &CodegenNode, indent: usize) -> String {
 
 fn generate_luau(name: &str, node: &CodegenNode) -> String {
     let body = generate_luau_node(node, 0);
-    format!("local {} = {}\n\nreturn {}", name, body, name)
+    format!("local {name} = {body}\n\nreturn {name}")
 }
 
 fn generate_luau_node(node: &CodegenNode, indent: usize) -> String {
@@ -172,7 +172,7 @@ fn generate_luau_node(node: &CodegenNode, indent: usize) -> String {
                 let k = if is_valid_identifier(k) {
                     k.clone()
                 } else {
-                    format!("[\"{}\"]", k)
+                    format!("[\"{k}\"]")
                 };
                 result.push_str(&k);
                 result.push_str(" = ");
@@ -183,8 +183,8 @@ fn generate_luau_node(node: &CodegenNode, indent: usize) -> String {
             result.push('}');
             result
         }
-        CodegenNode::String(s) => format!("\"{}\"", s),
-        CodegenNode::Number(n) => format!("{}", n),
+        CodegenNode::String(s) => format!("\"{s}\""),
+        CodegenNode::Number(n) => format!("{n}"),
     }
 }
 

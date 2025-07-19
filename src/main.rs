@@ -5,7 +5,7 @@ use indicatif::MultiProgress;
 use log::LevelFilter;
 use migrate_lockfile::migrate_lockfile;
 use sync::sync;
-use upload_command::upload;
+use upload::upload;
 
 mod asset;
 mod auth;
@@ -16,8 +16,8 @@ mod lockfile;
 mod migrate_lockfile;
 mod sync;
 mod upload;
-mod upload_command;
 mod util;
+mod web_api;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
