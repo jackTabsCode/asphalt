@@ -130,9 +130,10 @@ impl WebApiClient {
             let operation: WebAssetOperation = serde_json::from_str(&text)?;
 
             if operation.done {
-                match operation.response {
-                    Some(response) => return Ok(Some(response.asset_id.parse()?)),
-                    None => bail!("Operation completed but no response provided"),
+                if let Some(response) = operation.response {
+                    return Ok(Some(response.asset_id.parse()?));
+                } else {
+                    bail!("Operation completed but no response provided")
                 }
             }
 
