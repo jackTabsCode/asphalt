@@ -1,5 +1,5 @@
 use crate::{
-    asset::{Asset, AssetKind, ModelKind},
+    asset::{Asset, AssetType, ModelType},
     config::Input,
     sync::SyncState,
 };
@@ -35,7 +35,7 @@ impl SyncBackend for StudioBackend {
             .collect::<Vec<_>>()
             .join("-");
 
-        let identifier = format!(".asphalt-{}", project_name);
+        let identifier = format!(".asphalt-{project_name}");
         let sync_path = studio.content_path().join(&identifier);
         info!("Assets will be synced to: {}", sync_path.display());
 
@@ -56,7 +56,7 @@ impl SyncBackend for StudioBackend {
         input: &Input,
         asset: &Asset,
     ) -> anyhow::Result<Option<BackendSyncResult>> {
-        if let AssetKind::Model(ModelKind::Animation(_)) = asset.kind {
+        if let AssetType::Model(ModelType::Animation(_)) = asset.ty {
             return match state.existing_lockfile.get(&input_name, &asset.hash) {
                 Some(entry) => Ok(Some(BackendSyncResult::Studio(format!(
                     "rbxassetid://{}",

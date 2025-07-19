@@ -4,6 +4,7 @@ use crate::{
     cli::{SyncArgs, SyncTarget},
     config::{Codegen, Config, Input},
     lockfile::{Lockfile, LockfileEntry, RawLockfile},
+    web_api::WebApiClient,
 };
 use anyhow::{Context, Result, bail};
 use backend::BackendSyncResult;
@@ -12,11 +13,7 @@ use indicatif::MultiProgress;
 use log::{debug, warn};
 use resvg::usvg::fontdb::Database;
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
-use tokio::{
-    fs,
-    sync::{RwLock, mpsc},
-    task::JoinHandle,
-};
+use tokio::{fs, sync::mpsc, task::JoinHandle};
 use walk::{DuplicateResult, WalkResult};
 
 mod backend;
@@ -34,7 +31,6 @@ pub struct SyncResult {
 
 pub struct SyncState {
     args: SyncArgs,
-    config: Config,
 
     existing_lockfile: Lockfile,
     result_tx: mpsc::Sender<SyncResult>,
@@ -43,9 +39,7 @@ pub struct SyncState {
 
     font_db: Arc<Database>,
 
-    client: reqwest::Client,
-    auth: Auth,
-    csrf: Arc<RwLock<Option<String>>>,
+    client: WebApiClient,
 }
 
 struct CodegenInsertion {
@@ -91,7 +85,6 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
 
     let state = Arc::new(SyncState {
         args: args.clone(),
-        config: config.clone(),
 
         existing_lockfile: lockfile,
         result_tx,
@@ -100,9 +93,7 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
 
         font_db,
 
-        client: reqwest::Client::new(),
-        auth,
-        csrf: Arc::new(RwLock::new(None)),
+        client: WebApiClient::new(auth, config.creator),
     });
 
     let mut codegen_inputs: HashMap<String, CodegenInput> = HashMap::new();
@@ -151,7 +142,7 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
                     .send(CodegenInsertion {
                         input_name: result.input_name,
                         asset_path: result.path,
-                        asset_id: format!("rbxassetid://{}", asset_id),
+                        asset_id: format!("rbxassetid://{asset_id}"),
                     })
                     .await?;
             } else if let BackendSyncResult::Studio(asset_id) = result.backend {
@@ -241,7 +232,7 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
         let duplicate_tx = duplicate_tx.clone();
 
         producer_handles.push(tokio::spawn(async move {
-            debug!("Walking input {}", input_name);
+            debug!("Walking input {input_name}");
             let walk_results = walk::walk(state.clone(), input_name.clone(), &input).await?;
 
             let mut new_assets = Vec::<Asset>::new();
@@ -389,11 +380,7 @@ async fn generate_from_input(
     let code = codegen::generate_code(lang, input_name, &node)?;
 
     fs::create_dir_all(&input.output_path).await?;
-    fs::write(
-        input.output_path.join(format!("{}.{}", input_name, ext)),
-        code,
-    )
-    .await?;
+    fs::write(input.output_path.join(format!("{input_name}.{ext}")), code).await?;
 
     Ok(())
 }

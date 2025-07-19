@@ -30,10 +30,9 @@ pub async fn perform(
         let input_name = input_name.clone();
 
         let display = asset.path.display();
-        debug!("Syncing asset {}", display);
+        debug!("Syncing asset {display}");
 
-        progress_bar.set_message(format!("Syncing \"{}\"", display));
-        progress_bar.inc(1);
+        progress_bar.set_message(format!("Syncing \"{display}\""));
 
         let res = match backend {
             TargetBackend::Debug(ref backend) => {
@@ -53,7 +52,7 @@ pub async fn perform(
             }
         };
 
-        progress_bar.set_message(format!("Writing {}", display));
+        progress_bar.set_message(format!("Writing {display}"));
 
         match res {
             Ok(Some(result)) => {
@@ -68,10 +67,12 @@ pub async fn perform(
                     .await?;
             }
             Err(err) => {
-                warn!("Failed to sync asset {}: {:?}", display, err);
+                warn!("Failed to sync asset {display}: {err:?}");
             }
             _ => {}
         };
+
+        progress_bar.inc(1);
     }
 
     Ok(())

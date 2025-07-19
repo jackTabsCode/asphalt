@@ -3,7 +3,7 @@ use std::env;
 
 pub struct Auth {
     pub api_key: String,
-    pub cookie: String,
+    pub cookie: Option<String>,
 }
 
 impl Auth {
@@ -16,14 +16,6 @@ impl Auth {
             Some(key) => key,
             None if auth_required => {
                 bail!(err_str("API key"))
-            }
-            None => String::new(),
-        };
-
-        let cookie = match cookie {
-            Some(c) => c,
-            None if auth_required => {
-                bail!(err_str("cookie"))
             }
             None => String::new(),
         };

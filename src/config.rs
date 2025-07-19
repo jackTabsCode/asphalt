@@ -2,7 +2,6 @@ use crate::glob::Glob;
 use anyhow::Context;
 use clap::ValueEnum;
 use fs_err::tokio as fs;
-use rbxcloud::rbx::v1::assets::{AssetCreator, AssetGroupCreator, AssetUserCreator};
 use serde::Deserialize;
 use std::{collections::HashMap, path::PathBuf};
 
@@ -49,19 +48,6 @@ pub struct Creator {
     #[serde(rename = "type")]
     pub ty: CreatorType,
     pub id: u64,
-}
-
-impl From<Creator> for AssetCreator {
-    fn from(creator: Creator) -> AssetCreator {
-        match creator.ty {
-            CreatorType::User => AssetCreator::User(AssetUserCreator {
-                user_id: creator.id.to_string(),
-            }),
-            CreatorType::Group => AssetCreator::Group(AssetGroupCreator {
-                group_id: creator.id.to_string(),
-            }),
-        }
-    }
 }
 
 fn default_true() -> bool {
