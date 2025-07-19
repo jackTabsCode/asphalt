@@ -21,6 +21,9 @@ It's a modern alternative to [Tarmac](https://github.com/Roblox/Tarmac).
 
 ### [Homebrew](https://brew.sh) (macOS/Linux)
 
+> [!WARNING]
+> Does not include pre-releases.
+
 ```bash
 brew tap jacktabscode/tap
 brew install asphalt
