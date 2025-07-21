@@ -67,6 +67,8 @@ pub async fn perform(
         pb.inc(1);
     }
 
+    pb.finish();
+
     Ok(())
 }
 

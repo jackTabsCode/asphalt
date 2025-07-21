@@ -9,16 +9,16 @@ impl ProgressBar {
     pub fn new(mp: MultiProgress, prefix: &str, len: usize) -> Self {
         let template = "{prefix:>.bold}\n[{bar:40.cyan/blue}] {pos}/{len}: {msg} ({eta})";
 
-        let inner = InnerProgressBar::new(len as u64)
-            .with_prefix(prefix.to_string())
-            .with_style(
-                ProgressStyle::default_bar()
-                    .template(template)
-                    .unwrap()
-                    .progress_chars("=>"),
-            );
+        let inner = mp.add(InnerProgressBar::new(len as u64));
 
-        let inner = mp.add(inner);
+        inner.set_style(
+            ProgressStyle::default_bar()
+                .template(template)
+                .unwrap()
+                .progress_chars("=>"),
+        );
+        inner.set_prefix(prefix.to_string());
+
         inner.tick();
 
         Self { inner }
@@ -32,7 +32,7 @@ impl ProgressBar {
         self.inner.inc(delta);
     }
 
-    pub fn finish_with_message(&self, msg: impl Into<String>) {
-        self.inner.finish_with_message(msg.into());
+    pub fn finish(&self) {
+        self.inner.finish_and_clear();
     }
 }

@@ -64,7 +64,7 @@ pub async fn walk(
         .collect::<Vec<_>>()
         .await;
 
-    pb.finish_with_message("Done reading");
+    pb.finish();
 
     Ok(results)
 }

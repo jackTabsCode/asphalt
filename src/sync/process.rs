@@ -44,6 +44,8 @@ pub async fn process(
         pb.inc(1);
     }
 
+    pb.finish();
+
     if state.args.dry_run && dry_run_count > 0 {
         bail!("{} files would be synced", dry_run_count);
     }
