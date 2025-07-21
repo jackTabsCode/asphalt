@@ -77,13 +77,10 @@ impl SyncBackend for StudioBackend {
             .unwrap_or_else(|| std::path::Path::new(""));
         let extension = rel_path
             .extension()
-            .and_then(|ext| ext.to_str())
-            .unwrap_or("");
-        let hash_filename = if extension.is_empty() {
-            asset.hash.clone()
-        } else {
-            format!("{}.{}", asset.hash, extension)
-        };
+            .unwrap()
+            .to_str()
+            .unwrap();
+        let hash_filename = format!("{}.{}", asset.hash, extension);
         rel_path = parent_dir.join(hash_filename);
 
         let target_path = self.sync_path.join(&rel_path);
