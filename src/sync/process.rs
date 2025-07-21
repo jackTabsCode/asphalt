@@ -1,7 +1,6 @@
 use super::SyncState;
-use crate::{asset::Asset, config::Input};
+use crate::{asset::Asset, config::Input, progress_bar::ProgressBar};
 use anyhow::bail;
-use indicatif::{ProgressBar, ProgressStyle};
 use log::{debug, info, warn};
 use std::sync::Arc;
 
@@ -11,47 +10,38 @@ pub async fn process(
     input: &Input,
     assets: &mut Vec<Asset>,
 ) -> anyhow::Result<()> {
-    let progress_bar = state.multi_progress.add(
-        ProgressBar::new(assets.len() as u64)
-            .with_prefix(input_name.clone())
-            .with_style(
-                ProgressStyle::default_bar()
-                    .template("Input \"{prefix}\"\n {msg}\n Progress: {pos}/{len} | ETA: {eta}\n[{bar:40.cyan/blue}]")
-                    .unwrap()
-                    .progress_chars("=> "),
-            ),
+    let prefix = if state.args.dry_run {
+        "Checking"
+    } else {
+        "Processing"
+    };
+    let pb = ProgressBar::new(
+        state.multi_progress.clone(),
+        &format!("{prefix} input \"{input_name}\""),
+        assets.len(),
     );
 
     let mut dry_run_count = 0;
 
     for asset in assets {
-        let display = asset.path.display().to_string();
-
-        let message = format!(
-            "{} \"{}\"",
-            if state.args.dry_run {
-                "Checking"
-            } else {
-                "Processing"
-            },
-            display
-        );
-        progress_bar.set_message(message);
+        let file_name = asset.path.display().to_string();
+        pb.set_msg(&file_name);
 
         if state.args.dry_run {
-            info!("File {display} would be synced");
+            info!("File {file_name} would be synced");
             dry_run_count += 1;
+
             continue;
         } else {
-            debug!("File {display} changed, syncing");
+            debug!("File {file_name} changed, syncing");
         }
 
         if let Err(err) = asset.process(state.font_db.clone(), input.bleed).await {
-            warn!("Skipping file {display} because it failed processing: {err:?}");
+            warn!("Skipping file {file_name} because it failed processing: {err:?}");
             continue;
         }
 
-        progress_bar.inc(1);
+        pb.inc(1);
     }
 
     if state.args.dry_run && dry_run_count > 0 {

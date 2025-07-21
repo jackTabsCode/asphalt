@@ -266,7 +266,7 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
                             .await?;
                     }
                     WalkResult::Duplicate(dupe) => {
-                        if !state.args.suppress_duplicate_warnings {
+                        if input.warn_each_duplicate {
                             warn!(
                                 "Duplicate file found: {} (original at {})",
                                 dupe.path.display(),
