@@ -1,9 +1,14 @@
 use super::SyncState;
-use crate::{asset::Asset, cli::SyncTarget, config::Input, lockfile::LockfileEntry};
+use crate::{
+    asset::Asset, cli::SyncTarget, config::Input, lockfile::LockfileEntry,
+    progress_bar::ProgressBar,
+};
+use dashmap::DashMap;
 use fs_err::tokio as fs;
-use indicatif::{ProgressBar, ProgressStyle};
+use futures::stream::{self, StreamExt};
 use log::warn;
-use std::{collections::HashMap, path::PathBuf, sync::Arc};
+use std::{path::PathBuf, sync::Arc};
+use tokio::sync::Semaphore;
 use walkdir::WalkDir;
 
 pub async fn walk(
@@ -11,23 +16,7 @@ pub async fn walk(
     input_name: String,
     input: &Input,
 ) -> anyhow::Result<Vec<WalkResult>> {
-    let mut seen_hashes = HashMap::<String, PathBuf>::new();
-
     let prefix = input.path.get_prefix();
-
-    let prefix_display = prefix.to_string_lossy().to_string();
-    let progress_bar = state
-        .multi_progress
-        .add(
-            ProgressBar::new_spinner()
-                .with_prefix(prefix_display)
-                .with_style(
-                    ProgressStyle::default_spinner()
-                        .template("{prefix:.bold}: {spinner} {msg}")
-                        .unwrap(),
-                ),
-        )
-        .with_message("Collecting files");
 
     let entries = WalkDir::new(prefix)
         .into_iter()
@@ -36,30 +25,48 @@ pub async fn walk(
         .map(|entry| entry.path().to_path_buf())
         .collect::<Vec<_>>();
 
-    let mut res = Vec::with_capacity(entries.len());
+    let total_files = entries.len();
+    let pb = ProgressBar::new(
+        state.multi_progress.clone(),
+        &format!("Reading input \"{input_name}\""),
+        total_files,
+    );
 
-    for path in entries {
-        progress_bar.set_message(format!("Reading {}", path.display()));
-        progress_bar.tick();
+    let semaphore = Arc::new(Semaphore::new(50));
+    let seen_hashes = Arc::new(DashMap::<String, PathBuf>::with_capacity(total_files));
 
-        match walk_file(
-            state.clone(),
-            input_name.clone(),
-            path.clone(),
-            &mut seen_hashes,
-        )
-        .await
-        {
-            Ok(result) => res.push(result),
-            Err(err) => {
-                warn!("Skipping file {}: {:?}", path.display(), err);
+    let results = stream::iter(entries)
+        .map(|path| {
+            let state = state.clone();
+            let input_name = input_name.clone();
+            let seen_hashes = seen_hashes.clone();
+            let semaphore = semaphore.clone();
+            let pb = pb.clone();
+
+            async move {
+                let _permit = semaphore.acquire().await.unwrap();
+
+                let result = walk_file(state, input_name, path.clone(), seen_hashes).await;
+
+                pb.inc(1);
+
+                match result {
+                    Ok(res) => Some(res),
+                    Err(err) => {
+                        warn!("Skipping file {}: {:?}", path.display(), err);
+                        None
+                    }
+                }
             }
-        }
-    }
+        })
+        .buffer_unordered(100)
+        .filter_map(|result| async move { result })
+        .collect::<Vec<_>>()
+        .await;
 
-    progress_bar.set_message("Done reading files");
+    pb.finish_with_message("Done reading");
 
-    Ok(res)
+    Ok(results)
 }
 
 pub struct ExistingResult {
@@ -83,13 +90,12 @@ async fn walk_file(
     state: Arc<SyncState>,
     input_name: String,
     path: PathBuf,
-    seen_hashes: &mut HashMap<String, PathBuf>,
+    seen_hashes: Arc<DashMap<String, PathBuf>>,
 ) -> anyhow::Result<WalkResult> {
     let data = fs::read(&path).await?;
     let asset = Asset::new(path.clone(), data)?;
 
-    let seen = seen_hashes.get(&asset.hash);
-    if let Some(seen_path) = seen {
+    if let Some(seen_path) = seen_hashes.get(&asset.hash) {
         return Ok(WalkResult::Duplicate(DuplicateResult {
             path: path.clone(),
             original_path: seen_path.clone(),

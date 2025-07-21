@@ -50,10 +50,6 @@ pub struct SyncArgs {
     /// Skip asset syncing and only display what assets will be synced.
     #[arg(long)]
     pub dry_run: bool,
-
-    /// Suppress warnings of duplicate assets. This does not disable the total duplicate count warning.
-    #[arg(long, default_value_t = false)]
-    pub suppress_duplicate_warnings: bool,
 }
 
 #[derive(Args)]

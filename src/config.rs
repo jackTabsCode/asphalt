@@ -64,6 +64,9 @@ pub struct Input {
 
     #[serde(default)]
     pub web: HashMap<String, WebAsset>,
+
+    #[serde(default = "default_true")]
+    pub warn_each_duplicate: bool,
 }
 
 #[derive(Debug, Deserialize, Clone)]

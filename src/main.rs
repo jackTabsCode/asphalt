@@ -14,6 +14,7 @@ mod config;
 mod glob;
 mod lockfile;
 mod migrate_lockfile;
+mod progress_bar;
 mod sync;
 mod upload;
 mod util;

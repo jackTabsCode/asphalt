@@ -16,12 +16,14 @@ blake3 = "1.8.2"
 bytes = "1.10.1"
 clap = { version = "4.5.41", features = ["derive"] }
 clap-verbosity-flag = "3.0.3"
+dashmap = "6.1.0"
 dotenv = "0.15.0"
 env_logger = "0.11.8"
 fs-err = { version = "3.1.1", features = ["tokio"] }
+futures = "0.3.31"
 globset = { version = "0.4.16", features = ["serde1"] }
 image = "0.25.6"
-indicatif = "0.17.11"
+indicatif = "=0.17.11"
 indicatif-log-bridge = "0.2.3"
 log = "0.4.27"
 rbx_binary = { version = "1.0.0", features = ["serde"] }

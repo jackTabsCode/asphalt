@@ -2,9 +2,10 @@ use super::{
     SyncState,
     backend::{SyncBackend, cloud::CloudBackend, debug::DebugBackend, studio::StudioBackend},
 };
-use crate::{asset::Asset, cli::SyncTarget, config::Input, sync::SyncResult};
-use indicatif::{ProgressBar, ProgressStyle};
-use log::{debug, warn};
+use crate::{
+    asset::Asset, cli::SyncTarget, config::Input, progress_bar::ProgressBar, sync::SyncResult,
+};
+use log::warn;
 use std::sync::Arc;
 
 pub async fn perform(
@@ -15,24 +16,17 @@ pub async fn perform(
 ) -> anyhow::Result<()> {
     let backend = pick_backend(&state.args.target.clone()).await?;
 
-    let progress_bar = state.multi_progress.add(
-        ProgressBar::new(assets.len() as u64)
-            .with_prefix(input_name.clone())
-            .with_style(
-                ProgressStyle::default_bar()
-                    .template("Input \"{prefix}\"\n {msg}\n Progress: {pos}/{len} | ETA: {eta}\n[{bar:40.cyan/blue}]")
-                    .unwrap()
-                    .progress_chars("=> "),
-            ),
+    let pb = ProgressBar::new(
+        state.multi_progress.clone(),
+        &format!("Syncing input \"{input_name}\""),
+        assets.len(),
     );
 
     for asset in assets {
         let input_name = input_name.clone();
 
-        let display = asset.path.display();
-        debug!("Syncing asset {display}");
-
-        progress_bar.set_message(format!("Syncing \"{display}\""));
+        let file_name = asset.path.display().to_string();
+        pb.set_msg(&file_name);
 
         let res = match backend {
             TargetBackend::Debug(ref backend) => {
@@ -52,8 +46,6 @@ pub async fn perform(
             }
         };
 
-        progress_bar.set_message(format!("Writing {display}"));
-
         match res {
             Ok(Some(result)) => {
                 state
@@ -67,12 +59,12 @@ pub async fn perform(
                     .await?;
             }
             Err(err) => {
-                warn!("Failed to sync asset {display}: {err:?}");
+                warn!("Failed to sync asset {file_name}: {err:?}");
             }
             _ => {}
         };
 
-        progress_bar.inc(1);
+        pb.inc(1);
     }
 
     Ok(())
