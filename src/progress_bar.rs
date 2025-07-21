@@ -5,9 +5,6 @@ pub struct ProgressBar {
     inner: InnerProgressBar,
 }
 
-// mpiling image v0.25.6
-//     Building [=======================> ] 374/376: image
-
 impl ProgressBar {
     pub fn new(mp: MultiProgress, prefix: &str, len: usize) -> Self {
         let template = "{prefix:>.bold}\n[{bar:40.cyan/blue}] {pos}/{len}: {msg} ({eta})";
