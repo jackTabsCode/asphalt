@@ -75,11 +75,7 @@ impl SyncBackend for StudioBackend {
         let parent_dir = rel_path
             .parent()
             .unwrap_or_else(|| std::path::Path::new(""));
-        let extension = rel_path
-            .extension()
-            .unwrap()
-            .to_str()
-            .unwrap();
+        let extension = rel_path.extension().unwrap().to_str().unwrap();
         let hash_filename = format!("{}.{}", asset.hash, extension);
         rel_path = parent_dir.join(hash_filename);
 
