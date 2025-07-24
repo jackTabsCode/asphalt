@@ -3,7 +3,7 @@ use anyhow::Context;
 use clap::ValueEnum;
 use fs_err::tokio as fs;
 use serde::Deserialize;
-use std::{collections::HashMap, path::PathBuf};
+use std::{collections::HashMap, fmt, path::PathBuf};
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Config {
@@ -41,6 +41,15 @@ pub struct Codegen {
 pub enum CreatorType {
     User,
     Group,
+}
+
+impl fmt::Display for CreatorType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            CreatorType::User => write!(f, "User"),
+            CreatorType::Group => write!(f, "Group"),
+        }
+    }
 }
 
 #[derive(Debug, Deserialize, Clone)]

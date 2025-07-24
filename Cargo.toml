@@ -25,6 +25,7 @@ globset = { version = "0.4.16", features = ["serde1"] }
 image = "0.25.6"
 indicatif = "=0.17.11"
 indicatif-log-bridge = "0.2.3"
+inquire = "0.7.5"
 log = "0.4.27"
 rbx_binary = { version = "1.0.0", features = ["serde"] }
 rbx_cookie = { version = "0.1.5", default-features = false }

@@ -12,6 +12,7 @@ mod auth;
 mod cli;
 mod config;
 mod glob;
+mod init;
 mod lockfile;
 mod migrate_lockfile;
 mod progress_bar;
