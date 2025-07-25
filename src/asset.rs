@@ -78,8 +78,7 @@ impl Asset {
             bail!("Asset has already been processed");
         }
 
-        let ext = self.path.extension().context("File has no extension")?;
-        if ext == "svg" {
+        if self.ext == "svg" {
             self.data = svg_to_png(&self.data, font_db.clone()).await?;
             self.ext = "png".to_string();
         }

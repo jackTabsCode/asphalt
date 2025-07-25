@@ -214,3 +214,35 @@ fn is_valid_identifier(value: &str) -> bool {
 
     chars.all(is_valid_ident_char)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_test_node() -> CodegenNode {
+        let mut inner_map = BTreeMap::new();
+        inner_map.insert("foo".to_string(), CodegenNode::String("bar".to_string()));
+        inner_map.insert("baz".to_string(), CodegenNode::Number(42));
+        let inner_node = CodegenNode::Table(inner_map);
+
+        let mut root_inner = BTreeMap::new();
+        root_inner.insert("qux".to_string(), inner_node);
+        root_inner.insert("fred".to_string(), CodegenNode::String("world".to_string()));
+
+        CodegenNode::Table(root_inner)
+    }
+
+    #[test]
+    fn test_typescript_codegen() {
+        let root_node = make_test_node();
+        let code = generate_code(CodegenLanguage::TypeScript, "name", &root_node).unwrap();
+        insta::assert_snapshot!(code);
+    }
+
+    #[test]
+    fn test_luau_codegen() {
+        let root_node = make_test_node();
+        let code = generate_code(CodegenLanguage::Luau, "name", &root_node).unwrap();
+        insta::assert_snapshot!(code);
+    }
+}

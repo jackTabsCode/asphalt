@@ -9,7 +9,11 @@ use anyhow::Context;
 use fs_err::tokio as fs;
 use log::{info, warn};
 use roblox_install::RobloxStudio;
-use std::{env, path::PathBuf, sync::Arc};
+use std::{
+    env,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 pub struct StudioBackend {
     identifier: String,
@@ -71,9 +75,7 @@ impl SyncBackend for StudioBackend {
 
         let rel_path = asset.rel_path(&input.path.get_prefix())?;
 
-        let parent_dir = rel_path
-            .parent()
-            .unwrap_or_else(|| std::path::Path::new(""));
+        let parent_dir = rel_path.parent().unwrap_or_else(|| Path::new(""));
         let extension = rel_path.extension().unwrap().to_str().unwrap();
         let hash_filename = format!("{}.{}", asset.hash, extension);
 
