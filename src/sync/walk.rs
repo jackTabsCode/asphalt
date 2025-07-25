@@ -6,7 +6,7 @@ use crate::{
 use dashmap::DashMap;
 use fs_err::tokio as fs;
 use futures::stream::{self, StreamExt};
-use log::warn;
+use log::debug;
 use std::{path::PathBuf, sync::Arc};
 use tokio::sync::Semaphore;
 use walkdir::WalkDir;
@@ -53,7 +53,7 @@ pub async fn walk(
                 match result {
                     Ok(res) => Some(res),
                     Err(err) => {
-                        warn!("Skipping file {}: {:?}", path.display(), err);
+                        debug!("Skipping file {}: {:?}", path.display(), err);
                         None
                     }
                 }
