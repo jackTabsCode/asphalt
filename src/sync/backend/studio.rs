@@ -69,21 +69,16 @@ impl SyncBackend for StudioBackend {
             };
         }
 
-        let mut rel_path = asset.rel_path(&input.path.get_prefix())?;
-        rel_path = PathBuf::from(rel_path.to_string_lossy().replace('\\', "/"));
+        let rel_path = asset.rel_path(&input.path.get_prefix())?;
 
         let parent_dir = rel_path
             .parent()
             .unwrap_or_else(|| std::path::Path::new(""));
-        let extension = rel_path
-            .extension()
-            .unwrap()
-            .to_str()
-            .unwrap();
+        let extension = rel_path.extension().unwrap().to_str().unwrap();
         let hash_filename = format!("{}.{}", asset.hash, extension);
-        rel_path = parent_dir.join(hash_filename);
 
-        let target_path = self.sync_path.join(&rel_path);
+        let hash_rel_path = parent_dir.join(hash_filename);
+        let target_path = self.sync_path.join(&hash_rel_path);
 
         if let Some(parent) = target_path.parent() {
             fs::create_dir_all(parent).await?;
@@ -91,10 +86,11 @@ impl SyncBackend for StudioBackend {
 
         fs::write(&target_path, &asset.data).await?;
 
+        let url_path = hash_rel_path.to_string_lossy().replace('\\', "/");
+
         Ok(Some(BackendSyncResult::Studio(format!(
             "rbxasset://{}/{}",
-            self.identifier,
-            rel_path.display()
+            self.identifier, url_path
         ))))
     }
 }
