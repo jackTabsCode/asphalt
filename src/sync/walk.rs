@@ -3,13 +3,23 @@ use crate::{
     asset::Asset, cli::SyncTarget, config::Input, lockfile::LockfileEntry,
     progress_bar::ProgressBar,
 };
+use anyhow::Context;
 use dashmap::DashMap;
 use fs_err::tokio as fs;
 use futures::stream::{self, StreamExt};
 use log::debug;
 use std::{path::PathBuf, sync::Arc};
-use tokio::sync::Semaphore;
+use tokio::{sync::Semaphore, task::spawn_blocking};
 use walkdir::WalkDir;
+
+#[derive(Clone)]
+struct WalkCtx {
+    state: Arc<SyncState>,
+    input_name: String,
+    seen_hashes: Arc<DashMap<String, PathBuf>>,
+    semaphore: Arc<Semaphore>,
+    pb: ProgressBar,
+}
 
 pub async fn walk(
     state: Arc<SyncState>,
@@ -35,20 +45,25 @@ pub async fn walk(
     let semaphore = Arc::new(Semaphore::new(50));
     let seen_hashes = Arc::new(DashMap::<String, PathBuf>::with_capacity(total_files));
 
+    let ctx = WalkCtx {
+        state,
+        input_name,
+        seen_hashes,
+        semaphore,
+        pb,
+    };
+
     let results = stream::iter(entries)
         .map(|path| {
-            let state = state.clone();
-            let input_name = input_name.clone();
-            let seen_hashes = seen_hashes.clone();
-            let semaphore = semaphore.clone();
-            let pb = pb.clone();
+            let ctx = ctx.clone();
 
             async move {
-                let _permit = semaphore.acquire().await.unwrap();
+                let _permit = ctx.semaphore.acquire().await.unwrap();
 
-                let result = walk_file(state, input_name, path.clone(), seen_hashes).await;
+                let result =
+                    walk_file(ctx.state, ctx.input_name, path.clone(), ctx.seen_hashes).await;
 
-                pb.inc(1);
+                ctx.pb.inc(1);
 
                 match result {
                     Ok(res) => Some(res),
@@ -64,7 +79,7 @@ pub async fn walk(
         .collect::<Vec<_>>()
         .await;
 
-    pb.finish();
+    ctx.pb.finish();
 
     Ok(results)
 }
@@ -93,7 +108,10 @@ async fn walk_file(
     seen_hashes: Arc<DashMap<String, PathBuf>>,
 ) -> anyhow::Result<WalkResult> {
     let data = fs::read(&path).await?;
-    let asset = Asset::new(path.clone(), data)?;
+    let path_clone = path.clone();
+    let asset = spawn_blocking(move || Asset::new(path_clone, data))
+        .await
+        .context("Failed to create asset")??;
 
     if let Some(seen_path) = seen_hashes.get(&asset.hash) {
         return Ok(WalkResult::Duplicate(DuplicateResult {
