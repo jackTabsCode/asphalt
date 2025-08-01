@@ -1,6 +1,6 @@
 use clap::Parser;
 use cli::{Cli, Commands};
-use dotenv::dotenv;
+use dotenvy::dotenv;
 use indicatif::MultiProgress;
 use log::LevelFilter;
 use migrate_lockfile::migrate_lockfile;
@@ -22,7 +22,7 @@ mod web_api;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    dotenv().ok();
+    let _ = dotenv();
 
     let args = Cli::parse();
 
