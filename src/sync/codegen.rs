@@ -56,17 +56,16 @@ fn normalize_path_components(path: &Path, strip_extensions: bool) -> Vec<String>
 }
 
 fn normalize_path_string(path: &Path, strip_extensions: bool) -> String {
-    if strip_extensions {
-        if let (Some(file_name), Some(parent)) = (path.file_name(), path.parent()) {
-            if let Some(stem) = Path::new(file_name).file_stem() {
-                let parent_str = parent.to_string_lossy();
-                return if parent_str.is_empty() || parent_str == "." {
-                    stem.to_string_lossy().into_owned()
-                } else {
-                    format!("{}/{}", parent_str, stem.to_string_lossy())
-                };
-            }
-        }
+    if strip_extensions
+        && let (Some(file_name), Some(parent)) = (path.file_name(), path.parent())
+        && let Some(stem) = Path::new(file_name).file_stem()
+    {
+        let parent_str = parent.to_string_lossy();
+        return if parent_str.is_empty() || parent_str == "." {
+            stem.to_string_lossy().into_owned()
+        } else {
+            format!("{}/{}", parent_str, stem.to_string_lossy())
+        };
     }
     path.to_string_lossy().into_owned()
 }
