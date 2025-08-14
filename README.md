@@ -8,7 +8,7 @@ It's a modern alternative to [Tarmac](https://github.com/Roblox/Tarmac).
 
 ## Features
 
--   Syncs your images, sounds, models, and animations to Roblox
+-   Syncs your images, sounds, [videos](#videos), [animations](#animations), and [3D models](#models) to Roblox
 -   Generates Luau or Typescript code so you can use them in your game
 -   Can target Roblox users or groups
 -   Processes SVGs into PNGs and alpha bleeds images for crisp edges
@@ -187,6 +187,16 @@ You will probably want to [disable Session Protection](https://create.roblox.com
 > This feature uses a private Studio API, so this feature may break without warning.
 
 Asphalt expects a single [KeyframeSequence](https://create.roblox.com/docs/reference/engine/classes/KeyframeSequence) to be saved as either a `.rbxm` or `.rbxmx` file.
+
+## Videos
+
+When uploading videos, you must provide the `--expected-price` argument, which is the price you expect to be charged for the video. See the [Roblox documentation on Videos](https://create.roblox.com/docs/en-us/ui/video-frames#upload-videos) for more details.
+
+## Models
+
+Asphalt supports uploading `.fbx` files purely out of ease, but Roblox does not offer control over the import settings through the web API. As such, this is not a feature that most developers use.
+
+We instead recommend uploading your models with the 3D Importer in Studio, which provides a 3D preview, error checking, and customizable settings. You can then use a tool like [Rojo](https://github.com/rojo-rbx/rojo) to build them into your project.
 
 ## Attributions
 
