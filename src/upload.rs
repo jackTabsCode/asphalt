@@ -20,7 +20,7 @@ pub async fn upload(args: UploadArgs) -> anyhow::Result<()> {
     };
     let auth = Auth::new(args.api_key, true)?;
 
-    let client = WebApiClient::new(auth, creator);
+    let client = WebApiClient::new(auth, creator, args.expected_price);
 
     let asset_id = client.upload(&asset).await?;
 

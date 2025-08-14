@@ -50,6 +50,10 @@ pub struct SyncArgs {
     /// Skip asset syncing and only display what assets will be synced.
     #[arg(long)]
     pub dry_run: bool,
+
+    /// Provides Roblox with the amount of Robux that you are willing to spend on each non-free asset upload.
+    #[arg(long)]
+    pub expected_price: Option<u32>,
 }
 
 #[derive(Args)]
@@ -77,6 +81,10 @@ pub struct UploadArgs {
     /// Format the response as a link.
     #[arg(long)]
     pub link: bool,
+
+    /// Provides Roblox with the amount of Robux that you are willing to spend on each non-free asset upload.
+    #[arg(long)]
+    pub expected_price: Option<u32>,
 }
 
 #[derive(Args)]

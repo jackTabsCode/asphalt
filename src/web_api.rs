@@ -25,15 +25,17 @@ pub struct WebApiClient {
     inner: reqwest::Client,
     auth: Auth,
     creator: Creator,
+    expected_price: Option<u32>,
     csrf_token: Mutex<Option<HeaderValue>>,
 }
 
 impl WebApiClient {
-    pub fn new(auth: Auth, creator: Creator) -> Self {
+    pub fn new(auth: Auth, creator: Creator, expected_price: Option<u32>) -> Self {
         WebApiClient {
             inner: reqwest::Client::new(),
             auth,
             creator,
+            expected_price,
             csrf_token: Mutex::new(None),
         }
     }
@@ -47,6 +49,7 @@ impl WebApiClient {
             asset_type: asset.ty.clone(),
             creation_context: WebAssetRequestCreationContext {
                 creator: self.creator.clone().into(),
+                expected_price: self.expected_price,
             },
             description: ASSET_DESCRIPTION,
         };
@@ -206,8 +209,10 @@ struct WebAssetRequest {
 }
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct WebAssetRequestCreationContext {
     creator: WebAssetCreator,
+    expected_price: Option<u32>,
 }
 
 #[derive(Serialize)]

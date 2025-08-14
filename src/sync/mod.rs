@@ -93,7 +93,7 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
 
         font_db,
 
-        client: WebApiClient::new(auth, config.creator),
+        client: WebApiClient::new(auth, config.creator, args.expected_price),
     });
 
     let mut codegen_inputs: HashMap<String, CodegenInput> = HashMap::new();
