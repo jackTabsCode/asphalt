@@ -25,7 +25,7 @@ impl SyncBackend for StudioBackend {
     where
         Self: Sized,
     {
-        let studio = RobloxStudio::locate()?;
+        let studio = RobloxStudio::locate().context("Failed to locate Roblox Studio directory")?;
 
         let current_dir = env::current_dir()?;
         let name = current_dir
