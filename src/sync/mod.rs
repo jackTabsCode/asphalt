@@ -201,7 +201,9 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
 
         for dupe in dupes {
             let original = source.get(&dupe.original_path).unwrap();
-            source.insert(dupe.path, original.clone());
+
+            let path = dupe.path.to_string_lossy().replace('\\', "/");
+            source.insert(path.into(), original.clone());
         }
     }
 
