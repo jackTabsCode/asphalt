@@ -2,7 +2,7 @@
 members = ["cargo:."]
 
 [dist]
-cargo-dist-version = "0.28.2"
+cargo-dist-version = "0.29.0"
 ci = "github"
 installers = ["homebrew"]
 tap = "jacktabscode/homebrew-tap"
@@ -14,7 +14,5 @@ targets = [
 	"x86_64-pc-windows-msvc",
 ]
 pr-run-mode = "skip"
-windows-archive = ".zip"
-unix-archive = ".zip"
 checksum = "false"
 source-tarball = false
