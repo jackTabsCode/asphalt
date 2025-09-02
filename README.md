@@ -19,6 +19,33 @@ It's a modern alternative to [Tarmac](https://github.com/Roblox/Tarmac).
 
 ## Installation
 
+### [Mise](https://mise.jdx.dev)
+
+```bash
+mise use ubi:jacktabscode/asphalt
+```
+
+### [Cargo](https://crates.io/crates/asphalt) (build from source)
+
+```bash
+cargo install asphalt
+```
+
+<details>
+<summary>View other installation options</summary>
+
+### [Pesde](https://github.com/pesde-pkg/pesde)
+
+```bash
+pesde add --dev pesde/asphalt --target lune
+```
+
+### [Rokit](https://github.com/rojo-rbx/rokit)
+
+```bash
+rokit add jacktabscode/asphalt
+```
+
 ### [Homebrew](https://brew.sh) (macOS/Linux)
 
 > [!WARNING]
@@ -29,24 +56,9 @@ brew tap jacktabscode/tap
 brew install asphalt
 ```
 
-### [Pesde](https://github.com/pesde-pkg/pesde)
-```bash
-pesde add --dev pesde/asphalt --target lune
-```
-
-### [Aftman](https://github.com/lpghatguy/aftman) or [Rokit](https://github.com/rojo-rbx/rokit)
-
-```bash
-aftman add jacktabscode/asphalt
-```
-
-### [Cargo](https://crates.io/crates/asphalt) (build from source)
-
-```bash
-cargo install asphalt
-```
-
 [Asphalt cannot be installed with Foreman.](https://github.com/Roblox/foreman/issues/97)
+
+</details>
 
 ## Commands
 
@@ -87,7 +99,7 @@ Uploads a single asset to Roblox. See `asphalt upload --help` for more informati
 Asphalt is configured with a project file called `asphalt.toml`. It is required for the program to run.
 
 <details>
-<summary>Example</summary>
+<summary>See an example</summary>
 
 ```toml
 [creator]
