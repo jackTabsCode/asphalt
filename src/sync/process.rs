@@ -1,54 +1,37 @@
 use super::SyncState;
-use crate::{asset::Asset, config::Input, progress_bar::ProgressBar};
-use anyhow::bail;
-use log::{debug, info, warn};
+use crate::{asset::Asset, progress_bar::ProgressBar};
+use log::warn;
 use std::sync::Arc;
 
 pub async fn process(
+    assets: Vec<Asset>,
     state: Arc<SyncState>,
     input_name: String,
-    input: &Input,
-    assets: &mut Vec<Asset>,
-) -> anyhow::Result<()> {
-    let prefix = if state.args.dry_run {
-        "Checking"
-    } else {
-        "Processing"
-    };
+    bleed: bool,
+) -> anyhow::Result<Vec<Asset>> {
     let pb = ProgressBar::new(
         state.multi_progress.clone(),
-        &format!("{prefix} input \"{input_name}\""),
+        &format!("Processing input \"{input_name}\""),
         assets.len(),
     );
 
-    let mut dry_run_count = 0;
+    let mut processed_assets = Vec::with_capacity(assets.len());
 
-    for asset in assets {
+    for mut asset in assets {
         let file_name = asset.path.display().to_string();
         pb.set_msg(&file_name);
 
-        if state.args.dry_run {
-            info!("File {file_name} would be synced");
-            dry_run_count += 1;
-
-            continue;
-        } else {
-            debug!("File {file_name} changed, syncing");
-        }
-
-        if let Err(err) = asset.process(state.font_db.clone(), input.bleed).await {
+        if let Err(err) = asset.process(state.font_db.clone(), bleed).await {
             warn!("Skipping file {file_name} because it failed processing: {err:?}");
             continue;
         }
 
         pb.inc(1);
+
+        processed_assets.push(asset);
     }
 
     pb.finish();
 
-    if state.args.dry_run && dry_run_count > 0 {
-        bail!("{} files would be synced", dry_run_count);
-    }
-
-    Ok(())
+    Ok(processed_assets)
 }

@@ -9,10 +9,10 @@ use log::warn;
 use std::sync::Arc;
 
 pub async fn perform(
+    assets: &Vec<Asset>,
     state: Arc<SyncState>,
     input_name: String,
     input: &Input,
-    assets: &Vec<Asset>,
 ) -> anyhow::Result<()> {
     let backend = pick_backend(&state.args.target.clone()).await?;
 

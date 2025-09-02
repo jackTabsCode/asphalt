@@ -30,6 +30,7 @@ async fn main() -> anyhow::Result<()> {
     let logger = binding
         .filter_level(LevelFilter::Info)
         .filter_module("asphalt", args.verbose.log_level_filter())
+        .filter_module("rbx_cookie", LevelFilter::Warn)
         .format_timestamp(None)
         .format_module_path(false)
         .build();
