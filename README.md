@@ -3,9 +3,6 @@
 Asphalt is a command line tool used to upload assets to Roblox and easily reference them in code.
 It's a modern alternative to [Tarmac](https://github.com/Roblox/Tarmac).
 
-> [!IMPORTANT]
-> This documentation is for the pre-release of Asphalt 1.0. Older versions are no longer supported or working due to Roblox API changes.
-
 ## Features
 
 -   Syncs your images, sounds, [videos](#videos), [animations](#animations), and [3D models](#models) to Roblox
@@ -47,9 +44,6 @@ rokit add jacktabscode/asphalt
 ```
 
 ### [Homebrew](https://brew.sh) (macOS/Linux)
-
-> [!WARNING]
-> Does not include pre-releases.
 
 ```bash
 brew tap jacktabscode/tap
