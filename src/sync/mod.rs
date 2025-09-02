@@ -107,6 +107,10 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
                     new_assets.push(asset);
                 }
                 WalkResult::Existing(existing) => {
+                    if args.dry_run {
+                        continue;
+                    }
+
                     if matches!(args.target, SyncTarget::Cloud) {
                         lockfile_tx
                             .send(LockfileInsertion {
@@ -134,6 +138,10 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
                             dupe.path.display(),
                             dupe.original_path.display()
                         );
+                    }
+
+                    if args.dry_run {
+                        continue;
                     }
 
                     dupe_count += 1;
