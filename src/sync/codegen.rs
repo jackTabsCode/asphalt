@@ -8,6 +8,7 @@ use std::{
 pub enum Node {
     Table(BTreeMap<String, Node>),
     String(String),
+    Content(String),
     #[allow(dead_code)]
     Number(u64),
 }
@@ -21,6 +22,12 @@ pub fn create_node(source: &BTreeMap<PathBuf, String>, config: &config::Codegen)
     let mut root = Node::Table(BTreeMap::new());
 
     for (path, value) in source {
+        let value = if config.content {
+            Node::Content(value.into())
+        } else {
+            Node::String(value.into())
+        };
+
         match config.style {
             config::CodegenStyle::Nested => {
                 let components = normalize_path_components(path, config.strip_extensions);
@@ -68,21 +75,21 @@ fn normalize_path_string(path: &Path, strip_extensions: bool) -> String {
     path.to_string_lossy().into_owned()
 }
 
-fn insert_flat(node: &mut Node, key: &str, content: &str) {
+fn insert_flat(node: &mut Node, key: &str, value: Node) {
     match node {
         Node::Table(map) => {
-            map.insert(key.into(), Node::String(content.into()));
+            map.insert(key.into(), value);
         }
         _ => {
             *node = Node::Table(BTreeMap::new());
             if let Node::Table(map) = node {
-                map.insert(key.into(), Node::String(content.into()));
+                map.insert(key.into(), value);
             }
         }
     }
 }
 
-fn insert_nested(node: &mut Node, components: &[String], content: &str) {
+fn insert_nested(node: &mut Node, components: &[String], value: Node) {
     if !matches!(node, Node::Table(_)) {
         *node = Node::Table(BTreeMap::new());
     }
@@ -95,7 +102,7 @@ fn insert_nested(node: &mut Node, components: &[String], content: &str) {
         let component = &components[0];
 
         if components.len() == 1 {
-            map.insert(component.clone(), Node::String(content.into()));
+            map.insert(component.clone(), value);
         } else {
             let next_node = map
                 .entry(component.clone())
@@ -105,7 +112,7 @@ fn insert_nested(node: &mut Node, components: &[String], content: &str) {
                 *next_node = Node::Table(BTreeMap::new());
             }
 
-            insert_nested(next_node, &components[1..], content);
+            insert_nested(next_node, &components[1..], value);
         }
     }
 }
@@ -149,6 +156,7 @@ fn generate_ts_node(node: &Node, indent: usize) -> String {
             result
         }
         Node::String(_) => "string".to_string(),
+        Node::Content(_) => "Content".to_string(),
         Node::Number(_) => "number".to_string(),
     }
 }
@@ -181,6 +189,7 @@ fn generate_luau_node(node: &Node, indent: usize) -> String {
             result
         }
         Node::String(s) => format!("\"{s}\""),
+        Node::Content(s) => format!("Content.fromUri(\"{s}\")"),
         Node::Number(n) => format!("{n}"),
     }
 }
@@ -221,6 +230,7 @@ mod tests {
         let mut root_inner = BTreeMap::new();
         root_inner.insert("qux".to_string(), inner_node);
         root_inner.insert("fred".to_string(), Node::String("world".to_string()));
+        root_inner.insert("waldo".to_string(), Node::Content("garply".to_string()));
 
         Node::Table(root_inner)
     }
