@@ -137,6 +137,8 @@ output_path = "src/shared"
     -   The code-generation style to use. Defaults to `flat`, which makes accessing assets feel like writing file paths. You may consider using `nested` if you are not a TypeScript user, however, as Luau does not support template literal types.
 -   `strip_extensions`: boolean (optional)
     -   Whether to strip the file extension. Defaults to `false` for the same reason described above.
+-   `content`: boolean (optional)
+    -   Whether to output `Content` instead of `string`s. Defaults to `false`.
 
 #### Input
 -	`path`: glob

@@ -34,6 +34,7 @@ pub struct Codegen {
     pub style: CodegenStyle,
     pub typescript: bool,
     pub strip_extensions: bool,
+    pub content: bool,
 }
 
 #[derive(Debug, Deserialize, Clone, ValueEnum)]

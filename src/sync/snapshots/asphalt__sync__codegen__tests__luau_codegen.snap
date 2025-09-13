@@ -10,6 +10,7 @@ local name = {
 		baz = 42,
 		foo = "bar",
 	},
+	waldo = Content.fromUri("garply"),
 }
 
 return name

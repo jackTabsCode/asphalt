@@ -10,6 +10,7 @@ declare const name: {
 		baz: number
 		foo: string
 	}
+	waldo: Content
 }
 
 export = name
