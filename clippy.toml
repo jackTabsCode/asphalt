@@ -1,0 +1,53 @@
+# Clippy configuration for asphalt - a CLI tool for Roblox asset management
+# Using pedantic level for high code quality standards
+
+msrv = "1.85" # Minimum supported Rust version (Rust 2024 edition)
+
+# Thresholds appropriate for a CLI tool
+single-char-binding-names-threshold = 5 # Allow a few single-char names
+struct-field-name-threshold = 5         # Allow structs with fewer named fields
+too-many-arguments-threshold = 8        # Allow more arguments for CLI functions
+too-many-lines-threshold = 150          # Allow longer functions for CLI logic
+
+# Allow indexing in some cases (common in CLI tools)
+allow-indexing-slicing-in-tests = true
+
+# Allow mixed uninlined format args (common in logging)
+allow-mixed-uninlined-format-args = true
+
+# Don't require safety docs for all unsafe blocks (too strict for CLI tool)
+check-private-items = false
+
+# Allow some traits to be ignored in certain contexts
+ignore-interior-mutability = ["Arc", "Mutex", "RwLock"]
+
+# Allow some prefixes for module name repetitions
+allowed-prefixes = ["get", "set", "is", "has", "to", "from", "try"]
+
+# Allow some duplicate crates (common in CLI tools with many dependencies)
+allowed-duplicate-crates = ["serde", "tokio"]
+
+# Cognitive complexity threshold
+cognitive-complexity-threshold = 25
+
+# Allow some large stack frames for CLI operations
+too-large-for-stack = 300
+
+# Allow some excessive bools in CLI structs
+max-fn-params-bools = 4
+max-struct-bools = 4
+
+# Allow some trait bounds repetition
+max-trait-bounds = 4
+
+# Allow some large includes (for embedded assets if needed)
+max-include-file-size = 2000000
+
+# Allow some verbose bit masks
+verbose-bit-mask-threshold = 2
+
+# Allow some large stack arrays
+stack-size-threshold = 600000
+
+# Allow some trivial copy types to be passed by ref
+trivial-copy-size-limit = 64

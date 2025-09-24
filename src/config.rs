@@ -36,28 +36,37 @@ impl Config {
                 let config = match file_name {
                     name if name.ends_with(".json") => {
                         // Use fjson for lenient JSON parsing (supports trailing commas and comments)
-                        let clean_json = fjson::to_json(&content)
-                            .with_context(|| format!("Failed to parse JSON config file: {}", file_name))?;
-                        serde_json::from_str(&clean_json)
-                            .with_context(|| format!("Failed to deserialize JSON config: {}", file_name))?
-                    },
+                        let clean_json = fjson::to_json(&content).with_context(|| {
+                            format!("Failed to parse JSON config file: {}", file_name)
+                        })?;
+                        serde_json::from_str(&clean_json).with_context(|| {
+                            format!("Failed to deserialize JSON config: {}", file_name)
+                        })?
+                    }
                     name if name.ends_with(".json5") => {
-                        json5::from_str(&content)
-                            .with_context(|| format!("Failed to parse JSON5 config file: {}", file_name))?
-                    },
+                        json5::from_str(&content).with_context(|| {
+                            format!("Failed to parse JSON5 config file: {}", file_name)
+                        })?
+                    }
                     name if name.ends_with(".jsonc") => {
                         // Use fjson for JSONC files (supports comments and trailing commas)
-                        let clean_json = fjson::to_json(&content)
-                            .with_context(|| format!("Failed to parse JSONC config file: {}", file_name))?;
-                        serde_json::from_str(&clean_json)
-                            .with_context(|| format!("Failed to deserialize JSONC config: {}", file_name))?
-                    },
+                        let clean_json = fjson::to_json(&content).with_context(|| {
+                            format!("Failed to parse JSONC config file: {}", file_name)
+                        })?;
+                        serde_json::from_str(&clean_json).with_context(|| {
+                            format!("Failed to deserialize JSONC config: {}", file_name)
+                        })?
+                    }
                     name if name.ends_with(".toml") => {
-                        toml::from_str(&content)
-                            .with_context(|| format!("Failed to parse TOML config file: {}", file_name))?
-                    },
+                        toml::from_str(&content).with_context(|| {
+                            format!("Failed to parse TOML config file: {}", file_name)
+                        })?
+                    }
                     _ => {
-                        return Err(anyhow::anyhow!("Unsupported config file format: {}", file_name));
+                        return Err(anyhow::anyhow!(
+                            "Unsupported config file format: {}",
+                            file_name
+                        ));
                     }
                 };
 

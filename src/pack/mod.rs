@@ -86,14 +86,14 @@ impl Packer {
         let atlases = self.pack_sprites_to_atlases(sorted_sprites)?;
 
         // Check page limit
-        if let Some(limit) = self.options.page_limit {
-            if atlases.len() > limit as usize {
-                bail!(
-                    "Packing would require {} pages but limit is {}. Consider increasing max_size or page_limit.",
-                    atlases.len(),
-                    limit
-                );
-            }
+        if let Some(limit) = self.options.page_limit
+            && atlases.len() > limit as usize
+        {
+            bail!(
+                "Packing would require {} pages but limit is {}. Consider increasing max_size or page_limit.",
+                atlases.len(),
+                limit
+            );
         }
 
         // Generate manifest
@@ -231,7 +231,10 @@ impl Packer {
         let mut packed_sprites = Vec::new();
         let mut unpacked_sprites = Vec::new();
 
-        for sprite in sprites {
+        for mut sprite in sprites {
+            // Trim sprite to remove transparent borders
+            let original_rect = self.trim_sprite(&mut sprite);
+
             // Account for padding in placement
             let required_size = Size {
                 width: sprite.size.width + 2 * self.options.padding,
@@ -250,8 +253,8 @@ impl Packer {
                 packed_sprites.push(PackedSprite {
                     sprite,
                     rect: sprite_rect,
-                    trimmed: false, // TODO: Implement trimming
-                    sprite_source_size: None,
+                    trimmed: original_rect.is_some(),
+                    sprite_source_size: original_rect,
                 });
             } else {
                 unpacked_sprites.push(sprite);
@@ -270,6 +273,88 @@ impl Packer {
             },
             unpacked_sprites,
         ))
+    }
+
+    fn trim_sprite(&self, sprite: &mut Sprite) -> Option<Rect> {
+        use std::io::Cursor;
+
+        let img = image::load_from_memory(&sprite.data).ok()?;
+        let rgba = img.to_rgba8();
+        let width = rgba.width() as usize;
+        let height = rgba.height() as usize;
+
+        if width == 0 || height == 0 {
+            return None;
+        }
+
+        let pixels = rgba.as_raw();
+
+        // Find bounding box of non-transparent pixels
+        let mut min_x = width;
+        let mut max_x = 0;
+        let mut min_y = height;
+        let mut max_y = 0;
+
+        for y in 0..height {
+            for x in 0..width {
+                let idx = (y * width + x) * 4;
+                if pixels[idx + 3] != 0 {
+                    if x < min_x {
+                        min_x = x;
+                    }
+                    if x > max_x {
+                        max_x = x;
+                    }
+                    if y < min_y {
+                        min_y = y;
+                    }
+                    if y > max_y {
+                        max_y = y;
+                    }
+                }
+            }
+        }
+
+        if min_x > max_x || min_y > max_y {
+            return None; // No opaque pixels
+        }
+
+        let trimmed_width = max_x - min_x + 1;
+        let trimmed_height = max_y - min_y + 1;
+
+        if trimmed_width == width && trimmed_height == height {
+            return None; // No trimming needed
+        }
+
+        // Crop the image
+        let sub_img = image::imageops::crop_imm(
+            &rgba,
+            min_x as u32,
+            min_y as u32,
+            trimmed_width as u32,
+            trimmed_height as u32,
+        );
+        let cropped = sub_img.to_image();
+
+        // Encode back to PNG
+        let mut buffer = Cursor::new(Vec::new());
+        cropped
+            .write_to(&mut buffer, image::ImageFormat::Png)
+            .ok()?;
+
+        let original_size = sprite.size;
+        sprite.data = buffer.into_inner();
+        sprite.size = Size {
+            width: trimmed_width as u32,
+            height: trimmed_height as u32,
+        };
+
+        Some(Rect {
+            x: 0,
+            y: 0,
+            width: original_size.width,
+            height: original_size.height,
+        })
     }
 
     fn render_atlas(&self, packed_sprites: &[PackedSprite], atlas_size: Size) -> Result<Vec<u8>> {
