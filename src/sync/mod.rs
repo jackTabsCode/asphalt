@@ -1,8 +1,10 @@
 use crate::{
+    asset::Asset,
     auth::Auth,
     cli::{SyncArgs, SyncTarget},
-    config::{Config, Input},
+    config::{Config, Input, PackOptions},
     lockfile::{Lockfile, LockfileEntry, RawLockfile},
+    pack::Packer,
     web_api::WebApiClient,
 };
 use anyhow::{Context, Result, bail};
@@ -187,7 +189,14 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
         let processed_assets =
             process::process(new_assets, state.clone(), input_name.clone(), input.bleed).await?;
 
-        perform::perform(&processed_assets, state.clone(), input_name.clone(), input).await?;
+        // Handle packing if enabled
+        let final_assets = if should_pack(input, &args) {
+            handle_packing(processed_assets, state.clone(), input_name.clone(), input, &args).await?
+        } else {
+            processed_assets
+        };
+
+        perform::perform(&final_assets, state.clone(), input_name.clone(), input).await?;
     }
 
     drop(state);
@@ -350,4 +359,134 @@ async fn collect_lockfile_insertions(
     }
 
     Ok(new_lockfile)
+}
+
+/// Check if packing should be enabled for this input
+fn should_pack(input: &Input, args: &SyncArgs) -> bool {
+    // CLI overrides
+    if args.pack {
+        return true;
+    }
+    if args.no_pack {
+        return false;
+    }
+
+    // Check input configuration
+    input.pack.as_ref().map_or(false, |pack| pack.enabled)
+}
+
+/// Apply CLI argument overrides to pack options
+fn apply_pack_overrides(base_options: Option<&PackOptions>, args: &SyncArgs) -> PackOptions {
+    let mut options = base_options.cloned().unwrap_or_default();
+
+    // Apply CLI overrides
+    if args.pack {
+        options.enabled = true;
+    }
+    if args.no_pack {
+        options.enabled = false;
+    }
+    if let Some(max_size) = args.pack_max_size {
+        options.max_size = max_size;
+    }
+    if let Some(padding) = args.pack_padding {
+        options.padding = padding;
+    }
+    if let Some(extrude) = args.pack_extrude {
+        options.extrude = extrude;
+    }
+    if let Some(algorithm) = args.pack_algorithm.clone() {
+        options.algorithm = algorithm;
+    }
+    if args.pack_trim {
+        options.allow_trim = true;
+    }
+    if args.pack_no_trim {
+        options.allow_trim = false;
+    }
+    if let Some(page_limit) = args.pack_page_limit {
+        options.page_limit = Some(page_limit);
+    }
+    if let Some(sort) = args.pack_sort.clone() {
+        options.sort = sort;
+    }
+    if args.pack_dedupe {
+        options.dedupe = true;
+    }
+
+    options
+}
+
+/// Handle packing of assets into atlases
+async fn handle_packing(
+    assets: Vec<Asset>,
+    _state: Arc<SyncState>,
+    input_name: String,
+    input: &Input,
+    args: &SyncArgs,
+) -> anyhow::Result<Vec<Asset>> {
+
+    let pack_options = apply_pack_overrides(input.pack.as_ref(), args);
+    let packer = Packer::new(pack_options);
+
+    // Filter only image assets for packing
+    let (packable_assets, non_packable_assets): (Vec<_>, Vec<_>) = assets
+        .into_iter()
+        .partition(|asset| matches!(asset.ty, crate::asset::AssetType::Image(_)));
+
+    if packable_assets.is_empty() {
+        info!("No packable image assets found in input '{}'", input_name);
+        return Ok(non_packable_assets);
+    }
+
+    info!("Packing {} images for input '{}'", packable_assets.len(), input_name);
+
+    let pack_result = packer.pack_assets(&packable_assets, &input_name)?;
+
+    if pack_result.atlases.is_empty() {
+        warn!("No atlases were generated for input '{}'", input_name);
+        return Ok(non_packable_assets);
+    }
+
+    let mut result_assets = non_packable_assets;
+    let atlas_count = pack_result.atlases.len();
+
+    // Convert atlases to assets
+    for atlas in pack_result.atlases {
+        let filename = format!("{}-sheet-{}.png", input_name, atlas.page_index);
+        let atlas_path = input.output_path.join(&filename);
+
+        // Write atlas PNG to disk
+        fs::write(&atlas_path, &atlas.image_data).await?;
+
+        // Create asset from atlas with a synthetic input path for sync compatibility
+        let sync_path = input.path.get_prefix().join(&filename);
+        let atlas_asset = Asset::new(sync_path, atlas.image_data)?;
+        result_assets.push(atlas_asset);
+    }
+
+    // Write manifest JSON
+    let manifest_filename = format!("{}.atlas.json", input_name);
+    let manifest_path = input.output_path.join(&manifest_filename);
+    let manifest_json = pack_result.manifest.to_json()?;
+    fs::write(&manifest_path, manifest_json).await?;
+
+    // Write Luau and TypeScript codegen files
+    let luau_filename = format!("{}.atlas.luau", input_name);
+    let luau_path = input.output_path.join(&luau_filename);
+    let luau_code = pack_result.manifest.generate_luau(None);
+    fs::write(&luau_path, luau_code).await?;
+
+    let ts_filename = format!("{}.atlas.d.ts", input_name);
+    let ts_path = input.output_path.join(&ts_filename);
+    let ts_code = pack_result.manifest.generate_typescript();
+    fs::write(&ts_path, ts_code).await?;
+
+    info!(
+        "Generated {} atlas pages and metadata for input '{}'",
+        atlas_count,
+        input_name
+    );
+
+    Ok(result_assets)
 }

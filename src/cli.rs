@@ -1,4 +1,4 @@
-use crate::config::CreatorType;
+use crate::config::{CreatorType, PackAlgorithm, PackSort};
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use clap_verbosity_flag::{InfoLevel, Verbosity};
 
@@ -54,6 +54,65 @@ pub struct SyncArgs {
     /// Provides Roblox with the amount of Robux that you are willing to spend on each non-free asset upload.
     #[arg(long)]
     pub expected_price: Option<u32>,
+
+    // Pack-related arguments
+    /// Enable packing for all inputs that support it.
+    #[arg(long)]
+    pub pack: bool,
+
+    /// Disable packing for all inputs.
+    #[arg(long)]
+    pub no_pack: bool,
+
+    /// Maximum atlas size in format WxH (e.g., 2048x2048).
+    #[arg(long, value_parser = parse_size)]
+    pub pack_max_size: Option<(u32, u32)>,
+
+    /// Padding between sprites in atlas.
+    #[arg(long)]
+    pub pack_padding: Option<u32>,
+
+    /// Pixels to extrude sprite edges for filtering.
+    #[arg(long)]
+    pub pack_extrude: Option<u32>,
+
+    /// Packing algorithm to use.
+    #[arg(long)]
+    pub pack_algorithm: Option<PackAlgorithm>,
+
+    /// Enable sprite trimming to remove transparent borders.
+    #[arg(long)]
+    pub pack_trim: bool,
+
+    /// Disable sprite trimming.
+    #[arg(long)]
+    pub pack_no_trim: bool,
+
+    /// Maximum number of atlas pages to generate.
+    #[arg(long)]
+    pub pack_page_limit: Option<u32>,
+
+    /// Sprite sorting method for deterministic packing.
+    #[arg(long)]
+    pub pack_sort: Option<PackSort>,
+
+    /// Enable deduplication of identical sprites.
+    #[arg(long)]
+    pub pack_dedupe: bool,
+}
+
+fn parse_size(s: &str) -> Result<(u32, u32), String> {
+    let parts: Vec<&str> = s.split('x').collect();
+    if parts.len() != 2 {
+        return Err("Size must be in format WxH (e.g., 2048x2048)".to_string());
+    }
+
+    let width = parts[0].parse::<u32>()
+        .map_err(|_| "Width must be a valid number")?;
+    let height = parts[1].parse::<u32>()
+        .map_err(|_| "Height must be a valid number")?;
+
+    Ok((width, height))
 }
 
 #[derive(Args)]
