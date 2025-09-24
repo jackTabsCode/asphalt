@@ -278,18 +278,32 @@ impl Packer {
 
         let mut atlas_image: RgbaImage = ImageBuffer::new(atlas_size.width, atlas_size.height);
 
-        log::debug!("Rendering atlas {}x{} with {} sprites", atlas_size.width, atlas_size.height, packed_sprites.len());
+        log::debug!(
+            "Rendering atlas {}x{} with {} sprites",
+            atlas_size.width,
+            atlas_size.height,
+            packed_sprites.len()
+        );
 
         for (i, packed_sprite) in packed_sprites.iter().enumerate() {
-            log::debug!("Rendering sprite {} '{}' at ({}, {}) size {}x{}",
-                i, packed_sprite.sprite.name,
-                packed_sprite.rect.x, packed_sprite.rect.y,
-                packed_sprite.rect.width, packed_sprite.rect.height);
+            log::debug!(
+                "Rendering sprite {} '{}' at ({}, {}) size {}x{}",
+                i,
+                packed_sprite.sprite.name,
+                packed_sprite.rect.x,
+                packed_sprite.rect.y,
+                packed_sprite.rect.width,
+                packed_sprite.rect.height
+            );
 
             let sprite_image = image::load_from_memory(&packed_sprite.sprite.data)?;
             let sprite_rgba = sprite_image.to_rgba8();
 
-            log::debug!("Loaded sprite image {}x{}", sprite_rgba.width(), sprite_rgba.height());
+            log::debug!(
+                "Loaded sprite image {}x{}",
+                sprite_rgba.width(),
+                sprite_rgba.height()
+            );
 
             // Copy sprite to atlas at the correct position
             for y in 0..packed_sprite.rect.height {

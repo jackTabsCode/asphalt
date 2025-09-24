@@ -7,3 +7,6 @@ asphalt.lock.toml
 asphalt.toml
 .DS_Store
 .asphalt-debug/
+.schemas/
+test-images/
+test-output/

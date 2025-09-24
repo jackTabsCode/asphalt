@@ -16,3 +16,4 @@ targets = [
 pr-run-mode = "skip"
 checksum = "false"
 source-tarball = false
+unix-archive = ".zip"
