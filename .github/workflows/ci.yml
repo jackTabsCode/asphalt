@@ -33,6 +33,7 @@ jobs:
         run: cargo test --locked --verbose
 
       - name: Machete
+        if: matrix.os != 'windows-latest'
         uses: bnjbvr/cargo-machete@main
 
   lint:
