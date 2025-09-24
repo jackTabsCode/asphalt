@@ -15,16 +15,59 @@ pub struct Config {
     pub inputs: HashMap<String, Input>,
 }
 
-pub const FILE_NAME: &str = "asphalt.toml";
+pub const CONFIG_FILES: &[&str] = &[
+    "asphalt.json",
+    "asphalt.json5",
+    "asphalt.jsonc",
+    "asphalt.toml",
+];
 
 impl Config {
     pub async fn read() -> anyhow::Result<Config> {
-        let config = fs::read_to_string(FILE_NAME)
-            .await
-            .context("Failed to read config file")?;
-        let config: Config = toml::from_str(&config)?;
+        // Try each config file in priority order
+        for &file_name in CONFIG_FILES {
+            if fs::metadata(file_name).await.is_ok() {
+                let content = fs::read_to_string(file_name)
+                    .await
+                    .with_context(|| format!("Failed to read config file: {}", file_name))?;
 
-        Ok(config)
+                let config = match file_name {
+                    name if name.ends_with(".json") => {
+                        // Use fjson for lenient JSON parsing (supports trailing commas and comments)
+                        let clean_json = fjson::to_json(&content)
+                            .with_context(|| format!("Failed to parse JSON config file: {}", file_name))?;
+                        serde_json::from_str(&clean_json)
+                            .with_context(|| format!("Failed to deserialize JSON config: {}", file_name))?
+                    },
+                    name if name.ends_with(".json5") => {
+                        json5::from_str(&content)
+                            .with_context(|| format!("Failed to parse JSON5 config file: {}", file_name))?
+                    },
+                    name if name.ends_with(".jsonc") => {
+                        // Use fjson for JSONC files (supports comments and trailing commas)
+                        let clean_json = fjson::to_json(&content)
+                            .with_context(|| format!("Failed to parse JSONC config file: {}", file_name))?;
+                        serde_json::from_str(&clean_json)
+                            .with_context(|| format!("Failed to deserialize JSONC config: {}", file_name))?
+                    },
+                    name if name.ends_with(".toml") => {
+                        toml::from_str(&content)
+                            .with_context(|| format!("Failed to parse TOML config file: {}", file_name))?
+                    },
+                    _ => {
+                        return Err(anyhow::anyhow!("Unsupported config file format: {}", file_name));
+                    }
+                };
+
+                log::info!("Loaded configuration from {}", file_name);
+                return Ok(config);
+            }
+        }
+
+        Err(anyhow::anyhow!(
+            "No configuration file found. Please create one of: {}",
+            CONFIG_FILES.join(", ")
+        ))
     }
 }
 
