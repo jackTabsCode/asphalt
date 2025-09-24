@@ -27,6 +27,9 @@ pub enum Commands {
     /// The pre-1.0 migration entails hashing your files again and updating the lockfile with the new hashes.
     /// We basically pretend nothing has changed, so your assets don't get reuploaded.
     MigrateLockfile(MigrateLockfileArgs),
+
+    /// Generate JSON schema for configuration files.
+    GenerateSchema(GenerateSchemaArgs),
 }
 
 #[derive(ValueEnum, Clone, Copy)]
@@ -150,4 +153,11 @@ pub struct UploadArgs {
 pub struct MigrateLockfileArgs {
     /// The default input name to use. Only applies when upgrading from V0 to V1.
     pub input_name: Option<String>,
+}
+
+#[derive(Args)]
+pub struct GenerateSchemaArgs {
+    /// Output path for the JSON schema file.
+    #[arg(short, long, default_value = ".schemas/asphalt.schema.json")]
+    pub output: String,
 }

@@ -1,9 +1,11 @@
 use clap::Parser;
 use cli::{Cli, Commands};
+use config::Config;
 use dotenvy::dotenv;
 use indicatif::MultiProgress;
 use log::LevelFilter;
 use migrate_lockfile::migrate_lockfile;
+use schemars::schema_for;
 use sync::sync;
 use upload::upload;
 
@@ -47,5 +49,33 @@ async fn main() -> anyhow::Result<()> {
         Commands::Sync(args) => sync(multi_progress, args).await,
         Commands::Upload(args) => upload(args).await,
         Commands::MigrateLockfile(args) => migrate_lockfile(args).await,
+        Commands::GenerateSchema(args) => generate_schema(args).await,
     }
+}
+
+async fn generate_schema(args: cli::GenerateSchemaArgs) -> anyhow::Result<()> {
+    use anyhow::Context;
+    use fs_err::tokio as fs;
+    use std::path::Path;
+
+    // Generate the JSON schema for the Config struct
+    let schema = schema_for!(Config);
+    let schema_json = serde_json::to_string_pretty(&schema)
+        .context("Failed to serialize JSON schema")?;
+
+    // Create output directory if it doesn't exist
+    let output_path = Path::new(&args.output);
+    if let Some(parent_dir) = output_path.parent() {
+        fs::create_dir_all(parent_dir)
+            .await
+            .with_context(|| format!("Failed to create directory: {}", parent_dir.display()))?;
+    }
+
+    // Write the schema to the output file
+    fs::write(output_path, schema_json)
+        .await
+        .with_context(|| format!("Failed to write schema to: {}", output_path.display()))?;
+
+    println!("Generated JSON schema at: {}", args.output);
+    Ok(())
 }

@@ -2,10 +2,12 @@ use crate::glob::Glob;
 use anyhow::Context;
 use clap::ValueEnum;
 use fs_err::tokio as fs;
+use schemars::JsonSchema;
 use serde::Deserialize;
 use std::{collections::HashMap, path::PathBuf};
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, JsonSchema)]
+#[schemars(description = "Asphalt configuration file")]
 pub struct Config {
     pub creator: Creator,
 
@@ -71,8 +73,9 @@ impl Config {
     }
 }
 
-#[derive(Debug, Deserialize, Clone, Default)]
+#[derive(Debug, Deserialize, Clone, Default, JsonSchema)]
 #[serde(default)]
+#[schemars(description = "Code generation settings")]
 pub struct Codegen {
     pub style: CodegenStyle,
     pub typescript: bool,
@@ -80,14 +83,16 @@ pub struct Codegen {
     pub content: bool,
 }
 
-#[derive(Debug, Deserialize, Clone, ValueEnum)]
+#[derive(Debug, Deserialize, Clone, ValueEnum, JsonSchema)]
 #[serde(rename_all = "snake_case")]
+#[schemars(description = "Type of Roblox creator")]
 pub enum CreatorType {
     User,
     Group,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, JsonSchema)]
+#[schemars(description = "Roblox creator information")]
 pub struct Creator {
     #[serde(rename = "type")]
     pub ty: CreatorType,
@@ -98,8 +103,10 @@ fn default_true() -> bool {
     true
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, JsonSchema)]
+#[schemars(description = "Input asset configuration")]
 pub struct Input {
+    #[schemars(with = "String")]
     pub path: Glob,
     pub output_path: PathBuf,
     pub pack: Option<PackOptions>,
@@ -113,7 +120,8 @@ pub struct Input {
     pub warn_each_duplicate: bool,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, JsonSchema)]
+#[schemars(description = "Web asset configuration")]
 pub struct WebAsset {
     pub id: u64,
 }
@@ -142,8 +150,9 @@ fn default_pack_sort() -> PackSort {
     PackSort::Area
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, JsonSchema)]
 #[serde(default)]
+#[schemars(description = "Sprite packing configuration")]
 pub struct PackOptions {
     pub enabled: bool,
     #[serde(default = "default_pack_max_size")]
@@ -180,23 +189,26 @@ impl Default for PackOptions {
     }
 }
 
-#[derive(Debug, Deserialize, Clone, ValueEnum)]
+#[derive(Debug, Deserialize, Clone, ValueEnum, JsonSchema)]
 #[serde(rename_all = "snake_case")]
+#[schemars(description = "Packing algorithm to use")]
 pub enum PackAlgorithm {
     MaxRects,
     Guillotine,
 }
 
-#[derive(Debug, Deserialize, Clone, ValueEnum)]
+#[derive(Debug, Deserialize, Clone, ValueEnum, JsonSchema)]
 #[serde(rename_all = "snake_case")]
+#[schemars(description = "Sprite sorting method for deterministic packing")]
 pub enum PackSort {
     Area,
     MaxSide,
     Name,
 }
 
-#[derive(Debug, Deserialize, Default, Clone)]
+#[derive(Debug, Deserialize, Default, Clone, JsonSchema)]
 #[serde(rename_all = "snake_case")]
+#[schemars(description = "Code generation style")]
 pub enum CodegenStyle {
     #[default]
     Flat,
