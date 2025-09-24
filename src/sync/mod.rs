@@ -191,7 +191,14 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
 
         // Handle packing if enabled
         let final_assets = if should_pack(input, &args) {
-            handle_packing(processed_assets, state.clone(), input_name.clone(), input, &args).await?
+            handle_packing(
+                processed_assets,
+                state.clone(),
+                input_name.clone(),
+                input,
+                &args,
+            )
+            .await?
         } else {
             processed_assets
         };
@@ -372,7 +379,7 @@ fn should_pack(input: &Input, args: &SyncArgs) -> bool {
     }
 
     // Check input configuration
-    input.pack.as_ref().map_or(false, |pack| pack.enabled)
+    input.pack.as_ref().is_some_and(|pack| pack.enabled)
 }
 
 /// Apply CLI argument overrides to pack options
@@ -425,7 +432,6 @@ async fn handle_packing(
     input: &Input,
     args: &SyncArgs,
 ) -> anyhow::Result<Vec<Asset>> {
-
     let pack_options = apply_pack_overrides(input.pack.as_ref(), args);
     let packer = Packer::new(pack_options);
 
@@ -439,7 +445,11 @@ async fn handle_packing(
         return Ok(non_packable_assets);
     }
 
-    info!("Packing {} images for input '{}'", packable_assets.len(), input_name);
+    info!(
+        "Packing {} images for input '{}'",
+        packable_assets.len(),
+        input_name
+    );
 
     let pack_result = packer.pack_assets(&packable_assets, &input_name)?;
 
@@ -484,8 +494,7 @@ async fn handle_packing(
 
     info!(
         "Generated {} atlas pages and metadata for input '{}'",
-        atlas_count,
-        input_name
+        atlas_count, input_name
     );
 
     Ok(result_assets)

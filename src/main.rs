@@ -62,8 +62,8 @@ async fn generate_schema(args: cli::GenerateSchemaArgs) -> anyhow::Result<()> {
     let settings = SchemaSettings::draft07();
     let generator = settings.into_generator();
     let schema = generator.into_root_schema_for::<Config>();
-    let schema_json = serde_json::to_string_pretty(&schema)
-        .context("Failed to serialize JSON schema")?;
+    let schema_json =
+        serde_json::to_string_pretty(&schema).context("Failed to serialize JSON schema")?;
 
     // Create output directory if it doesn't exist
     let output_path = Path::new(&args.output);

@@ -110,9 +110,11 @@ fn parse_size(s: &str) -> Result<(u32, u32), String> {
         return Err("Size must be in format WxH (e.g., 2048x2048)".to_string());
     }
 
-    let width = parts[0].parse::<u32>()
+    let width = parts[0]
+        .parse::<u32>()
         .map_err(|_| "Width must be a valid number")?;
-    let height = parts[1].parse::<u32>()
+    let height = parts[1]
+        .parse::<u32>()
         .map_err(|_| "Height must be a valid number")?;
 
     Ok((width, height))
