@@ -63,8 +63,6 @@ impl fmt::Display for Glob {
     }
 }
 
-
-
 // A basic set of characters that might indicate the use of glob pattern syntax.
 // This is to distinguish portions of a glob that are fixed paths (e.g.
 // "foo.png") from ones that are leveraging patterns (e.g. "*.png").
