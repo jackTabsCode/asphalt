@@ -14,7 +14,9 @@ impl SyncBackend for DebugBackend {
     where
         Self: Sized,
     {
-        let debug_path = env::current_dir()?.join(".asphalt-debug");
+        let debug_path = env::current_dir()
+            .context("Failed to get current working directory")?
+            .join(".asphalt-debug");
         info!("Assets will be synced to: {}", debug_path.display());
 
         if debug_path.exists() {

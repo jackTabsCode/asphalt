@@ -1,16 +1,30 @@
-use crate::config;
+use crate::{
+    config,
+    pack::rect::{Rect, Size},
+};
 use anyhow::bail;
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
 };
 
+#[derive(Clone)]
 pub enum Node {
     Table(BTreeMap<String, Node>),
     String(String),
     Content(String),
     #[allow(dead_code)]
     Number(u64),
+    AtlasSprite(AtlasSpriteData),
+}
+
+#[derive(Clone)]
+pub struct AtlasSpriteData {
+    pub image: String,
+    pub rect: Rect,
+    pub size: Size,
+    pub trimmed: bool,
+    pub sprite_source_size: Option<Rect>,
 }
 
 pub enum Language {
@@ -18,14 +32,13 @@ pub enum Language {
     Luau,
 }
 
-pub fn create_node(source: &BTreeMap<PathBuf, String>, config: &config::Codegen) -> Node {
+pub fn create_node(source: &BTreeMap<PathBuf, Node>, config: &config::Codegen) -> Node {
     let mut root = Node::Table(BTreeMap::new());
 
-    for (path, value) in source {
-        let value = if config.content {
-            Node::Content(value.into())
-        } else {
-            Node::String(value.into())
+    for (path, node) in source {
+        let value = match node {
+            Node::String(s) if config.content => Node::Content(s.clone()),
+            other => other.clone(),
         };
 
         match config.style {
@@ -141,6 +154,7 @@ fn generate_ts_node(node: &Node, indent: usize) -> String {
             let mut result = String::from("{\n");
             for (k, v) in map {
                 result.push_str(&"\t".repeat(indent + 1));
+                result.push_str("readonly ");
                 let k = if is_valid_identifier(k) {
                     k.clone()
                 } else {
@@ -149,7 +163,7 @@ fn generate_ts_node(node: &Node, indent: usize) -> String {
                 result.push_str(&k);
                 result.push_str(": ");
                 result.push_str(&generate_ts_node(v, indent + 1));
-                result.push('\n');
+                result.push_str(";\n");
             }
             result.push_str(&"\t".repeat(indent));
             result.push('}');
@@ -158,6 +172,19 @@ fn generate_ts_node(node: &Node, indent: usize) -> String {
         Node::String(_) => "string".to_string(),
         Node::Content(_) => "Content".to_string(),
         Node::Number(_) => "number".to_string(),
+        Node::AtlasSprite(_) => {
+            let mut result = String::from("{\n");
+            let tab = "\t".repeat(indent + 1);
+            result.push_str(&format!("{}readonly image: string;\n", tab));
+            result.push_str(&format!("{}readonly imageRectOffset: Vector2;\n", tab));
+            result.push_str(&format!("{}readonly imageRectSize: Vector2;\n", tab));
+            result.push_str(&format!("{}readonly sourceSize?: Vector2;\n", tab));
+            result.push_str(&format!("{}readonly spriteSourceOffset?: Vector2;\n", tab));
+            result.push_str(&format!("{}readonly trimmed: boolean;\n", tab));
+            result.push_str(&"\t".repeat(indent));
+            result.push('}');
+            result
+        }
     }
 }
 
@@ -191,6 +218,33 @@ fn generate_luau_node(node: &Node, indent: usize) -> String {
         Node::String(s) => format!("\"{s}\""),
         Node::Content(s) => format!("Content.fromUri(\"{s}\")"),
         Node::Number(n) => format!("{n}"),
+        Node::AtlasSprite(data) => {
+            let tab = "\t".repeat(indent + 1);
+            let mut result = String::from("{\n");
+            result.push_str(&format!("{}image = \"{}\",\n", tab, data.image));
+            result.push_str(&format!(
+                "{}imageRectOffset = Vector2.new({}, {}),\n",
+                tab, data.rect.x, data.rect.y
+            ));
+            result.push_str(&format!(
+                "{}imageRectSize = Vector2.new({}, {}),\n",
+                tab, data.rect.width, data.rect.height
+            ));
+            result.push_str(&format!("{}trimmed = {},\n", tab, data.trimmed));
+            result.push_str(&format!(
+                "{}sourceSize = Vector2.new({}, {}),\n",
+                tab, data.size.width, data.size.height
+            ));
+            if let Some(sprite_source) = data.sprite_source_size {
+                result.push_str(&format!(
+                    "{}spriteSourceOffset = Vector2.new({}, {}),\n",
+                    tab, sprite_source.x, sprite_source.y
+                ));
+            }
+            result.push_str(&"\t".repeat(indent));
+            result.push('}');
+            result
+        }
     }
 }
 

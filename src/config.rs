@@ -9,11 +9,14 @@ use std::{collections::HashMap, path::PathBuf};
 #[derive(Debug, Deserialize, Clone, JsonSchema)]
 #[schemars(description = "Asphalt configuration file")]
 pub struct Config {
+    #[schemars(description = "Roblox creator information (user or group)")]
     pub creator: Creator,
 
     #[serde(default)]
+    #[schemars(description = "Code generation settings for asset references")]
     pub codegen: Codegen,
 
+    #[schemars(description = "Asset input configurations mapped by name")]
     pub inputs: HashMap<String, Input>,
 }
 
@@ -86,9 +89,15 @@ impl Config {
 #[serde(default)]
 #[schemars(description = "Code generation settings")]
 pub struct Codegen {
+    #[schemars(
+        description = "Code generation style: flat (file path-like) or nested (object property access)"
+    )]
     pub style: CodegenStyle,
+    #[schemars(description = "Generate TypeScript definition files (.d.ts) in addition to Luau")]
     pub typescript: bool,
+    #[schemars(description = "Remove file extensions from generated asset paths")]
     pub strip_extensions: bool,
+    #[schemars(description = "Generate Content objects instead of string asset IDs")]
     pub content: bool,
 }
 
@@ -104,7 +113,9 @@ pub enum CreatorType {
 #[schemars(description = "Roblox creator information")]
 pub struct Creator {
     #[serde(rename = "type")]
+    #[schemars(description = "Creator type: user or group")]
     pub ty: CreatorType,
+    #[schemars(description = "Creator ID (user ID or group ID)")]
     pub id: u64,
 }
 
@@ -116,22 +127,31 @@ fn default_true() -> bool {
 #[schemars(description = "Input asset configuration")]
 pub struct Input {
     #[schemars(with = "String")]
+    #[schemars(description = "Glob pattern to match asset files (e.g., 'assets/**/*.png')")]
     pub path: Glob,
+    #[schemars(description = "Directory where generated code and packed assets will be written")]
     pub output_path: PathBuf,
+    #[schemars(description = "Sprite packing/atlas generation configuration (optional)")]
     pub pack: Option<PackOptions>,
     #[serde(default = "default_true")]
+    #[schemars(
+        description = "Apply alpha bleeding to images to prevent edge artifacts (default: true)"
+    )]
     pub bleed: bool,
 
     #[serde(default)]
+    #[schemars(description = "Web assets that are already uploaded, mapped by path")]
     pub web: HashMap<String, WebAsset>,
 
     #[serde(default = "default_true")]
+    #[schemars(description = "Warn for each duplicate file found (default: true)")]
     pub warn_each_duplicate: bool,
 }
 
 #[derive(Debug, Deserialize, Clone, JsonSchema)]
-#[schemars(description = "Web asset configuration")]
+#[schemars(description = "Web asset that has already been uploaded to Roblox")]
 pub struct WebAsset {
+    #[schemars(description = "Roblox asset ID of the uploaded asset")]
     pub id: u64,
 }
 
@@ -163,21 +183,37 @@ fn default_pack_sort() -> PackSort {
 #[serde(default)]
 #[schemars(description = "Sprite packing configuration")]
 pub struct PackOptions {
+    #[schemars(description = "Enable sprite packing/atlas generation for this input")]
     pub enabled: bool,
     #[serde(default = "default_pack_max_size")]
+    #[schemars(
+        description = "Maximum atlas size as (width, height) in pixels (default: 2048x2048)"
+    )]
     pub max_size: (u32, u32),
     #[serde(default = "default_pack_power_of_two")]
+    #[schemars(description = "Constrain atlas dimensions to power-of-two sizes (default: true)")]
     pub power_of_two: bool,
     #[serde(default = "default_pack_padding")]
+    #[schemars(description = "Padding between sprites in pixels (default: 2)")]
     pub padding: u32,
     #[serde(default = "default_pack_extrude")]
+    #[schemars(
+        description = "Pixels to extrude sprite edges for filtering artifacts (default: 1)"
+    )]
     pub extrude: u32,
+    #[schemars(description = "Allow trimming transparent borders from sprites (default: false)")]
     pub allow_trim: bool,
     #[serde(default = "default_pack_algorithm")]
+    #[schemars(description = "Packing algorithm to use (default: max_rects)")]
     pub algorithm: PackAlgorithm,
+    #[schemars(
+        description = "Maximum number of atlas pages to generate (optional, unlimited by default)"
+    )]
     pub page_limit: Option<u32>,
     #[serde(default = "default_pack_sort")]
+    #[schemars(description = "Sprite sorting method for deterministic packing (default: area)")]
     pub sort: PackSort,
+    #[schemars(description = "Enable deduplication of identical sprites (default: false)")]
     pub dedupe: bool,
 }
 
