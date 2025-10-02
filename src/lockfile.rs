@@ -18,12 +18,22 @@ pub struct Lockfile {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct LockfileEntry {
     pub asset_id: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sprite_info: Option<SpriteInfo>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SpriteInfo {
+    pub rect: crate::pack::rect::Rect,
+    pub source_size: crate::pack::rect::Size,
+    pub trimmed: bool,
+    pub sprite_source_size: Option<crate::pack::rect::Rect>,
 }
 
 impl Default for Lockfile {
     fn default() -> Self {
         Self {
-            version: 2,
+            version: 3,
             inputs: BTreeMap::new(),
         }
     }
@@ -67,17 +77,29 @@ pub struct LockfileV1 {
     inputs: BTreeMap<String, BTreeMap<PathBuf, OldLockfileEntry>>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct LockfileV2Entry {
+    pub asset_id: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LockfileV2 {
+    version: u32,
+    inputs: BTreeMap<String, BTreeMap<String, LockfileV2Entry>>,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum RawLockfile {
     V0(LockfileV0),
     V1(LockfileV1),
-    V2(Lockfile),
+    V2(LockfileV2),
+    V3(Lockfile),
 }
 
 impl Default for RawLockfile {
     fn default() -> Self {
-        Self::V2(Lockfile::default())
+        Self::V3(Lockfile::default())
     }
 }
 
@@ -93,6 +115,7 @@ impl RawLockfile {
         let raw: toml::Value = toml::from_str(&content)?;
 
         match raw.get("version").and_then(|v| v.as_integer()) {
+            Some(3) => Ok(RawLockfile::V3(toml::from_str(&content)?)),
             Some(2) => Ok(RawLockfile::V2(toml::from_str(&content)?)),
             Some(1) => Ok(RawLockfile::V1(toml::from_str(&content)?)),
             Some(0) | None => Ok(RawLockfile::V0(toml::from_str(&content)?)),
@@ -102,14 +125,16 @@ impl RawLockfile {
 
     pub fn into_lockfile(self) -> anyhow::Result<Lockfile> {
         match self {
-            Self::V2(lockfile) => Ok(lockfile),
+            Self::V3(lockfile) => Ok(lockfile),
+            Self::V2(v2) => Ok(migrate_from_v2(&v2)),
             _ => anyhow::bail!("Your lockfile is out of date, please run asphalt migrate-lockfile"),
         }
     }
 
     pub async fn migrate(self, input_name: Option<&str>) -> Result<Lockfile> {
         match (self, input_name) {
-            (Self::V2(_), _) => bail!("Your lockfile is already up to date"),
+            (Self::V3(_), _) => bail!("Your lockfile is already up to date"),
+            (Self::V2(v2), _) => Ok(migrate_from_v2(&v2)),
             (Self::V1(v1), _) => Ok(migrate_from_v1(&v1)),
             (Self::V0(v0), Some(name)) => migrate_from_v0(&v0, name).await,
             (Self::V0(_), None) => {
@@ -117,6 +142,25 @@ impl RawLockfile {
             }
         }
     }
+}
+
+fn migrate_from_v2(lockfile: &LockfileV2) -> Lockfile {
+    let mut new_lockfile = Lockfile::default();
+
+    for (input_name, entries) in &lockfile.inputs {
+        for (hash, entry) in entries {
+            new_lockfile.insert(
+                input_name,
+                hash,
+                LockfileEntry {
+                    asset_id: entry.asset_id,
+                    sprite_info: None,
+                },
+            )
+        }
+    }
+
+    new_lockfile
 }
 
 fn migrate_from_v1(lockfile: &LockfileV1) -> Lockfile {
@@ -129,6 +173,7 @@ fn migrate_from_v1(lockfile: &LockfileV1) -> Lockfile {
                 &entry.hash,
                 LockfileEntry {
                     asset_id: entry.asset_id,
+                    sprite_info: None,
                 },
             )
         }
@@ -150,6 +195,7 @@ async fn migrate_from_v0(lockfile: &LockfileV0, input_name: &str) -> anyhow::Res
             &new_hash,
             LockfileEntry {
                 asset_id: entry.asset_id,
+                sprite_info: None,
             },
         )
     }

@@ -358,7 +358,7 @@ impl Packer {
     }
 
     fn render_atlas(&self, packed_sprites: &[PackedSprite], atlas_size: Size) -> Result<Vec<u8>> {
-        use image::{ImageBuffer, RgbaImage};
+        use image::{DynamicImage, ImageBuffer, RgbaImage};
         use std::io::Cursor;
 
         let mut atlas_image: RgbaImage = ImageBuffer::new(atlas_size.width, atlas_size.height);
@@ -411,19 +411,60 @@ impl Packer {
             log::debug!("Finished rendering sprite '{}'", packed_sprite.sprite.name);
         }
 
+        log::debug!("Applying alpha bleeding to atlas image");
+        let mut atlas_dynamic = DynamicImage::ImageRgba8(atlas_image);
+        crate::util::alpha_bleed::alpha_bleed(&mut atlas_dynamic);
+
         // Encode as PNG
         let mut buffer = Cursor::new(Vec::new());
-        atlas_image.write_to(&mut buffer, image::ImageFormat::Png)?;
+        atlas_dynamic.write_to(&mut buffer, image::ImageFormat::Png)?;
         Ok(buffer.into_inner())
     }
 
     fn apply_extrude(
         &self,
-        _atlas_image: &mut RgbaImage,
-        _packed_sprite: &PackedSprite,
+        atlas_image: &mut RgbaImage,
+        packed_sprite: &PackedSprite,
     ) -> Result<()> {
-        // TODO: Implement edge extrusion for filtering
-        // For now, we'll skip this to keep the initial implementation simple
+        let extrude = self.options.extrude;
+        let rect = &packed_sprite.rect;
+
+        for e in 1..=extrude {
+            let e = e as i32;
+
+            for y in 0..rect.height {
+                if rect.x >= e as u32 {
+                    let edge_pixel = atlas_image.get_pixel(rect.x, rect.y + y);
+                    atlas_image.put_pixel(rect.x - e as u32, rect.y + y, *edge_pixel);
+                }
+
+                if rect.x + rect.width + (e as u32) <= atlas_image.width() {
+                    let edge_pixel = atlas_image.get_pixel(rect.x + rect.width - 1, rect.y + y);
+                    atlas_image.put_pixel(
+                        rect.x + rect.width + e as u32 - 1,
+                        rect.y + y,
+                        *edge_pixel,
+                    );
+                }
+            }
+
+            for x in 0..rect.width {
+                if rect.y >= e as u32 {
+                    let edge_pixel = atlas_image.get_pixel(rect.x + x, rect.y);
+                    atlas_image.put_pixel(rect.x + x, rect.y - e as u32, *edge_pixel);
+                }
+
+                if rect.y + rect.height + (e as u32) <= atlas_image.height() {
+                    let edge_pixel = atlas_image.get_pixel(rect.x + x, rect.y + rect.height - 1);
+                    atlas_image.put_pixel(
+                        rect.x + x,
+                        rect.y + rect.height + e as u32 - 1,
+                        *edge_pixel,
+                    );
+                }
+            }
+        }
+
         Ok(())
     }
 

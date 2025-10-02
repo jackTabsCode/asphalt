@@ -38,6 +38,7 @@ pub struct PageInfo {
     pub sprite_count: usize,
 }
 
+#[allow(dead_code)]
 impl AtlasManifest {
     pub fn new(input_name: String) -> Self {
         Self {
@@ -90,19 +91,23 @@ impl AtlasManifest {
             code.push_str(&format!("    [\"{}\"] = {{\n", name));
             code.push_str(&format!("        image = {},\n", asset_ref));
             code.push_str(&format!(
-                "        rect = {{ x = {}, y = {}, w = {}, h = {} }},\n",
-                sprite.rect.x, sprite.rect.y, sprite.rect.width, sprite.rect.height
+                "        imageRectOffset = Vector2.new({}, {}),\n",
+                sprite.rect.x, sprite.rect.y
             ));
             code.push_str(&format!(
-                "        size = {{ w = {}, h = {} }},\n",
-                sprite.source_size.width, sprite.source_size.height
+                "        imageRectSize = Vector2.new({}, {}),\n",
+                sprite.rect.width, sprite.rect.height
             ));
             code.push_str(&format!("        trimmed = {},\n", sprite.trimmed));
+            code.push_str(&format!(
+                "        sourceSize = Vector2.new({}, {}),\n",
+                sprite.source_size.width, sprite.source_size.height
+            ));
 
             if let Some(sprite_source) = sprite.sprite_source_size {
                 code.push_str(&format!(
-                    "        spriteSourceSize = {{ x = {}, y = {}, w = {}, h = {} }},\n",
-                    sprite_source.x, sprite_source.y, sprite_source.width, sprite_source.height
+                    "        spriteSourceOffset = Vector2.new({}, {}),\n",
+                    sprite_source.x, sprite_source.y
                 ));
             }
 
@@ -121,16 +126,17 @@ impl AtlasManifest {
 
         // Type definitions
         code.push_str("export interface Sprite {\n");
-        code.push_str("    image: string;\n");
-        code.push_str("    rect: { x: number; y: number; w: number; h: number };\n");
-        code.push_str("    size: { w: number; h: number };\n");
-        code.push_str("    trimmed: boolean;\n");
-        code.push_str("    spriteSourceSize?: { x: number; y: number; w: number; h: number };\n");
+        code.push_str("    readonly image: string;\n");
+        code.push_str("    readonly imageRectOffset: Vector2;\n");
+        code.push_str("    readonly imageRectSize: Vector2;\n");
+        code.push_str("    readonly sourceSize: Vector2;\n");
+        code.push_str("    readonly spriteSourceOffset?: Vector2;\n");
+        code.push_str("    readonly trimmed: boolean;\n");
         code.push_str("}\n\n");
 
         code.push_str("export type Atlas = {\n");
         for name in self.sprites.keys() {
-            code.push_str(&format!("    \"{}\": Sprite;\n", name));
+            code.push_str(&format!("    readonly \"{}\": Sprite;\n", name));
         }
         code.push_str("};\n\n");
 
@@ -140,22 +146,26 @@ impl AtlasManifest {
             code.push_str(&format!("    \"{}\": {{\n", name));
             code.push_str("        image: \"rbxassetid://0\",\n");
             code.push_str(&format!(
-                "        rect: {{ x: {}, y: {}, w: {}, h: {} }},\n",
-                sprite.rect.x, sprite.rect.y, sprite.rect.width, sprite.rect.height
+                "        imageRectOffset: new Vector2({}, {}),\n",
+                sprite.rect.x, sprite.rect.y
             ));
             code.push_str(&format!(
-                "        size: {{ w: {}, h: {} }},\n",
+                "        imageRectSize: new Vector2({}, {}),\n",
+                sprite.rect.width, sprite.rect.height
+            ));
+            code.push_str(&format!(
+                "        sourceSize: new Vector2({}, {}),\n",
                 sprite.source_size.width, sprite.source_size.height
             ));
-            code.push_str(&format!("        trimmed: {},\n", sprite.trimmed));
 
             if let Some(sprite_source) = sprite.sprite_source_size {
                 code.push_str(&format!(
-                    "        spriteSourceSize: {{ x: {}, y: {}, w: {}, h: {} }},\n",
-                    sprite_source.x, sprite_source.y, sprite_source.width, sprite_source.height
+                    "        spriteSourceOffset: new Vector2({}, {}),\n",
+                    sprite_source.x, sprite_source.y
                 ));
             }
 
+            code.push_str(&format!("        trimmed: {},\n", sprite.trimmed));
             code.push_str("    },\n");
         }
         code.push_str("};\n\n");
@@ -220,8 +230,9 @@ mod tests {
 
         assert!(luau.contains("rbxassetid://123456"));
         assert!(luau.contains("test_sprite"));
-        assert!(luau.contains("rect = { x = 0, y = 0, w = 64, h = 64 }"));
-        assert!(luau.contains("size = { w = 64, h = 64 }"));
+        assert!(luau.contains("imageRectOffset = Vector2.new(0, 0)"));
+        assert!(luau.contains("imageRectSize = Vector2.new(64, 64)"));
+        assert!(luau.contains("sourceSize = Vector2.new(64, 64)"));
         assert!(luau.contains("trimmed = false"));
     }
 
@@ -233,8 +244,9 @@ mod tests {
         assert!(typescript.contains("export interface Sprite"));
         assert!(typescript.contains("export type Atlas"));
         assert!(typescript.contains("test_sprite"));
-        assert!(typescript.contains("rect: { x: 0, y: 0, w: 64, h: 64 }"));
-        assert!(typescript.contains("size: { w: 64, h: 64 }"));
+        assert!(typescript.contains("imageRectOffset: new Vector2(0, 0)"));
+        assert!(typescript.contains("imageRectSize: new Vector2(64, 64)"));
+        assert!(typescript.contains("sourceSize: new Vector2(64, 64)"));
         assert!(typescript.contains("trimmed: false"));
     }
 

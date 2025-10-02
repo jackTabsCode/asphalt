@@ -4,7 +4,7 @@ use crate::{
     cli::{SyncArgs, SyncTarget},
     config::{Config, Input, PackOptions},
     lockfile::{Lockfile, LockfileEntry, RawLockfile},
-    pack::Packer,
+    pack::{self, Packer},
     web_api::WebApiClient,
 };
 use anyhow::{Context, Result, bail};
@@ -75,11 +75,18 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
 
     let (result_tx, result_rx) = mpsc::channel::<SyncResult>(100);
 
+    let packing_metadata = Arc::new(tokio::sync::Mutex::new(
+        HashMap::<String, PackingMetadata>::new(),
+    ));
+
     let result_handle = {
         let codegen_tx = codegen_tx.clone();
         let lockfile_tx = lockfile_tx.clone();
+        let packing_metadata = packing_metadata.clone();
 
-        tokio::spawn(async move { handle_sync_results(result_rx, codegen_tx, lockfile_tx).await })
+        tokio::spawn(async move {
+            handle_sync_results(result_rx, codegen_tx, lockfile_tx, packing_metadata).await
+        })
     };
 
     let state = Arc::new(SyncState {
@@ -129,7 +136,10 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
                         .send(CodegenInsertion {
                             input_name: input_name.clone(),
                             asset_path: existing.path.clone(),
-                            asset_id: format!("rbxassetid://{}", existing.entry.asset_id),
+                            node: codegen::Node::String(format!(
+                                "rbxassetid://{}",
+                                existing.entry.asset_id
+                            )),
                         })
                         .await?;
                 }
@@ -191,14 +201,23 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
 
         // Handle packing if enabled
         let final_assets = if should_pack(input, &args) {
-            handle_packing(
+            let (assets, metadata) = handle_packing(
                 processed_assets,
                 state.clone(),
                 input_name.clone(),
                 input,
                 &args,
             )
-            .await?
+            .await?;
+
+            if let Some(metadata) = metadata {
+                packing_metadata
+                    .lock()
+                    .await
+                    .insert(input_name.clone(), metadata);
+            }
+
+            assets
         } else {
             processed_assets
         };
@@ -251,8 +270,18 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
             };
             let code = codegen::generate_code(lang, &input_name, &node)?;
 
-            fs::create_dir_all(&input.output_path).await?;
-            fs::write(input.output_path.join(format!("{input_name}.{ext}")), code).await?;
+            fs::create_dir_all(&input.output_path)
+                .await
+                .with_context(|| {
+                    format!(
+                        "Failed to create output directory: {}",
+                        input.output_path.display()
+                    )
+                })?;
+            let output_file = input.output_path.join(format!("{input_name}.{ext}"));
+            fs::write(&output_file, code).await.with_context(|| {
+                format!("Failed to write codegen file: {}", output_file.display())
+            })?;
         }
     }
 
@@ -270,34 +299,127 @@ async fn handle_sync_results(
     mut rx: Receiver<SyncResult>,
     codegen_tx: Sender<CodegenInsertion>,
     lockfile_tx: Sender<LockfileInsertion>,
+    packing_metadata: Arc<tokio::sync::Mutex<HashMap<String, PackingMetadata>>>,
 ) -> anyhow::Result<()> {
     while let Some(result) = rx.recv().await {
-        if let BackendSyncResult::Cloud(asset_id) = result.backend {
-            lockfile_tx
-                .send(LockfileInsertion {
-                    input_name: result.input_name.clone(),
-                    hash: result.hash,
-                    entry: LockfileEntry { asset_id },
-                    write: true,
-                })
-                .await?;
+        // Check if this is an atlas upload
+        let is_atlas = result
+            .path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .map(|name| name.ends_with(".png") && name.contains("-sheet-"))
+            .unwrap_or(false);
 
-            codegen_tx
-                .send(CodegenInsertion {
-                    input_name: result.input_name,
-                    asset_path: result.path,
-                    asset_id: format!("rbxassetid://{asset_id}"),
-                })
+        if let BackendSyncResult::Cloud(asset_id) = result.backend {
+            if is_atlas {
+                // Handle atlas upload - create AtlasSprite codegen entries
+                handle_atlas_upload(
+                    &result,
+                    format!("rbxassetid://{}", asset_id),
+                    &codegen_tx,
+                    &packing_metadata,
+                )
                 .await?;
-        } else if let BackendSyncResult::Studio(asset_id) = result.backend {
-            codegen_tx
-                .send(CodegenInsertion {
-                    input_name: result.input_name,
-                    asset_path: result.path.clone(),
-                    asset_id,
-                })
-                .await?;
+            } else {
+                // Regular asset upload
+                lockfile_tx
+                    .send(LockfileInsertion {
+                        input_name: result.input_name.clone(),
+                        hash: result.hash,
+                        entry: LockfileEntry {
+                            asset_id,
+                            sprite_info: None,
+                        },
+                        write: true,
+                    })
+                    .await?;
+
+                codegen_tx
+                    .send(CodegenInsertion {
+                        input_name: result.input_name,
+                        asset_path: result.path,
+                        node: codegen::Node::String(format!("rbxassetid://{asset_id}")),
+                    })
+                    .await?;
+            }
+        } else if let BackendSyncResult::Studio(ref asset_id) = result.backend {
+            if is_atlas {
+                // Handle atlas upload for studio
+                handle_atlas_upload(&result, asset_id.clone(), &codegen_tx, &packing_metadata)
+                    .await?;
+            } else {
+                codegen_tx
+                    .send(CodegenInsertion {
+                        input_name: result.input_name,
+                        asset_path: result.path.clone(),
+                        node: codegen::Node::String(asset_id.clone()),
+                    })
+                    .await?;
+            }
         }
+    }
+
+    Ok(())
+}
+
+async fn handle_atlas_upload(
+    result: &SyncResult,
+    atlas_asset_url: String,
+    codegen_tx: &Sender<CodegenInsertion>,
+    packing_metadata: &Arc<tokio::sync::Mutex<HashMap<String, PackingMetadata>>>,
+) -> anyhow::Result<()> {
+    let metadata_guard = packing_metadata.lock().await;
+    let metadata = match metadata_guard.get(&result.input_name) {
+        Some(m) => m,
+        None => {
+            log::warn!(
+                "No packing metadata found for input '{}'",
+                result.input_name
+            );
+            return Ok(());
+        }
+    };
+
+    // Extract page index from filename (format: "{input}-sheet-{N}.png")
+    let filename = result
+        .path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .context("Invalid atlas filename")?;
+
+    let page_index = filename
+        .strip_suffix(".png")
+        .and_then(|s| s.rsplit_once("-sheet-"))
+        .and_then(|(_, idx)| idx.parse::<usize>().ok())
+        .context("Failed to extract page index from atlas filename")?;
+
+    // Find all sprites on this page and create AtlasSprite codegen entries
+    for (sprite_name, sprite_info) in &metadata.manifest.sprites {
+        if sprite_info.page_index != page_index {
+            continue;
+        }
+
+        let original_path = match metadata.sprite_to_path.get(sprite_name) {
+            Some(path) => path.clone(),
+            None => {
+                log::warn!("No original path found for sprite '{}'", sprite_name);
+                continue;
+            }
+        };
+
+        codegen_tx
+            .send(CodegenInsertion {
+                input_name: result.input_name.clone(),
+                asset_path: original_path,
+                node: codegen::Node::AtlasSprite(codegen::AtlasSpriteData {
+                    image: atlas_asset_url.clone(),
+                    rect: sprite_info.rect,
+                    size: sprite_info.source_size,
+                    trimmed: sprite_info.trimmed,
+                    sprite_source_size: sprite_info.sprite_source_size,
+                }),
+            })
+            .await?;
     }
 
     Ok(())
@@ -306,21 +428,24 @@ async fn handle_sync_results(
 struct CodegenInsertion {
     input_name: String,
     asset_path: PathBuf,
-    asset_id: String,
+    node: codegen::Node,
 }
 
 async fn collect_codegen_insertions(
     mut rx: Receiver<CodegenInsertion>,
     inputs: HashMap<String, Input>,
-) -> anyhow::Result<HashMap<String, BTreeMap<PathBuf, String>>> {
-    let mut inputs_to_sources: HashMap<String, BTreeMap<PathBuf, String>> = HashMap::new();
+) -> anyhow::Result<HashMap<String, BTreeMap<PathBuf, codegen::Node>>> {
+    let mut inputs_to_sources: HashMap<String, BTreeMap<PathBuf, codegen::Node>> = HashMap::new();
 
     for (input_name, input) in &inputs {
         for (path, asset) in &input.web {
             let entry = inputs_to_sources.entry(input_name.clone()).or_default();
             let path = PathBuf::from(path.replace('\\', "/"));
 
-            entry.insert(path, format!("rbxassetid://{}", asset.id));
+            entry.insert(
+                path,
+                codegen::Node::String(format!("rbxassetid://{}", asset.id)),
+            );
         }
     }
 
@@ -340,7 +465,7 @@ async fn collect_codegen_insertions(
 
         let path = path.to_string_lossy().replace('\\', "/");
 
-        source.insert(path.into(), insertion.asset_id);
+        source.insert(path.into(), insertion.node);
     }
 
     Ok(inputs_to_sources)
@@ -424,6 +549,11 @@ fn apply_pack_overrides(base_options: Option<&PackOptions>, args: &SyncArgs) -> 
     options
 }
 
+struct PackingMetadata {
+    manifest: pack::manifest::AtlasManifest,
+    sprite_to_path: HashMap<String, PathBuf>,
+}
+
 /// Handle packing of assets into atlases
 async fn handle_packing(
     assets: Vec<Asset>,
@@ -431,7 +561,7 @@ async fn handle_packing(
     input_name: String,
     input: &Input,
     args: &SyncArgs,
-) -> anyhow::Result<Vec<Asset>> {
+) -> anyhow::Result<(Vec<Asset>, Option<PackingMetadata>)> {
     let pack_options = apply_pack_overrides(input.pack.as_ref(), args);
     let packer = Packer::new(pack_options);
 
@@ -442,7 +572,7 @@ async fn handle_packing(
 
     if packable_assets.is_empty() {
         info!("No packable image assets found in input '{}'", input_name);
-        return Ok(non_packable_assets);
+        return Ok((non_packable_assets, None));
     }
 
     info!(
@@ -451,51 +581,41 @@ async fn handle_packing(
         input_name
     );
 
+    // Build sprite name to original path mapping
+    let mut sprite_to_path = HashMap::new();
+    for asset in &packable_assets {
+        if let Some(name) = asset.path.file_stem().and_then(|s| s.to_str()) {
+            sprite_to_path.insert(name.to_string(), asset.path.clone());
+        }
+    }
+
     let pack_result = packer.pack_assets(&packable_assets, &input_name)?;
 
     if pack_result.atlases.is_empty() {
         warn!("No atlases were generated for input '{}'", input_name);
-        return Ok(non_packable_assets);
+        return Ok((non_packable_assets, None));
     }
 
     let mut result_assets = non_packable_assets;
     let atlas_count = pack_result.atlases.len();
 
-    // Convert atlases to assets
-    for atlas in pack_result.atlases {
+    // Convert atlases to assets (keep in memory, will be uploaded by backend)
+    for atlas in &pack_result.atlases {
         let filename = format!("{}-sheet-{}.png", input_name, atlas.page_index);
-        let atlas_path = input.output_path.join(&filename);
-
-        // Write atlas PNG to disk
-        fs::write(&atlas_path, &atlas.image_data).await?;
-
-        // Create asset from atlas with a synthetic input path for sync compatibility
         let sync_path = input.path.get_prefix().join(&filename);
-        let atlas_asset = Asset::new(sync_path, atlas.image_data)?;
+        let atlas_asset = Asset::new(sync_path, atlas.image_data.clone())?;
         result_assets.push(atlas_asset);
     }
 
-    // Write manifest JSON
-    let manifest_filename = format!("{}.atlas.json", input_name);
-    let manifest_path = input.output_path.join(&manifest_filename);
-    let manifest_json = pack_result.manifest.to_json()?;
-    fs::write(&manifest_path, manifest_json).await?;
-
-    // Write Luau and TypeScript codegen files
-    let luau_filename = format!("{}.atlas.luau", input_name);
-    let luau_path = input.output_path.join(&luau_filename);
-    let luau_code = pack_result.manifest.generate_luau(None);
-    fs::write(&luau_path, luau_code).await?;
-
-    let ts_filename = format!("{}.atlas.d.ts", input_name);
-    let ts_path = input.output_path.join(&ts_filename);
-    let ts_code = pack_result.manifest.generate_typescript();
-    fs::write(&ts_path, ts_code).await?;
-
     info!(
-        "Generated {} atlas pages and metadata for input '{}'",
+        "Generated {} atlas pages for input '{}'",
         atlas_count, input_name
     );
 
-    Ok(result_assets)
+    let metadata = PackingMetadata {
+        manifest: pack_result.manifest,
+        sprite_to_path,
+    };
+
+    Ok((result_assets, Some(metadata)))
 }

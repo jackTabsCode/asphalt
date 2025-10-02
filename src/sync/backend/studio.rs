@@ -27,7 +27,7 @@ impl SyncBackend for StudioBackend {
     {
         let studio = RobloxStudio::locate().context("Failed to locate Roblox Studio directory")?;
 
-        let current_dir = env::current_dir()?;
+        let current_dir = env::current_dir().context("Failed to get current working directory")?;
         let name = current_dir
             .file_name()
             .and_then(|s| s.to_str())
@@ -44,7 +44,12 @@ impl SyncBackend for StudioBackend {
         info!("Assets will be synced to: {}", sync_path.display());
 
         if sync_path.exists() {
-            fs::remove_dir_all(&sync_path).await?;
+            fs::remove_dir_all(&sync_path).await.with_context(|| {
+                format!(
+                    "Failed to remove existing sync directory: {}",
+                    sync_path.display()
+                )
+            })?;
         }
 
         Ok(Self {
@@ -83,10 +88,14 @@ impl SyncBackend for StudioBackend {
         let target_path = self.sync_path.join(&hash_rel_path);
 
         if let Some(parent) = target_path.parent() {
-            fs::create_dir_all(parent).await?;
+            fs::create_dir_all(parent).await.with_context(|| {
+                format!("Failed to create parent directory: {}", parent.display())
+            })?;
         }
 
-        fs::write(&target_path, &asset.data).await?;
+        fs::write(&target_path, &asset.data)
+            .await
+            .with_context(|| format!("Failed to write asset to: {}", target_path.display()))?;
 
         let url_path = hash_rel_path.to_string_lossy().replace('\\', "/");
 
