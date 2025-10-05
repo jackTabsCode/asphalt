@@ -132,14 +132,26 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
                             .await?;
                     }
 
+                    let node = if let Some(ref sprite_info) = existing.entry.sprite_info {
+                        codegen::Node::AtlasSprite(codegen::AtlasSpriteData {
+                            image: format!("rbxassetid://{}", existing.entry.asset_id),
+                            rect: sprite_info.rect,
+                            size: sprite_info.source_size,
+                            trimmed: sprite_info.trimmed,
+                            sprite_source_size: sprite_info.sprite_source_size,
+                        })
+                    } else {
+                        codegen::Node::String(format!(
+                            "rbxassetid://{}",
+                            existing.entry.asset_id
+                        ))
+                    };
+
                     codegen_tx
                         .send(CodegenInsertion {
                             input_name: input_name.clone(),
                             asset_path: existing.path.clone(),
-                            node: codegen::Node::String(format!(
-                                "rbxassetid://{}",
-                                existing.entry.asset_id
-                            )),
+                            node,
                         })
                         .await?;
                 }
@@ -317,6 +329,7 @@ async fn handle_sync_results(
                     &result,
                     format!("rbxassetid://{}", asset_id),
                     &codegen_tx,
+                    &lockfile_tx,
                     &packing_metadata,
                 )
                 .await?;
@@ -345,7 +358,7 @@ async fn handle_sync_results(
         } else if let BackendSyncResult::Studio(ref asset_id) = result.backend {
             if is_atlas {
                 // Handle atlas upload for studio
-                handle_atlas_upload(&result, asset_id.clone(), &codegen_tx, &packing_metadata)
+                handle_atlas_upload(&result, asset_id.clone(), &codegen_tx, &lockfile_tx, &packing_metadata)
                     .await?;
             } else {
                 codegen_tx
@@ -366,6 +379,7 @@ async fn handle_atlas_upload(
     result: &SyncResult,
     atlas_asset_url: String,
     codegen_tx: &Sender<CodegenInsertion>,
+    lockfile_tx: &Sender<LockfileInsertion>,
     packing_metadata: &Arc<tokio::sync::Mutex<HashMap<String, PackingMetadata>>>,
 ) -> anyhow::Result<()> {
     let metadata_guard = packing_metadata.lock().await;
@@ -420,6 +434,36 @@ async fn handle_atlas_upload(
                 }),
             })
             .await?;
+
+        // Create lockfile entry for Cloud backend only
+        if let BackendSyncResult::Cloud(asset_id) = result.backend {
+            let sprite_hash = match metadata.sprite_to_hash.get(sprite_name) {
+                Some(hash) => hash.clone(),
+                None => {
+                    log::warn!("No hash found for sprite '{}'", sprite_name);
+                    continue;
+                }
+            };
+
+            let lockfile_sprite_info = crate::lockfile::SpriteInfo {
+                rect: sprite_info.rect,
+                source_size: sprite_info.source_size,
+                trimmed: sprite_info.trimmed,
+                sprite_source_size: sprite_info.sprite_source_size,
+            };
+
+            lockfile_tx
+                .send(LockfileInsertion {
+                    input_name: result.input_name.clone(),
+                    hash: sprite_hash,
+                    entry: LockfileEntry {
+                        asset_id,
+                        sprite_info: Some(lockfile_sprite_info),
+                    },
+                    write: true,
+                })
+                .await?;
+        }
     }
 
     Ok(())
@@ -552,6 +596,7 @@ fn apply_pack_overrides(base_options: Option<&PackOptions>, args: &SyncArgs) -> 
 struct PackingMetadata {
     manifest: pack::manifest::AtlasManifest,
     sprite_to_path: HashMap<String, PathBuf>,
+    sprite_to_hash: HashMap<String, String>,
 }
 
 /// Handle packing of assets into atlases
@@ -581,11 +626,13 @@ async fn handle_packing(
         input_name
     );
 
-    // Build sprite name to original path mapping
+    // Build sprite name to original path and hash mapping
     let mut sprite_to_path = HashMap::new();
+    let mut sprite_to_hash = HashMap::new();
     for asset in &packable_assets {
         if let Some(name) = asset.path.file_stem().and_then(|s| s.to_str()) {
             sprite_to_path.insert(name.to_string(), asset.path.clone());
+            sprite_to_hash.insert(name.to_string(), asset.hash.clone());
         }
     }
 
@@ -615,6 +662,7 @@ async fn handle_packing(
     let metadata = PackingMetadata {
         manifest: pack_result.manifest,
         sprite_to_path,
+        sprite_to_hash,
     };
 
     Ok((result_assets, Some(metadata)))
