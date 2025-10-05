@@ -209,3 +209,217 @@ async fn read_and_hash(path: &Path) -> Result<String> {
     hasher.update(&bytes);
     Ok(hasher.finalize().to_string())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::pack::rect::{Rect, Size};
+
+    fn create_sprite_info(trimmed: bool) -> SpriteInfo {
+        SpriteInfo {
+            rect: Rect::new(10, 20, 64, 64),
+            source_size: Size::new(64, 64),
+            trimmed,
+            sprite_source_size: if trimmed {
+                Some(Rect::new(5, 5, 54, 54))
+            } else {
+                None
+            },
+        }
+    }
+
+    #[test]
+    fn test_lockfile_with_sprite_info() {
+        let mut lockfile = Lockfile::default();
+
+        let entry_with_sprite = LockfileEntry {
+            asset_id: 12345,
+            sprite_info: Some(create_sprite_info(true)),
+        };
+
+        let entry_without_sprite = LockfileEntry {
+            asset_id: 67890,
+            sprite_info: None,
+        };
+
+        lockfile.insert("images", "hash1", entry_with_sprite.clone());
+        lockfile.insert("images", "hash2", entry_without_sprite.clone());
+
+        let retrieved_with = lockfile.get("images", "hash1").unwrap();
+        assert_eq!(retrieved_with.asset_id, 12345);
+        assert!(retrieved_with.sprite_info.is_some());
+        let sprite_info = retrieved_with.sprite_info.as_ref().unwrap();
+        assert_eq!(sprite_info.rect.x, 10);
+        assert_eq!(sprite_info.rect.y, 20);
+        assert_eq!(sprite_info.rect.width, 64);
+        assert_eq!(sprite_info.rect.height, 64);
+        assert!(sprite_info.trimmed);
+        assert!(sprite_info.sprite_source_size.is_some());
+
+        let retrieved_without = lockfile.get("images", "hash2").unwrap();
+        assert_eq!(retrieved_without.asset_id, 67890);
+        assert!(retrieved_without.sprite_info.is_none());
+    }
+
+    #[test]
+    fn test_lockfile_sprite_info_serialization() {
+        let mut lockfile = Lockfile::default();
+
+        lockfile.insert(
+            "spritesheets",
+            "hash_trimmed",
+            LockfileEntry {
+                asset_id: 11111,
+                sprite_info: Some(create_sprite_info(true)),
+            },
+        );
+
+        lockfile.insert(
+            "spritesheets",
+            "hash_untrimmed",
+            LockfileEntry {
+                asset_id: 22222,
+                sprite_info: Some(create_sprite_info(false)),
+            },
+        );
+
+        lockfile.insert(
+            "images",
+            "hash_regular",
+            LockfileEntry {
+                asset_id: 33333,
+                sprite_info: None,
+            },
+        );
+
+        let serialized = toml::to_string(&lockfile).expect("Failed to serialize");
+
+        assert!(serialized.contains("asset_id = 11111"));
+        assert!(serialized.contains("asset_id = 22222"));
+        assert!(serialized.contains("asset_id = 33333"));
+        assert!(serialized.contains("trimmed = true"));
+        assert!(serialized.contains("trimmed = false"));
+        assert!(serialized.contains("sprite_info"));
+        assert!(serialized.contains("rect"));
+        assert!(serialized.contains("source_size"));
+
+        let deserialized: Lockfile = toml::from_str(&serialized).expect("Failed to deserialize");
+
+        let trimmed_entry = deserialized.get("spritesheets", "hash_trimmed").unwrap();
+        assert_eq!(trimmed_entry.asset_id, 11111);
+        assert!(trimmed_entry.sprite_info.is_some());
+        assert!(trimmed_entry.sprite_info.as_ref().unwrap().trimmed);
+        assert!(
+            trimmed_entry
+                .sprite_info
+                .as_ref()
+                .unwrap()
+                .sprite_source_size
+                .is_some()
+        );
+
+        let untrimmed_entry = deserialized.get("spritesheets", "hash_untrimmed").unwrap();
+        assert_eq!(untrimmed_entry.asset_id, 22222);
+        assert!(untrimmed_entry.sprite_info.is_some());
+        assert!(!untrimmed_entry.sprite_info.as_ref().unwrap().trimmed);
+        assert!(
+            untrimmed_entry
+                .sprite_info
+                .as_ref()
+                .unwrap()
+                .sprite_source_size
+                .is_none()
+        );
+
+        let regular_entry = deserialized.get("images", "hash_regular").unwrap();
+        assert_eq!(regular_entry.asset_id, 33333);
+        assert!(regular_entry.sprite_info.is_none());
+    }
+
+    #[test]
+    fn test_lockfile_insert_multiple_inputs() {
+        let mut lockfile = Lockfile::default();
+
+        lockfile.insert(
+            "input1",
+            "hash_a",
+            LockfileEntry {
+                asset_id: 100,
+                sprite_info: Some(create_sprite_info(true)),
+            },
+        );
+
+        lockfile.insert(
+            "input1",
+            "hash_b",
+            LockfileEntry {
+                asset_id: 200,
+                sprite_info: Some(create_sprite_info(false)),
+            },
+        );
+
+        lockfile.insert(
+            "input2",
+            "hash_c",
+            LockfileEntry {
+                asset_id: 300,
+                sprite_info: None,
+            },
+        );
+
+        assert_eq!(lockfile.get("input1", "hash_a").unwrap().asset_id, 100);
+        assert_eq!(lockfile.get("input1", "hash_b").unwrap().asset_id, 200);
+        assert_eq!(lockfile.get("input2", "hash_c").unwrap().asset_id, 300);
+        assert!(lockfile.get("input1", "hash_c").is_none());
+        assert!(lockfile.get("input3", "hash_a").is_none());
+    }
+
+    #[test]
+    fn test_sprite_info_edge_cases() {
+        let mut lockfile = Lockfile::default();
+
+        let max_values_sprite = SpriteInfo {
+            rect: Rect::new(u32::MAX, u32::MAX, u32::MAX, u32::MAX),
+            source_size: Size::new(u32::MAX, u32::MAX),
+            trimmed: true,
+            sprite_source_size: Some(Rect::new(0, 0, u32::MAX, u32::MAX)),
+        };
+
+        lockfile.insert(
+            "test",
+            "max_values",
+            LockfileEntry {
+                asset_id: u64::MAX,
+                sprite_info: Some(max_values_sprite),
+            },
+        );
+
+        let retrieved = lockfile.get("test", "max_values").unwrap();
+        assert_eq!(retrieved.asset_id, u64::MAX);
+        let sprite = retrieved.sprite_info.as_ref().unwrap();
+        assert_eq!(sprite.rect.x, u32::MAX);
+        assert_eq!(sprite.source_size.width, u32::MAX);
+
+        let zero_values_sprite = SpriteInfo {
+            rect: Rect::new(0, 0, 1, 1),
+            source_size: Size::new(1, 1),
+            trimmed: false,
+            sprite_source_size: None,
+        };
+
+        lockfile.insert(
+            "test",
+            "zero_values",
+            LockfileEntry {
+                asset_id: 0,
+                sprite_info: Some(zero_values_sprite),
+            },
+        );
+
+        let retrieved = lockfile.get("test", "zero_values").unwrap();
+        assert_eq!(retrieved.asset_id, 0);
+        let sprite = retrieved.sprite_info.as_ref().unwrap();
+        assert_eq!(sprite.rect.x, 0);
+        assert_eq!(sprite.rect.y, 0);
+    }
+}

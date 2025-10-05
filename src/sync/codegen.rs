@@ -274,6 +274,7 @@ fn is_valid_identifier(value: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::pack::rect::{Rect, Size};
 
     fn make_test_node() -> Node {
         let mut inner_map = BTreeMap::new();
@@ -289,6 +290,34 @@ mod tests {
         Node::Table(root_inner)
     }
 
+    fn make_atlas_sprite_node(trimmed: bool) -> Node {
+        Node::AtlasSprite(AtlasSpriteData {
+            image: "rbxassetid://123456789".to_string(),
+            rect: Rect::new(32, 64, 128, 128),
+            size: Size::new(128, 128),
+            trimmed,
+            sprite_source_size: if trimmed {
+                Some(Rect::new(8, 16, 112, 96))
+            } else {
+                None
+            },
+        })
+    }
+
+    fn make_mixed_nodes() -> Node {
+        let mut map = BTreeMap::new();
+        map.insert(
+            "regular_image".to_string(),
+            Node::String("rbxassetid://111".to_string()),
+        );
+        map.insert("trimmed_sprite".to_string(), make_atlas_sprite_node(true));
+        map.insert(
+            "untrimmed_sprite".to_string(),
+            make_atlas_sprite_node(false),
+        );
+        Node::Table(map)
+    }
+
     #[test]
     fn test_typescript_codegen() {
         let root_node = make_test_node();
@@ -300,6 +329,72 @@ mod tests {
     fn test_luau_codegen() {
         let root_node = make_test_node();
         let code = generate_code(Language::Luau, "name", &root_node).unwrap();
+        insta::assert_snapshot!(code);
+    }
+
+    #[test]
+    fn test_atlas_sprite_luau_trimmed() {
+        let mut map = BTreeMap::new();
+        map.insert("sprite".to_string(), make_atlas_sprite_node(true));
+        let root = Node::Table(map);
+        let code = generate_code(Language::Luau, "sprite", &root).unwrap();
+        insta::assert_snapshot!(code);
+    }
+
+    #[test]
+    fn test_atlas_sprite_luau_untrimmed() {
+        let mut map = BTreeMap::new();
+        map.insert("sprite".to_string(), make_atlas_sprite_node(false));
+        let root = Node::Table(map);
+        let code = generate_code(Language::Luau, "sprite", &root).unwrap();
+        insta::assert_snapshot!(code);
+    }
+
+    #[test]
+    fn test_atlas_sprite_typescript_trimmed() {
+        let mut map = BTreeMap::new();
+        map.insert("sprite".to_string(), make_atlas_sprite_node(true));
+        let root = Node::Table(map);
+        let code = generate_code(Language::TypeScript, "sprite", &root).unwrap();
+        insta::assert_snapshot!(code);
+    }
+
+    #[test]
+    fn test_atlas_sprite_typescript_untrimmed() {
+        let mut map = BTreeMap::new();
+        map.insert("sprite".to_string(), make_atlas_sprite_node(false));
+        let root = Node::Table(map);
+        let code = generate_code(Language::TypeScript, "sprite", &root).unwrap();
+        insta::assert_snapshot!(code);
+    }
+
+    #[test]
+    fn test_mixed_nodes_luau() {
+        let mixed_node = make_mixed_nodes();
+        let code = generate_code(Language::Luau, "assets", &mixed_node).unwrap();
+        insta::assert_snapshot!(code);
+    }
+
+    #[test]
+    fn test_mixed_nodes_typescript() {
+        let mixed_node = make_mixed_nodes();
+        let code = generate_code(Language::TypeScript, "assets", &mixed_node).unwrap();
+        insta::assert_snapshot!(code);
+    }
+
+    #[test]
+    fn test_atlas_sprite_with_edge_values() {
+        let sprite = Node::AtlasSprite(AtlasSpriteData {
+            image: "rbxassetid://0".to_string(),
+            rect: Rect::new(0, 0, 1024, 1024),
+            size: Size::new(2048, 2048),
+            trimmed: true,
+            sprite_source_size: Some(Rect::new(512, 512, 1024, 1024)),
+        });
+        let mut map = BTreeMap::new();
+        map.insert("edge_case".to_string(), sprite);
+        let root = Node::Table(map);
+        let code = generate_code(Language::Luau, "edge_case", &root).unwrap();
         insta::assert_snapshot!(code);
     }
 }
