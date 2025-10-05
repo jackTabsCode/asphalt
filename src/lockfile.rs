@@ -309,23 +309,27 @@ mod tests {
         assert_eq!(trimmed_entry.asset_id, 11111);
         assert!(trimmed_entry.sprite_info.is_some());
         assert!(trimmed_entry.sprite_info.as_ref().unwrap().trimmed);
-        assert!(trimmed_entry
-            .sprite_info
-            .as_ref()
-            .unwrap()
-            .sprite_source_size
-            .is_some());
+        assert!(
+            trimmed_entry
+                .sprite_info
+                .as_ref()
+                .unwrap()
+                .sprite_source_size
+                .is_some()
+        );
 
         let untrimmed_entry = deserialized.get("spritesheets", "hash_untrimmed").unwrap();
         assert_eq!(untrimmed_entry.asset_id, 22222);
         assert!(untrimmed_entry.sprite_info.is_some());
         assert!(!untrimmed_entry.sprite_info.as_ref().unwrap().trimmed);
-        assert!(untrimmed_entry
-            .sprite_info
-            .as_ref()
-            .unwrap()
-            .sprite_source_size
-            .is_none());
+        assert!(
+            untrimmed_entry
+                .sprite_info
+                .as_ref()
+                .unwrap()
+                .sprite_source_size
+                .is_none()
+        );
 
         let regular_entry = deserialized.get("images", "hash_regular").unwrap();
         assert_eq!(regular_entry.asset_id, 33333);

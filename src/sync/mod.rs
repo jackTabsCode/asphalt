@@ -141,10 +141,7 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
                             sprite_source_size: sprite_info.sprite_source_size,
                         })
                     } else {
-                        codegen::Node::String(format!(
-                            "rbxassetid://{}",
-                            existing.entry.asset_id
-                        ))
+                        codegen::Node::String(format!("rbxassetid://{}", existing.entry.asset_id))
                     };
 
                     codegen_tx
@@ -186,8 +183,8 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
                         .entry(input_name.clone())
                         .or_default()
                         .push(DuplicateResult {
-                            original_path,
                             path,
+                            original_path,
                         });
                 }
             }
@@ -202,10 +199,9 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
 
             if new_len > 0 {
                 bail!("{new_len} new assets would be synced!")
-            } else {
-                info!("No new assets would be synced.");
-                return Ok(());
             }
+            info!("No new assets would be synced.");
+            return Ok(());
         }
 
         let processed_assets =
@@ -315,19 +311,19 @@ async fn handle_sync_results(
 ) -> anyhow::Result<()> {
     while let Some(result) = rx.recv().await {
         // Check if this is an atlas upload
-        let is_atlas = result
-            .path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .map(|name| name.ends_with(".png") && name.contains("-sheet-"))
-            .unwrap_or(false);
+        let is_atlas = result.path.extension().is_some_and(|ext| ext == "png")
+            && result
+                .path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .is_some_and(|name| name.contains("-sheet-"));
 
         if let BackendSyncResult::Cloud(asset_id) = result.backend {
             if is_atlas {
                 // Handle atlas upload - create AtlasSprite codegen entries
                 handle_atlas_upload(
                     &result,
-                    format!("rbxassetid://{}", asset_id),
+                    format!("rbxassetid://{asset_id}"),
                     &codegen_tx,
                     &lockfile_tx,
                     &packing_metadata,
@@ -358,8 +354,14 @@ async fn handle_sync_results(
         } else if let BackendSyncResult::Studio(ref asset_id) = result.backend {
             if is_atlas {
                 // Handle atlas upload for studio
-                handle_atlas_upload(&result, asset_id.clone(), &codegen_tx, &lockfile_tx, &packing_metadata)
-                    .await?;
+                handle_atlas_upload(
+                    &result,
+                    asset_id.clone(),
+                    &codegen_tx,
+                    &lockfile_tx,
+                    &packing_metadata,
+                )
+                .await?;
             } else {
                 codegen_tx
                     .send(CodegenInsertion {
@@ -383,15 +385,10 @@ async fn handle_atlas_upload(
     packing_metadata: &Arc<tokio::sync::Mutex<HashMap<String, PackingMetadata>>>,
 ) -> anyhow::Result<()> {
     let metadata_guard = packing_metadata.lock().await;
-    let metadata = match metadata_guard.get(&result.input_name) {
-        Some(m) => m,
-        None => {
-            log::warn!(
-                "No packing metadata found for input '{}'",
-                result.input_name
-            );
-            return Ok(());
-        }
+    let Some(metadata) = metadata_guard.get(&result.input_name) else {
+        let input = &result.input_name;
+        log::warn!("No packing metadata found for input '{input}'");
+        return Ok(());
     };
 
     // Extract page index from filename (format: "{input}-sheet-{N}.png")
@@ -413,12 +410,9 @@ async fn handle_atlas_upload(
             continue;
         }
 
-        let original_path = match metadata.sprite_to_path.get(sprite_name) {
-            Some(path) => path.clone(),
-            None => {
-                log::warn!("No original path found for sprite '{}'", sprite_name);
-                continue;
-            }
+        let Some(original_path) = metadata.sprite_to_path.get(sprite_name).cloned() else {
+            log::warn!("No original path found for sprite '{sprite_name}'");
+            continue;
         };
 
         codegen_tx
@@ -437,12 +431,9 @@ async fn handle_atlas_upload(
 
         // Create lockfile entry for Cloud backend only
         if let BackendSyncResult::Cloud(asset_id) = result.backend {
-            let sprite_hash = match metadata.sprite_to_hash.get(sprite_name) {
-                Some(hash) => hash.clone(),
-                None => {
-                    log::warn!("No hash found for sprite '{}'", sprite_name);
-                    continue;
-                }
+            let Some(sprite_hash) = metadata.sprite_to_hash.get(sprite_name).cloned() else {
+                log::warn!("No hash found for sprite '{sprite_name}'");
+                continue;
             };
 
             let lockfile_sprite_info = crate::lockfile::SpriteInfo {
@@ -616,7 +607,7 @@ async fn handle_packing(
         .partition(|asset| matches!(asset.ty, crate::asset::AssetType::Image(_)));
 
     if packable_assets.is_empty() {
-        info!("No packable image assets found in input '{}'", input_name);
+        info!("No packable image assets found in input '{input_name}'");
         return Ok((non_packable_assets, None));
     }
 
@@ -639,7 +630,7 @@ async fn handle_packing(
     let pack_result = packer.pack_assets(&packable_assets, &input_name)?;
 
     if pack_result.atlases.is_empty() {
-        warn!("No atlases were generated for input '{}'", input_name);
+        warn!("No atlases were generated for input '{input_name}'");
         return Ok((non_packable_assets, None));
     }
 
@@ -654,10 +645,7 @@ async fn handle_packing(
         result_assets.push(atlas_asset);
     }
 
-    info!(
-        "Generated {} atlas pages for input '{}'",
-        atlas_count, input_name
-    );
+    info!("Generated {atlas_count} atlas pages for input '{input_name}'");
 
     let metadata = PackingMetadata {
         manifest: pack_result.manifest,

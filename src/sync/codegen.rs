@@ -306,9 +306,15 @@ mod tests {
 
     fn make_mixed_nodes() -> Node {
         let mut map = BTreeMap::new();
-        map.insert("regular_image".to_string(), Node::String("rbxassetid://111".to_string()));
+        map.insert(
+            "regular_image".to_string(),
+            Node::String("rbxassetid://111".to_string()),
+        );
         map.insert("trimmed_sprite".to_string(), make_atlas_sprite_node(true));
-        map.insert("untrimmed_sprite".to_string(), make_atlas_sprite_node(false));
+        map.insert(
+            "untrimmed_sprite".to_string(),
+            make_atlas_sprite_node(false),
+        );
         Node::Table(map)
     }
 
