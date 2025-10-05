@@ -7,7 +7,7 @@ license = "MIT"
 name = "asphalt"
 readme = "README.md"
 repository = "https://github.com/jacktabscode/asphalt"
-version = "1.3.0"
+version = "1.3.1"
 
 [dependencies]
 anyhow = "1.0.98"
