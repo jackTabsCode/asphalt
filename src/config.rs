@@ -85,6 +85,14 @@ impl Config {
     }
 }
 
+fn default_input_naming_convention() -> NamingConvention {
+    NamingConvention::CamelCase
+}
+
+fn default_asset_naming_convention() -> NamingConvention {
+    NamingConvention::Preserve
+}
+
 #[derive(Debug, Deserialize, Clone, Default, JsonSchema)]
 #[serde(default)]
 #[schemars(description = "Code generation settings")]
@@ -99,6 +107,14 @@ pub struct Codegen {
     pub strip_extensions: bool,
     #[schemars(description = "Generate Content objects instead of string asset IDs")]
     pub content: bool,
+    #[serde(default = "default_input_naming_convention")]
+    #[schemars(description = "Naming convention for input module names (default: camel_case)")]
+    pub input_naming_convention: NamingConvention,
+    #[serde(default = "default_asset_naming_convention")]
+    #[schemars(
+        description = "Naming convention for asset keys in generated code (default: preserve)"
+    )]
+    pub asset_naming_convention: NamingConvention,
 }
 
 #[derive(Debug, Deserialize, Clone, ValueEnum, JsonSchema)]
@@ -258,4 +274,21 @@ pub enum CodegenStyle {
     #[default]
     Flat,
     Nested,
+}
+
+#[derive(Debug, Deserialize, Clone, Default, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+#[schemars(description = "Naming convention for transforming names with hyphens, spaces, etc.")]
+pub enum NamingConvention {
+    #[schemars(description = "lowercase_with_underscores")]
+    SnakeCase,
+    #[default]
+    #[schemars(description = "firstWordLowerRestCapitalized (default for input names)")]
+    CamelCase,
+    #[schemars(description = "AllWordsCapitalized")]
+    PascalCase,
+    #[schemars(description = "UPPERCASE_WITH_UNDERSCORES")]
+    ScreamingSnakeCase,
+    #[schemars(description = "Keep original formatting, quote if needed (default for asset names)")]
+    Preserve,
 }
