@@ -282,7 +282,12 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
                 codegen::Language::Luau => "luau",
                 codegen::Language::TypeScript => "d.ts",
             };
-            let code = codegen::generate_code(lang, &input_name, &node)?;
+            let code = codegen::generate_code(
+                lang,
+                &input_name,
+                &node,
+                &config.codegen.input_naming_convention,
+            )?;
 
             fs::create_dir_all(&input.output_path)
                 .await

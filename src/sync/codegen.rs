@@ -43,11 +43,19 @@ pub fn create_node(source: &BTreeMap<PathBuf, Node>, config: &config::Codegen) -
 
         match config.style {
             config::CodegenStyle::Nested => {
-                let components = normalize_path_components(path, config.strip_extensions);
+                let components = normalize_path_components(
+                    path,
+                    config.strip_extensions,
+                    &config.asset_naming_convention,
+                );
                 insert_nested(&mut root, &components, value);
             }
             config::CodegenStyle::Flat => {
-                let key = normalize_path_string(path, config.strip_extensions);
+                let key = normalize_path_string(
+                    path,
+                    config.strip_extensions,
+                    &config.asset_naming_convention,
+                );
                 insert_flat(&mut root, &key, value);
             }
         }
@@ -56,36 +64,51 @@ pub fn create_node(source: &BTreeMap<PathBuf, Node>, config: &config::Codegen) -
     root
 }
 
-fn normalize_path_components(path: &Path, strip_extensions: bool) -> Vec<String> {
+fn normalize_path_components(
+    path: &Path,
+    strip_extensions: bool,
+    convention: &config::NamingConvention,
+) -> Vec<String> {
     let mut components: Vec<String> = Vec::new();
     let total_components = path.iter().count();
 
     for (i, comp) in path.iter().enumerate() {
-        if i == total_components - 1 && strip_extensions {
+        let component_str = if i == total_components - 1 && strip_extensions {
             let as_path = Path::new(comp);
             if let Some(stem) = as_path.file_stem() {
-                components.push(stem.to_string_lossy().to_string());
-                continue;
+                stem.to_string_lossy().to_string()
+            } else {
+                comp.to_string_lossy().to_string()
             }
-        }
-        components.push(comp.to_string_lossy().to_string());
+        } else {
+            comp.to_string_lossy().to_string()
+        };
+
+        components.push(convert_name(&component_str, convention));
     }
     components
 }
 
-fn normalize_path_string(path: &Path, strip_extensions: bool) -> String {
-    if strip_extensions
+fn normalize_path_string(
+    path: &Path,
+    strip_extensions: bool,
+    convention: &config::NamingConvention,
+) -> String {
+    let path_str = if strip_extensions
         && let (Some(file_name), Some(parent)) = (path.file_name(), path.parent())
         && let Some(stem) = Path::new(file_name).file_stem()
     {
         let parent_str = parent.to_string_lossy();
-        return if parent_str.is_empty() || parent_str == "." {
+        if parent_str.is_empty() || parent_str == "." {
             stem.to_string_lossy().into_owned()
         } else {
             format!("{}/{}", parent_str, stem.to_string_lossy())
-        };
-    }
-    path.to_string_lossy().into_owned()
+        }
+    } else {
+        path.to_string_lossy().into_owned()
+    };
+
+    convert_name(&path_str, convention)
 }
 
 fn insert_flat(node: &mut Node, key: &str, value: Node) {
@@ -130,14 +153,21 @@ fn insert_nested(node: &mut Node, components: &[String], value: Node) {
     }
 }
 
-pub fn generate_code(lang: Language, name: &str, node: &Node) -> anyhow::Result<String> {
+pub fn generate_code(
+    lang: Language,
+    name: &str,
+    node: &Node,
+    input_naming_convention: &config::NamingConvention,
+) -> anyhow::Result<String> {
     if !matches!(node, Node::Table(_)) {
         bail!("Root node must be a Table");
     }
 
+    let converted_name = convert_name(name, input_naming_convention);
+
     Ok(match lang {
-        Language::TypeScript => generate_typescript(name, node),
-        Language::Luau => generate_luau(name, node),
+        Language::TypeScript => generate_typescript(&converted_name, node),
+        Language::Luau => generate_luau(&converted_name, node),
     })
 }
 
@@ -271,6 +301,136 @@ fn is_valid_identifier(value: &str) -> bool {
     chars.all(is_valid_ident_char)
 }
 
+fn convert_name(value: &str, convention: &config::NamingConvention) -> String {
+    match convention {
+        config::NamingConvention::SnakeCase => to_snake_case(value),
+        config::NamingConvention::CamelCase => to_camel_case(value),
+        config::NamingConvention::PascalCase => to_pascal_case(value),
+        config::NamingConvention::ScreamingSnakeCase => to_screaming_snake_case(value),
+        config::NamingConvention::Preserve => to_preserve(value),
+    }
+}
+
+fn split_into_words(value: &str) -> Vec<String> {
+    let mut words = Vec::new();
+    let mut current_word = String::new();
+
+    for ch in value.chars() {
+        if ch.is_ascii_alphanumeric() {
+            current_word.push(ch);
+        } else if !current_word.is_empty() {
+            words.push(current_word.clone());
+            current_word.clear();
+        }
+    }
+
+    if !current_word.is_empty() {
+        words.push(current_word);
+    }
+
+    words
+}
+
+fn to_snake_case(value: &str) -> String {
+    let words = split_into_words(value);
+    let mut result = words.join("_").to_ascii_lowercase();
+
+    if result.is_empty() || result.starts_with(|c: char| c.is_ascii_digit()) {
+        result.insert(0, '_');
+    }
+
+    result
+}
+
+fn to_camel_case(value: &str) -> String {
+    let starts_with_invalid = value
+        .chars()
+        .next()
+        .is_none_or(|c| !is_valid_ident_char_start(c));
+
+    let words = split_into_words(value);
+    let mut result = String::new();
+
+    for (i, word) in words.iter().enumerate() {
+        if i == 0 {
+            result.push_str(&word.to_ascii_lowercase());
+        } else {
+            let mut chars = word.chars();
+            if let Some(first) = chars.next() {
+                result.push(first.to_ascii_uppercase());
+                result.push_str(&chars.as_str().to_ascii_lowercase());
+            }
+        }
+    }
+
+    if result.is_empty() || starts_with_invalid {
+        result.insert(0, '_');
+    }
+
+    result
+}
+
+fn to_pascal_case(value: &str) -> String {
+    let starts_with_invalid = value
+        .chars()
+        .next()
+        .is_none_or(|c| !is_valid_ident_char_start(c));
+
+    let words = split_into_words(value);
+    let mut result = String::new();
+
+    for word in words {
+        let mut chars = word.chars();
+        if let Some(first) = chars.next() {
+            result.push(first.to_ascii_uppercase());
+            result.push_str(&chars.as_str().to_ascii_lowercase());
+        }
+    }
+
+    if result.is_empty() || starts_with_invalid {
+        result.insert(0, '_');
+    }
+
+    result
+}
+
+fn to_screaming_snake_case(value: &str) -> String {
+    let words = split_into_words(value);
+    let mut result = words.join("_").to_ascii_uppercase();
+
+    if result.is_empty() || result.starts_with(|c: char| c.is_ascii_digit()) {
+        result.insert(0, '_');
+    }
+
+    result
+}
+
+fn to_preserve(value: &str) -> String {
+    let mut result = String::with_capacity(value.len());
+    let mut chars = value.chars();
+
+    if let Some(first) = chars.next() {
+        if is_valid_ident_char_start(first) {
+            result.push(first);
+        } else if first.is_ascii_digit() {
+            result.push('_');
+            result.push(first);
+        } else {
+            result.push('_');
+        }
+    }
+
+    for ch in chars {
+        if is_valid_ident_char(ch) {
+            result.push(ch);
+        } else {
+            result.push('_');
+        }
+    }
+
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -321,14 +481,26 @@ mod tests {
     #[test]
     fn test_typescript_codegen() {
         let root_node = make_test_node();
-        let code = generate_code(Language::TypeScript, "name", &root_node).unwrap();
+        let code = generate_code(
+            Language::TypeScript,
+            "name",
+            &root_node,
+            &config::NamingConvention::CamelCase,
+        )
+        .unwrap();
         insta::assert_snapshot!(code);
     }
 
     #[test]
     fn test_luau_codegen() {
         let root_node = make_test_node();
-        let code = generate_code(Language::Luau, "name", &root_node).unwrap();
+        let code = generate_code(
+            Language::Luau,
+            "name",
+            &root_node,
+            &config::NamingConvention::CamelCase,
+        )
+        .unwrap();
         insta::assert_snapshot!(code);
     }
 
@@ -337,7 +509,13 @@ mod tests {
         let mut map = BTreeMap::new();
         map.insert("sprite".to_string(), make_atlas_sprite_node(true));
         let root = Node::Table(map);
-        let code = generate_code(Language::Luau, "sprite", &root).unwrap();
+        let code = generate_code(
+            Language::Luau,
+            "sprite",
+            &root,
+            &config::NamingConvention::CamelCase,
+        )
+        .unwrap();
         insta::assert_snapshot!(code);
     }
 
@@ -346,7 +524,13 @@ mod tests {
         let mut map = BTreeMap::new();
         map.insert("sprite".to_string(), make_atlas_sprite_node(false));
         let root = Node::Table(map);
-        let code = generate_code(Language::Luau, "sprite", &root).unwrap();
+        let code = generate_code(
+            Language::Luau,
+            "sprite",
+            &root,
+            &config::NamingConvention::CamelCase,
+        )
+        .unwrap();
         insta::assert_snapshot!(code);
     }
 
@@ -355,7 +539,13 @@ mod tests {
         let mut map = BTreeMap::new();
         map.insert("sprite".to_string(), make_atlas_sprite_node(true));
         let root = Node::Table(map);
-        let code = generate_code(Language::TypeScript, "sprite", &root).unwrap();
+        let code = generate_code(
+            Language::TypeScript,
+            "sprite",
+            &root,
+            &config::NamingConvention::CamelCase,
+        )
+        .unwrap();
         insta::assert_snapshot!(code);
     }
 
@@ -364,21 +554,39 @@ mod tests {
         let mut map = BTreeMap::new();
         map.insert("sprite".to_string(), make_atlas_sprite_node(false));
         let root = Node::Table(map);
-        let code = generate_code(Language::TypeScript, "sprite", &root).unwrap();
+        let code = generate_code(
+            Language::TypeScript,
+            "sprite",
+            &root,
+            &config::NamingConvention::CamelCase,
+        )
+        .unwrap();
         insta::assert_snapshot!(code);
     }
 
     #[test]
     fn test_mixed_nodes_luau() {
         let mixed_node = make_mixed_nodes();
-        let code = generate_code(Language::Luau, "assets", &mixed_node).unwrap();
+        let code = generate_code(
+            Language::Luau,
+            "assets",
+            &mixed_node,
+            &config::NamingConvention::CamelCase,
+        )
+        .unwrap();
         insta::assert_snapshot!(code);
     }
 
     #[test]
     fn test_mixed_nodes_typescript() {
         let mixed_node = make_mixed_nodes();
-        let code = generate_code(Language::TypeScript, "assets", &mixed_node).unwrap();
+        let code = generate_code(
+            Language::TypeScript,
+            "assets",
+            &mixed_node,
+            &config::NamingConvention::CamelCase,
+        )
+        .unwrap();
         insta::assert_snapshot!(code);
     }
 
@@ -394,7 +602,90 @@ mod tests {
         let mut map = BTreeMap::new();
         map.insert("edge_case".to_string(), sprite);
         let root = Node::Table(map);
-        let code = generate_code(Language::Luau, "edge_case", &root).unwrap();
+        let code = generate_code(
+            Language::Luau,
+            "edge_case",
+            &root,
+            &config::NamingConvention::CamelCase,
+        )
+        .unwrap();
         insta::assert_snapshot!(code);
+    }
+
+    #[test]
+    fn test_naming_conventions() {
+        assert_eq!(
+            convert_name("character-art", &config::NamingConvention::SnakeCase),
+            "character_art"
+        );
+        assert_eq!(
+            convert_name("character-art", &config::NamingConvention::CamelCase),
+            "characterArt"
+        );
+        assert_eq!(
+            convert_name("character-art", &config::NamingConvention::PascalCase),
+            "CharacterArt"
+        );
+        assert_eq!(
+            convert_name(
+                "character-art",
+                &config::NamingConvention::ScreamingSnakeCase
+            ),
+            "CHARACTER_ART"
+        );
+        assert_eq!(
+            convert_name("character-art", &config::NamingConvention::Preserve),
+            "character_art"
+        );
+    }
+
+    #[test]
+    fn test_naming_edge_cases() {
+        assert_eq!(
+            convert_name("123invalid", &config::NamingConvention::CamelCase),
+            "_123invalid"
+        );
+        assert_eq!(
+            convert_name("-starts-with-hyphen", &config::NamingConvention::CamelCase),
+            "_startsWithHyphen"
+        );
+        assert_eq!(
+            convert_name("has spaces", &config::NamingConvention::PascalCase),
+            "HasSpaces"
+        );
+        assert_eq!(
+            convert_name("special!@#chars", &config::NamingConvention::SnakeCase),
+            "special_chars"
+        );
+    }
+
+    #[test]
+    fn test_codegen_with_hyphenated_name() {
+        let mut map = BTreeMap::new();
+        map.insert(
+            "test".to_string(),
+            Node::String("rbxassetid://123".to_string()),
+        );
+        let root = Node::Table(map);
+
+        let luau_code = generate_code(
+            Language::Luau,
+            "character-art",
+            &root,
+            &config::NamingConvention::CamelCase,
+        )
+        .unwrap();
+        assert!(luau_code.contains("local characterArt ="));
+        assert!(luau_code.contains("return characterArt"));
+
+        let ts_code = generate_code(
+            Language::TypeScript,
+            "image-ids",
+            &root,
+            &config::NamingConvention::CamelCase,
+        )
+        .unwrap();
+        assert!(ts_code.contains("declare const imageIds:"));
+        assert!(ts_code.contains("export = imageIds"));
     }
 }
