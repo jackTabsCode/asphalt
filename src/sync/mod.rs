@@ -258,11 +258,17 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
         }
     }
 
+    let mut total_web_assets = 0;
+    let mut total_codegen_files = 0;
+
     for (input_name, source) in inputs_to_sources {
         let input = config
             .inputs
             .get(&input_name)
             .context("Failed to find input for codegen input")?;
+
+        let asset_count = source.len();
+        total_web_assets += input.web.len();
 
         let mut langs_to_generate = vec![codegen::Language::Luau];
 
@@ -290,8 +296,21 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
             fs::write(&output_file, code).await.with_context(|| {
                 format!("Failed to write codegen file: {}", output_file.display())
             })?;
+
+            total_codegen_files += 1;
+            info!(
+                "Generated {} with {} asset(s)",
+                output_file.display(),
+                asset_count
+            );
         }
     }
+
+    let new_uploads = new_lockfile.count_entries();
+    info!(
+        "Sync complete: {} codegen file(s) generated, {} new upload(s), {} web asset(s) from configuration",
+        total_codegen_files, new_uploads, total_web_assets
+    );
 
     Ok(())
 }
@@ -473,6 +492,11 @@ async fn collect_codegen_insertions(
     let mut inputs_to_sources: HashMap<String, BTreeMap<PathBuf, codegen::Node>> = HashMap::new();
 
     for (input_name, input) in &inputs {
+        let web_count = input.web.len();
+        if web_count > 0 {
+            info!("Including {web_count} web asset(s) from configuration for input '{input_name}'");
+        }
+
         for (path, asset) in &input.web {
             let entry = inputs_to_sources.entry(input_name.clone()).or_default();
             let path = PathBuf::from(path.replace('\\', "/"));
@@ -607,7 +631,9 @@ async fn handle_packing(
         .partition(|asset| matches!(asset.ty, crate::asset::AssetType::Image(_)));
 
     if packable_assets.is_empty() {
-        info!("No packable image assets found in input '{input_name}'");
+        info!(
+            "No image files to pack for input '{input_name}' (web assets will still be included in codegen if configured)"
+        );
         return Ok((non_packable_assets, None));
     }
 
