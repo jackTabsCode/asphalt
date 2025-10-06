@@ -67,7 +67,7 @@ pub fn create_node(source: &BTreeMap<PathBuf, Node>, config: &config::Codegen) -
 fn normalize_path_components(
     path: &Path,
     strip_extensions: bool,
-    convention: &config::NamingConvention,
+    convention: &config::AssetNamingConvention,
 ) -> Vec<String> {
     let mut components: Vec<String> = Vec::new();
     let total_components = path.iter().count();
@@ -84,7 +84,7 @@ fn normalize_path_components(
             comp.to_string_lossy().to_string()
         };
 
-        components.push(convert_name(&component_str, convention));
+        components.push(convert_asset_name(&component_str, convention));
     }
     components
 }
@@ -92,7 +92,7 @@ fn normalize_path_components(
 fn normalize_path_string(
     path: &Path,
     strip_extensions: bool,
-    convention: &config::NamingConvention,
+    convention: &config::AssetNamingConvention,
 ) -> String {
     let path_str = if strip_extensions
         && let (Some(file_name), Some(parent)) = (path.file_name(), path.parent())
@@ -108,7 +108,7 @@ fn normalize_path_string(
         path.to_string_lossy().into_owned()
     };
 
-    convert_name(&path_str, convention)
+    convert_asset_name(&path_str, convention)
 }
 
 fn insert_flat(node: &mut Node, key: &str, value: Node) {
@@ -157,13 +157,13 @@ pub fn generate_code(
     lang: Language,
     name: &str,
     node: &Node,
-    input_naming_convention: &config::NamingConvention,
+    input_naming_convention: &config::InputNamingConvention,
 ) -> anyhow::Result<String> {
     if !matches!(node, Node::Table(_)) {
         bail!("Root node must be a Table");
     }
 
-    let converted_name = convert_name(name, input_naming_convention);
+    let converted_name = convert_input_name(name, input_naming_convention);
 
     Ok(match lang {
         Language::TypeScript => generate_typescript(&converted_name, node),
@@ -301,13 +301,23 @@ fn is_valid_identifier(value: &str) -> bool {
     chars.all(is_valid_ident_char)
 }
 
-fn convert_name(value: &str, convention: &config::NamingConvention) -> String {
+fn convert_input_name(value: &str, convention: &config::InputNamingConvention) -> String {
     match convention {
-        config::NamingConvention::SnakeCase => to_snake_case(value),
-        config::NamingConvention::CamelCase => to_camel_case(value),
-        config::NamingConvention::PascalCase => to_pascal_case(value),
-        config::NamingConvention::ScreamingSnakeCase => to_screaming_snake_case(value),
-        config::NamingConvention::Preserve => to_preserve(value),
+        config::InputNamingConvention::SnakeCase => to_snake_case(value),
+        config::InputNamingConvention::CamelCase => to_camel_case(value),
+        config::InputNamingConvention::PascalCase => to_pascal_case(value),
+        config::InputNamingConvention::ScreamingSnakeCase => to_screaming_snake_case(value),
+    }
+}
+
+fn convert_asset_name(value: &str, convention: &config::AssetNamingConvention) -> String {
+    match convention {
+        config::AssetNamingConvention::SnakeCase => to_snake_case(value),
+        config::AssetNamingConvention::CamelCase => to_camel_case(value),
+        config::AssetNamingConvention::PascalCase => to_pascal_case(value),
+        config::AssetNamingConvention::ScreamingSnakeCase => to_screaming_snake_case(value),
+        config::AssetNamingConvention::KebabCase => to_kebab_case(value),
+        config::AssetNamingConvention::Preserve => to_preserve(value),
     }
 }
 
@@ -405,30 +415,13 @@ fn to_screaming_snake_case(value: &str) -> String {
     result
 }
 
+fn to_kebab_case(value: &str) -> String {
+    let words = split_into_words(value);
+    words.join("-").to_ascii_lowercase()
+}
+
 fn to_preserve(value: &str) -> String {
-    let mut result = String::with_capacity(value.len());
-    let mut chars = value.chars();
-
-    if let Some(first) = chars.next() {
-        if is_valid_ident_char_start(first) {
-            result.push(first);
-        } else if first.is_ascii_digit() {
-            result.push('_');
-            result.push(first);
-        } else {
-            result.push('_');
-        }
-    }
-
-    for ch in chars {
-        if is_valid_ident_char(ch) {
-            result.push(ch);
-        } else {
-            result.push('_');
-        }
-    }
-
-    result
+    value.to_string()
 }
 
 #[cfg(test)]
@@ -485,7 +478,7 @@ mod tests {
             Language::TypeScript,
             "name",
             &root_node,
-            &config::NamingConvention::CamelCase,
+            &config::InputNamingConvention::CamelCase,
         )
         .unwrap();
         insta::assert_snapshot!(code);
@@ -498,7 +491,7 @@ mod tests {
             Language::Luau,
             "name",
             &root_node,
-            &config::NamingConvention::CamelCase,
+            &config::InputNamingConvention::CamelCase,
         )
         .unwrap();
         insta::assert_snapshot!(code);
@@ -513,7 +506,7 @@ mod tests {
             Language::Luau,
             "sprite",
             &root,
-            &config::NamingConvention::CamelCase,
+            &config::InputNamingConvention::CamelCase,
         )
         .unwrap();
         insta::assert_snapshot!(code);
@@ -528,7 +521,7 @@ mod tests {
             Language::Luau,
             "sprite",
             &root,
-            &config::NamingConvention::CamelCase,
+            &config::InputNamingConvention::CamelCase,
         )
         .unwrap();
         insta::assert_snapshot!(code);
@@ -543,7 +536,7 @@ mod tests {
             Language::TypeScript,
             "sprite",
             &root,
-            &config::NamingConvention::CamelCase,
+            &config::InputNamingConvention::CamelCase,
         )
         .unwrap();
         insta::assert_snapshot!(code);
@@ -558,7 +551,7 @@ mod tests {
             Language::TypeScript,
             "sprite",
             &root,
-            &config::NamingConvention::CamelCase,
+            &config::InputNamingConvention::CamelCase,
         )
         .unwrap();
         insta::assert_snapshot!(code);
@@ -571,7 +564,7 @@ mod tests {
             Language::Luau,
             "assets",
             &mixed_node,
-            &config::NamingConvention::CamelCase,
+            &config::InputNamingConvention::CamelCase,
         )
         .unwrap();
         insta::assert_snapshot!(code);
@@ -584,7 +577,7 @@ mod tests {
             Language::TypeScript,
             "assets",
             &mixed_node,
-            &config::NamingConvention::CamelCase,
+            &config::InputNamingConvention::CamelCase,
         )
         .unwrap();
         insta::assert_snapshot!(code);
@@ -606,7 +599,7 @@ mod tests {
             Language::Luau,
             "edge_case",
             &root,
-            &config::NamingConvention::CamelCase,
+            &config::InputNamingConvention::CamelCase,
         )
         .unwrap();
         insta::assert_snapshot!(code);
@@ -615,47 +608,89 @@ mod tests {
     #[test]
     fn test_naming_conventions() {
         assert_eq!(
-            convert_name("character-art", &config::NamingConvention::SnakeCase),
+            convert_asset_name("character-art", &config::AssetNamingConvention::SnakeCase),
             "character_art"
         );
         assert_eq!(
-            convert_name("character-art", &config::NamingConvention::CamelCase),
+            convert_asset_name("character-art", &config::AssetNamingConvention::CamelCase),
             "characterArt"
         );
         assert_eq!(
-            convert_name("character-art", &config::NamingConvention::PascalCase),
+            convert_asset_name("character-art", &config::AssetNamingConvention::PascalCase),
             "CharacterArt"
         );
         assert_eq!(
-            convert_name(
+            convert_asset_name(
                 "character-art",
-                &config::NamingConvention::ScreamingSnakeCase
+                &config::AssetNamingConvention::ScreamingSnakeCase
             ),
             "CHARACTER_ART"
         );
         assert_eq!(
-            convert_name("character-art", &config::NamingConvention::Preserve),
+            convert_asset_name("character-art", &config::AssetNamingConvention::KebabCase),
+            "character-art"
+        );
+        assert_eq!(
+            convert_asset_name("character-art", &config::AssetNamingConvention::Preserve),
+            "character-art"
+        );
+        assert_eq!(
+            convert_asset_name("Character Art", &config::AssetNamingConvention::KebabCase),
+            "character-art"
+        );
+        assert_eq!(
+            convert_asset_name("SOME_VALUE", &config::AssetNamingConvention::KebabCase),
+            "some-value"
+        );
+
+        assert_eq!(
+            convert_input_name("character-art", &config::InputNamingConvention::SnakeCase),
             "character_art"
+        );
+        assert_eq!(
+            convert_input_name("character-art", &config::InputNamingConvention::CamelCase),
+            "characterArt"
+        );
+        assert_eq!(
+            convert_input_name("character-art", &config::InputNamingConvention::PascalCase),
+            "CharacterArt"
         );
     }
 
     #[test]
     fn test_naming_edge_cases() {
         assert_eq!(
-            convert_name("123invalid", &config::NamingConvention::CamelCase),
+            convert_input_name("123invalid", &config::InputNamingConvention::CamelCase),
             "_123invalid"
         );
         assert_eq!(
-            convert_name("-starts-with-hyphen", &config::NamingConvention::CamelCase),
+            convert_input_name(
+                "-starts-with-hyphen",
+                &config::InputNamingConvention::CamelCase
+            ),
             "_startsWithHyphen"
         );
         assert_eq!(
-            convert_name("has spaces", &config::NamingConvention::PascalCase),
+            convert_input_name("has spaces", &config::InputNamingConvention::PascalCase),
             "HasSpaces"
         );
         assert_eq!(
-            convert_name("special!@#chars", &config::NamingConvention::SnakeCase),
+            convert_input_name("special!@#chars", &config::InputNamingConvention::SnakeCase),
             "special_chars"
+        );
+        assert_eq!(
+            convert_asset_name(
+                "icons/sword-icon.png",
+                &config::AssetNamingConvention::Preserve
+            ),
+            "icons/sword-icon.png"
+        );
+        assert_eq!(
+            convert_asset_name(
+                "path with spaces/file.png",
+                &config::AssetNamingConvention::Preserve
+            ),
+            "path with spaces/file.png"
         );
     }
 
@@ -672,7 +707,7 @@ mod tests {
             Language::Luau,
             "character-art",
             &root,
-            &config::NamingConvention::CamelCase,
+            &config::InputNamingConvention::CamelCase,
         )
         .unwrap();
         assert!(luau_code.contains("local characterArt ="));
@@ -682,7 +717,7 @@ mod tests {
             Language::TypeScript,
             "image-ids",
             &root,
-            &config::NamingConvention::CamelCase,
+            &config::InputNamingConvention::CamelCase,
         )
         .unwrap();
         assert!(ts_code.contains("declare const imageIds:"));

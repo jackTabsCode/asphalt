@@ -85,12 +85,12 @@ impl Config {
     }
 }
 
-fn default_input_naming_convention() -> NamingConvention {
-    NamingConvention::CamelCase
+fn default_input_naming_convention() -> InputNamingConvention {
+    InputNamingConvention::CamelCase
 }
 
-fn default_asset_naming_convention() -> NamingConvention {
-    NamingConvention::Preserve
+fn default_asset_naming_convention() -> AssetNamingConvention {
+    AssetNamingConvention::Preserve
 }
 
 #[derive(Debug, Deserialize, Clone, Default, JsonSchema)]
@@ -109,12 +109,12 @@ pub struct Codegen {
     pub content: bool,
     #[serde(default = "default_input_naming_convention")]
     #[schemars(description = "Naming convention for input module names (default: camel_case)")]
-    pub input_naming_convention: NamingConvention,
+    pub input_naming_convention: InputNamingConvention,
     #[serde(default = "default_asset_naming_convention")]
     #[schemars(
         description = "Naming convention for asset keys in generated code (default: preserve)"
     )]
-    pub asset_naming_convention: NamingConvention,
+    pub asset_naming_convention: AssetNamingConvention,
 }
 
 #[derive(Debug, Deserialize, Clone, ValueEnum, JsonSchema)]
@@ -278,17 +278,38 @@ pub enum CodegenStyle {
 
 #[derive(Debug, Deserialize, Clone, Default, JsonSchema)]
 #[serde(rename_all = "snake_case")]
-#[schemars(description = "Naming convention for transforming names with hyphens, spaces, etc.")]
-pub enum NamingConvention {
-    #[schemars(description = "lowercase_with_underscores")]
+#[schemars(description = "Naming convention for input module names")]
+#[allow(clippy::enum_variant_names)]
+pub enum InputNamingConvention {
+    #[schemars(description = "lowercase_with_underscores (e.g., 'my_input')")]
     SnakeCase,
     #[default]
-    #[schemars(description = "firstWordLowerRestCapitalized (default for input names)")]
+    #[schemars(description = "firstWordLowerRestCapitalized (e.g., 'myInput') - default")]
     CamelCase,
-    #[schemars(description = "AllWordsCapitalized")]
+    #[schemars(description = "AllWordsCapitalized (e.g., 'MyInput')")]
     PascalCase,
-    #[schemars(description = "UPPERCASE_WITH_UNDERSCORES")]
+    #[schemars(description = "UPPERCASE_WITH_UNDERSCORES (e.g., 'MY_INPUT')")]
     ScreamingSnakeCase,
-    #[schemars(description = "Keep original formatting, quote if needed (default for asset names)")]
+}
+
+#[derive(Debug, Deserialize, Clone, Default, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+#[schemars(description = "Naming convention for asset keys in generated code")]
+#[allow(clippy::enum_variant_names)]
+pub enum AssetNamingConvention {
+    #[schemars(description = "lowercase_with_underscores (e.g., 'my_asset_name')")]
+    SnakeCase,
+    #[schemars(description = "firstWordLowerRestCapitalized (e.g., 'myAssetName')")]
+    CamelCase,
+    #[schemars(description = "AllWordsCapitalized (e.g., 'MyAssetName')")]
+    PascalCase,
+    #[schemars(description = "UPPERCASE_WITH_UNDERSCORES (e.g., 'MY_ASSET_NAME')")]
+    ScreamingSnakeCase,
+    #[schemars(description = "lowercase-with-hyphens (e.g., 'my-asset-name')")]
+    KebabCase,
+    #[default]
+    #[schemars(
+        description = "Preserve original name, quote if contains special characters - default"
+    )]
     Preserve,
 }
