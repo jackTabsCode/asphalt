@@ -9,6 +9,7 @@ use anyhow::{Context, Result, bail};
 use backend::BackendSyncResult;
 use indicatif::MultiProgress;
 use log::{info, warn};
+use relative_path::{PathExt, RelativePathBuf};
 use resvg::usvg::fontdb;
 use std::{
     collections::{BTreeMap, HashMap},
@@ -205,10 +206,22 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
     let mut inputs_to_sources = codegen_handle.await??;
 
     for (input_name, dupes) in duplicate_assets {
+        let input = config
+            .inputs
+            .get(&input_name)
+            .context("Failed to find input for codegen input")?;
+
         let source = inputs_to_sources.get_mut(&input_name).unwrap();
 
         for dupe in dupes {
-            let original = source.get(&dupe.original_path).unwrap();
+            let original = source
+                .get(
+                    &dupe
+                        .original_path
+                        .relative_to(input.path.get_prefix())
+                        .unwrap(),
+                )
+                .unwrap();
 
             let path = dupe.path.to_string_lossy().replace('\\', "/");
             source.insert(path.into(), original.clone());
@@ -296,15 +309,14 @@ struct CodegenInsertion {
 async fn collect_codegen_insertions(
     mut rx: Receiver<CodegenInsertion>,
     inputs: HashMap<String, Input>,
-) -> anyhow::Result<HashMap<String, BTreeMap<PathBuf, String>>> {
-    let mut inputs_to_sources: HashMap<String, BTreeMap<PathBuf, String>> = HashMap::new();
+) -> anyhow::Result<HashMap<String, BTreeMap<RelativePathBuf, String>>> {
+    let mut inputs_to_sources: HashMap<String, BTreeMap<RelativePathBuf, String>> = HashMap::new();
 
     for (input_name, input) in &inputs {
-        for (path, asset) in &input.web {
+        for (rel_path, asset) in &input.web {
             let entry = inputs_to_sources.entry(input_name.clone()).or_default();
-            let path = PathBuf::from(path.replace('\\', "/"));
 
-            entry.insert(path, format!("rbxassetid://{}", asset.id));
+            entry.insert(rel_path.clone(), format!("rbxassetid://{}", asset.id));
         }
     }
 

@@ -1,9 +1,7 @@
 use crate::config;
 use anyhow::bail;
-use std::{
-    collections::BTreeMap,
-    path::{Path, PathBuf},
-};
+use relative_path::{RelativePath, RelativePathBuf};
+use std::{collections::BTreeMap, path::Path};
 
 pub enum Node {
     Table(BTreeMap<String, Node>),
@@ -18,7 +16,7 @@ pub enum Language {
     Luau,
 }
 
-pub fn create_node(source: &BTreeMap<PathBuf, String>, config: &config::Codegen) -> Node {
+pub fn create_node(source: &BTreeMap<RelativePathBuf, String>, config: &config::Codegen) -> Node {
     let mut root = Node::Table(BTreeMap::new());
 
     for (path, value) in source {
@@ -43,7 +41,7 @@ pub fn create_node(source: &BTreeMap<PathBuf, String>, config: &config::Codegen)
     root
 }
 
-fn normalize_path_components(path: &Path, strip_extensions: bool) -> Vec<String> {
+fn normalize_path_components(path: &RelativePath, strip_extensions: bool) -> Vec<String> {
     let mut components: Vec<String> = Vec::new();
     let total_components = path.iter().count();
 
@@ -55,24 +53,24 @@ fn normalize_path_components(path: &Path, strip_extensions: bool) -> Vec<String>
                 continue;
             }
         }
-        components.push(comp.to_string_lossy().to_string());
+        components.push(comp.to_string());
     }
     components
 }
 
-fn normalize_path_string(path: &Path, strip_extensions: bool) -> String {
+fn normalize_path_string(path: &RelativePath, strip_extensions: bool) -> String {
     if strip_extensions
         && let (Some(file_name), Some(parent)) = (path.file_name(), path.parent())
         && let Some(stem) = Path::new(file_name).file_stem()
     {
-        let parent_str = parent.to_string_lossy();
+        let parent_str = parent.to_string();
         return if parent_str.is_empty() || parent_str == "." {
-            stem.to_string_lossy().into_owned()
+            stem.to_string_lossy().to_string()
         } else {
             format!("{}/{}", parent_str, stem.to_string_lossy())
         };
     }
-    path.to_string_lossy().into_owned()
+    path.to_string()
 }
 
 fn insert_flat(node: &mut Node, key: &str, value: Node) {

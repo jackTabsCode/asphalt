@@ -2,6 +2,7 @@ use crate::glob::Glob;
 use anyhow::Context;
 use clap::ValueEnum;
 use fs_err::tokio as fs;
+use relative_path::RelativePathBuf;
 use serde::Deserialize;
 use std::{collections::HashMap, path::PathBuf};
 
@@ -64,7 +65,7 @@ pub struct Input {
     pub bleed: bool,
 
     #[serde(default)]
-    pub web: HashMap<String, WebAsset>,
+    pub web: HashMap<RelativePathBuf, WebAsset>,
 
     #[serde(default = "default_true")]
     pub warn_each_duplicate: bool,
