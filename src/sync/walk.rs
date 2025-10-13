@@ -9,7 +9,7 @@ use fs_err::tokio as fs;
 use futures::stream::{self, StreamExt};
 use log::debug;
 use std::{path::PathBuf, sync::Arc};
-use tokio::{sync::Semaphore, task::spawn_blocking};
+use tokio::task::spawn_blocking;
 use walkdir::WalkDir;
 
 #[derive(Clone)]
@@ -17,7 +17,6 @@ struct WalkCtx {
     state: Arc<SyncState>,
     input_name: String,
     seen_hashes: Arc<DashMap<String, PathBuf>>,
-    semaphore: Arc<Semaphore>,
     pb: ProgressBar,
 }
 
@@ -42,14 +41,12 @@ pub async fn walk(
         total_files,
     );
 
-    let semaphore = Arc::new(Semaphore::new(50));
     let seen_hashes = Arc::new(DashMap::<String, PathBuf>::with_capacity(total_files));
 
     let ctx = WalkCtx {
         state,
         input_name,
         seen_hashes,
-        semaphore,
         pb,
     };
 
@@ -58,8 +55,6 @@ pub async fn walk(
             let ctx = ctx.clone();
 
             async move {
-                let _permit = ctx.semaphore.acquire().await.unwrap();
-
                 let result =
                     walk_file(ctx.state, ctx.input_name, path.clone(), ctx.seen_hashes).await;
 
