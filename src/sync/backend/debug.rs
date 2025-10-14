@@ -1,5 +1,5 @@
 use super::{BackendSyncResult, SyncBackend};
-use crate::{asset::Asset, config::Input, sync::SyncState};
+use crate::{asset::Asset, sync::SyncState};
 use anyhow::Context;
 use fs_err::tokio as fs;
 use log::info;
@@ -36,11 +36,9 @@ impl SyncBackend for DebugBackend {
         &self,
         _state: Arc<SyncState>,
         _input_name: String,
-        input: &Input,
         asset: &Asset,
     ) -> anyhow::Result<Option<BackendSyncResult>> {
-        let rel_path = asset.rel_path(&input.path.get_prefix())?;
-        let target_path = self.sync_path.join(&rel_path);
+        let target_path = asset.path.to_logical_path(&self.sync_path);
 
         if let Some(parent) = target_path.parent() {
             fs::create_dir_all(parent)

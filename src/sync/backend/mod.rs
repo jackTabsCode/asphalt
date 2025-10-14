@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use super::SyncState;
-use crate::{asset::Asset, config::Input};
+use crate::asset::Asset;
 
 pub mod cloud;
 pub mod debug;
@@ -21,7 +21,6 @@ pub trait SyncBackend {
         &self,
         state: Arc<SyncState>,
         input_name: String,
-        input: &Input,
         asset: &Asset,
     ) -> anyhow::Result<Option<BackendSyncResult>>;
 }

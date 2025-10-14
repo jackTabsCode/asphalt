@@ -9,18 +9,17 @@ use anyhow::{Context, Result, bail};
 use backend::BackendSyncResult;
 use indicatif::MultiProgress;
 use log::{info, warn};
-use relative_path::{PathExt, RelativePathBuf};
+use relative_path::RelativePathBuf;
 use resvg::usvg::fontdb;
 use std::{
     collections::{BTreeMap, HashMap},
-    path::PathBuf,
     sync::Arc,
 };
 use tokio::{
     fs,
     sync::mpsc::{self, Receiver, Sender},
 };
-use walk::{DuplicateResult, WalkResult};
+use walk::{DuplicateFile, WalkedFile};
 
 mod backend;
 mod codegen;
@@ -94,7 +93,7 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
         client: WebApiClient::new(auth, config.creator, args.expected_price),
     });
 
-    let mut duplicate_assets = HashMap::<String, Vec<DuplicateResult>>::new();
+    let mut duplicate_assets = HashMap::<String, Vec<DuplicateFile>>::new();
 
     for (input_name, input) in &config.inputs {
         let walk_results = walk::walk(state.clone(), input_name.clone(), input).await?;
@@ -104,10 +103,10 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
 
         for result in walk_results {
             match result {
-                WalkResult::New(asset) => {
+                WalkedFile::New(asset) => {
                     new_assets.push(asset);
                 }
-                WalkResult::Existing(existing) => {
+                WalkedFile::Existing(existing) => {
                     if args.dry_run {
                         continue;
                     }
@@ -132,12 +131,11 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
                         })
                         .await?;
                 }
-                WalkResult::Duplicate(dupe) => {
+                WalkedFile::Duplicate(dupe) => {
                     if input.warn_each_duplicate {
                         warn!(
                             "Duplicate file found: {} (original at {})",
-                            dupe.path.display(),
-                            dupe.original_path.display()
+                            dupe.path, dupe.original_path
                         );
                     }
 
@@ -147,24 +145,12 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
 
                     dupe_count += 1;
 
-                    let original_path = dupe
-                        .original_path
-                        .strip_prefix(input.path.get_prefix())
-                        .unwrap()
-                        .to_owned();
-
-                    let path = dupe
-                        .path
-                        .strip_prefix(input.path.get_prefix())
-                        .unwrap()
-                        .to_owned();
-
                     duplicate_assets
                         .entry(input_name.clone())
                         .or_default()
-                        .push(DuplicateResult {
-                            original_path,
-                            path,
+                        .push(DuplicateFile {
+                            original_path: dupe.original_path,
+                            path: dupe.path,
                         });
                 }
             }
@@ -188,7 +174,7 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
         let processed_assets =
             process::process(new_assets, state.clone(), input_name.clone(), input.bleed).await?;
 
-        perform::perform(&processed_assets, state.clone(), input_name.clone(), input).await?;
+        perform::perform(&processed_assets, state.clone(), input_name.clone()).await?;
     }
 
     drop(state);
@@ -206,25 +192,11 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
     let mut inputs_to_sources = codegen_handle.await??;
 
     for (input_name, dupes) in duplicate_assets {
-        let input = config
-            .inputs
-            .get(&input_name)
-            .context("Failed to find input for codegen input")?;
-
         let source = inputs_to_sources.get_mut(&input_name).unwrap();
 
         for dupe in dupes {
-            let original = source
-                .get(
-                    &dupe
-                        .original_path
-                        .relative_to(input.path.get_prefix())
-                        .unwrap(),
-                )
-                .unwrap();
-
-            let path = dupe.path.to_string_lossy().replace('\\', "/");
-            source.insert(path.into(), original.clone());
+            let original = source.get(&dupe.original_path).unwrap();
+            source.insert(dupe.path, original.clone());
         }
     }
 
@@ -258,7 +230,7 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
 
 pub struct SyncResult {
     hash: String,
-    path: PathBuf,
+    path: RelativePathBuf,
     input_name: String,
     backend: BackendSyncResult,
 }
@@ -302,7 +274,7 @@ async fn handle_sync_results(
 
 struct CodegenInsertion {
     input_name: String,
-    asset_path: PathBuf,
+    asset_path: RelativePathBuf,
     asset_id: String,
 }
 
@@ -325,18 +297,7 @@ async fn collect_codegen_insertions(
             .entry(insertion.input_name.clone())
             .or_default();
 
-        let input = inputs
-            .get(&insertion.input_name)
-            .context("Failed to find input for codegen input")?;
-
-        let path = insertion
-            .asset_path
-            .strip_prefix(input.path.get_prefix())
-            .unwrap();
-
-        let path = path.to_string_lossy().replace('\\', "/");
-
-        source.insert(path.into(), insertion.asset_id);
+        source.insert(insertion.asset_path, insertion.asset_id);
     }
 
     Ok(inputs_to_sources)

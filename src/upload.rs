@@ -1,5 +1,6 @@
 use crate::{asset::Asset, auth::Auth, cli::UploadArgs, config::Creator, web_api::WebApiClient};
 use fs_err::tokio as fs;
+use relative_path::PathExt;
 use resvg::usvg::fontdb::Database;
 use std::{path::PathBuf, sync::Arc};
 
@@ -7,7 +8,7 @@ pub async fn upload(args: UploadArgs) -> anyhow::Result<()> {
     let path = PathBuf::from(&args.path);
     let data = fs::read(&path).await?;
 
-    let mut asset = Asset::new(path, data)?;
+    let mut asset = Asset::new(path.relative_to(".")?, data)?;
 
     let mut font_db = Database::new();
     font_db.load_system_fonts();

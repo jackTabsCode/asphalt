@@ -1,5 +1,5 @@
 use super::{BackendSyncResult, SyncBackend};
-use crate::{asset::Asset, config::Input, sync::SyncState};
+use crate::{asset::Asset, sync::SyncState};
 use std::sync::Arc;
 use tokio::time;
 
@@ -17,7 +17,6 @@ impl SyncBackend for CloudBackend {
         &self,
         state: Arc<SyncState>,
         _input_name: String,
-        _input: &Input,
         asset: &Asset,
     ) -> anyhow::Result<Option<BackendSyncResult>> {
         if cfg!(feature = "mock_cloud") {

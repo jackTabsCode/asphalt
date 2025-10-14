@@ -2,9 +2,7 @@ use super::{
     SyncState,
     backend::{SyncBackend, cloud::CloudBackend, debug::DebugBackend, studio::StudioBackend},
 };
-use crate::{
-    asset::Asset, cli::SyncTarget, config::Input, progress_bar::ProgressBar, sync::SyncResult,
-};
+use crate::{asset::Asset, cli::SyncTarget, progress_bar::ProgressBar, sync::SyncResult};
 use log::warn;
 use std::sync::Arc;
 
@@ -12,7 +10,6 @@ pub async fn perform(
     assets: &Vec<Asset>,
     state: Arc<SyncState>,
     input_name: String,
-    input: &Input,
 ) -> anyhow::Result<()> {
     let backend = pick_backend(&state.args.target.clone()).await?;
 
@@ -25,24 +22,18 @@ pub async fn perform(
     for asset in assets {
         let input_name = input_name.clone();
 
-        let file_name = asset.path.display().to_string();
+        let file_name = asset.path.to_string();
         pb.set_msg(&file_name);
 
         let res = match backend {
             TargetBackend::Debug(ref backend) => {
-                backend
-                    .sync(state.clone(), input_name.clone(), input, asset)
-                    .await
+                backend.sync(state.clone(), input_name.clone(), asset).await
             }
             TargetBackend::Cloud(ref backend) => {
-                backend
-                    .sync(state.clone(), input_name.clone(), input, asset)
-                    .await
+                backend.sync(state.clone(), input_name.clone(), asset).await
             }
             TargetBackend::Studio(ref backend) => {
-                backend
-                    .sync(state.clone(), input_name.clone(), input, asset)
-                    .await
+                backend.sync(state.clone(), input_name.clone(), asset).await
             }
         };
 
