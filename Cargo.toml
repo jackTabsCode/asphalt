@@ -10,7 +10,6 @@ license = "MIT"
 
 [dependencies]
 anyhow = "1.0.98"
-assert_cmd = "2.0.17"
 bit-vec = "0.8"
 blake3 = "1.8.2"
 bytes = "1.10.1"
