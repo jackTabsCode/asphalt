@@ -18,7 +18,7 @@ pub async fn process(
     let mut processed_assets = Vec::with_capacity(assets.len());
 
     for mut asset in assets {
-        let file_name = asset.path.display().to_string();
+        let file_name = asset.path.to_string();
         pb.set_msg(&file_name);
 
         if let Err(err) = asset.process(state.font_db.clone(), bleed).await {

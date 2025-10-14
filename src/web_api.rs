@@ -41,7 +41,7 @@ impl WebApiClient {
     }
 
     pub async fn upload(&self, asset: &Asset) -> anyhow::Result<u64> {
-        let file_name = asset.path.file_name().unwrap().to_str().unwrap();
+        let file_name = asset.path.file_name().unwrap();
         let display_name = trim_display_name(file_name);
 
         let req = WebAssetRequest {

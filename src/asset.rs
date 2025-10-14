@@ -2,31 +2,27 @@ use crate::util::{alpha_bleed::alpha_bleed, animation::get_animation, svg::svg_t
 use anyhow::{Context, bail};
 use blake3::Hasher;
 use image::DynamicImage;
+use relative_path::RelativePathBuf;
 use resvg::usvg::fontdb::Database;
 use serde::Serialize;
-use std::{
-    io::Cursor,
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::{io::Cursor, sync::Arc};
 
 pub struct Asset {
-    pub path: PathBuf,
+    /// Relative to Input prefix
+    pub path: RelativePathBuf,
     pub data: Vec<u8>,
     pub ty: AssetType,
     processed: bool,
-    ext: String,
+    pub ext: String,
     /// The hash before processing
     pub hash: String,
 }
 
 impl Asset {
-    pub fn new(path: PathBuf, data: Vec<u8>) -> anyhow::Result<Self> {
+    pub fn new(path: RelativePathBuf, data: Vec<u8>) -> anyhow::Result<Self> {
         let ext = path
             .extension()
             .context("File has no extension")?
-            .to_str()
-            .context("Extension is not valid UTF-8")?
             .to_string();
 
         let ty = match ext.as_str() {
@@ -65,12 +61,6 @@ impl Asset {
             ext,
             hash,
         })
-    }
-
-    pub fn rel_path(&self, input_path: &Path) -> anyhow::Result<PathBuf> {
-        let stripped = self.path.strip_prefix(input_path)?;
-
-        Ok(PathBuf::from(stripped).with_extension(self.ext.clone()))
     }
 
     pub async fn process(&mut self, font_db: Arc<Database>, bleed: bool) -> anyhow::Result<()> {

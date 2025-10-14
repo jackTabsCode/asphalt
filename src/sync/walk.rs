@@ -8,6 +8,7 @@ use dashmap::DashMap;
 use fs_err::tokio as fs;
 use futures::stream::{self, StreamExt};
 use log::debug;
+use relative_path::{PathExt, RelativePathBuf};
 use std::{path::PathBuf, sync::Arc};
 use tokio::task::spawn_blocking;
 use walkdir::WalkDir;
@@ -16,6 +17,7 @@ use walkdir::WalkDir;
 struct WalkCtx {
     state: Arc<SyncState>,
     input_name: String,
+    input_prefix: PathBuf,
     seen_hashes: Arc<DashMap<String, PathBuf>>,
     pb: ProgressBar,
 }
@@ -24,10 +26,10 @@ pub async fn walk(
     state: Arc<SyncState>,
     input_name: String,
     input: &Input,
-) -> anyhow::Result<Vec<WalkResult>> {
-    let prefix = input.path.get_prefix();
+) -> anyhow::Result<Vec<WalkedFile>> {
+    let input_prefix = input.path.get_prefix();
 
-    let entries = WalkDir::new(prefix)
+    let entries = WalkDir::new(&input_prefix)
         .into_iter()
         .filter_map(Result::ok)
         .filter(|entry| input.path.is_match(entry.path()) && entry.file_type().is_file())
@@ -48,6 +50,7 @@ pub async fn walk(
         input_name,
         seen_hashes,
         pb,
+        input_prefix,
     };
 
     let results = stream::iter(entries)
@@ -55,8 +58,7 @@ pub async fn walk(
             let ctx = ctx.clone();
 
             async move {
-                let result =
-                    walk_file(ctx.state, ctx.input_name, path.clone(), ctx.seen_hashes).await;
+                let result = walk_file(&ctx, path.clone()).await;
 
                 ctx.pb.inc(1);
 
@@ -79,53 +81,55 @@ pub async fn walk(
     Ok(results)
 }
 
-pub struct ExistingResult {
-    pub path: PathBuf,
+pub struct ExistingFile {
+    pub path: RelativePathBuf,
     pub hash: String,
     pub entry: LockfileEntry,
 }
 
-pub struct DuplicateResult {
-    pub path: PathBuf,
-    pub original_path: PathBuf,
+pub struct DuplicateFile {
+    pub path: RelativePathBuf,
+    pub original_path: RelativePathBuf,
 }
 
-pub enum WalkResult {
+pub enum WalkedFile {
     New(Asset),
-    Existing(ExistingResult),
-    Duplicate(DuplicateResult),
+    Existing(ExistingFile),
+    Duplicate(DuplicateFile),
 }
 
-async fn walk_file(
-    state: Arc<SyncState>,
-    input_name: String,
-    path: PathBuf,
-    seen_hashes: Arc<DashMap<String, PathBuf>>,
-) -> anyhow::Result<WalkResult> {
+async fn walk_file(ctx: &WalkCtx, path: PathBuf) -> anyhow::Result<WalkedFile> {
     let data = fs::read(&path).await?;
-    let path_clone = path.clone();
-    let asset = spawn_blocking(move || Asset::new(path_clone, data))
+    let rel_path = path.relative_to(&ctx.input_prefix)?;
+
+    let rel_path_clone = rel_path.clone();
+    let asset = spawn_blocking(move || Asset::new(rel_path_clone, data))
         .await
         .context("Failed to create asset")??;
 
-    if let Some(seen_path) = seen_hashes.get(&asset.hash) {
-        return Ok(WalkResult::Duplicate(DuplicateResult {
-            path: path.clone(),
-            original_path: seen_path.clone(),
+    if let Some(seen_path) = ctx.seen_hashes.get(&asset.hash) {
+        let rel_seen_path = seen_path.relative_to(&ctx.input_prefix)?;
+
+        return Ok(WalkedFile::Duplicate(DuplicateFile {
+            path: rel_path.clone(),
+            original_path: rel_seen_path,
         }));
     }
 
-    seen_hashes.insert(asset.hash.clone(), path.clone());
+    ctx.seen_hashes.insert(asset.hash.clone(), path.clone());
 
-    let entry = state.existing_lockfile.get(&input_name, &asset.hash);
+    let entry = ctx
+        .state
+        .existing_lockfile
+        .get(&ctx.input_name, &asset.hash);
 
-    match (entry, &state.args.target) {
-        (Some(entry), SyncTarget::Cloud) => Ok(WalkResult::Existing(ExistingResult {
-            path: path.clone(),
+    match (entry, &ctx.state.args.target) {
+        (Some(entry), SyncTarget::Cloud) => Ok(WalkedFile::Existing(ExistingFile {
+            path: rel_path,
             hash: asset.hash.clone(),
             entry: entry.clone(),
         })),
-        (Some(_), SyncTarget::Studio | SyncTarget::Debug) => Ok(WalkResult::New(asset)),
-        (None, _) => Ok(WalkResult::New(asset)),
+        (Some(_), SyncTarget::Studio | SyncTarget::Debug) => Ok(WalkedFile::New(asset)),
+        (None, _) => Ok(WalkedFile::New(asset)),
     }
 }
