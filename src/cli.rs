@@ -27,6 +27,9 @@ pub enum Commands {
     /// The pre-1.0 migration entails hashing your files again and updating the lockfile with the new hashes.
     /// We basically pretend nothing has changed, so your assets don't get reuploaded.
     MigrateLockfile(MigrateLockfileArgs),
+
+    #[command(hide = true)]
+    GenerateConfigSchema,
 }
 
 #[derive(ValueEnum, Clone, Copy)]

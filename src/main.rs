@@ -1,11 +1,15 @@
 use clap::Parser;
 use cli::{Cli, Commands};
 use dotenvy::dotenv;
+use fs_err::tokio as fs;
 use indicatif::MultiProgress;
 use log::LevelFilter;
 use migrate_lockfile::migrate_lockfile;
+use schemars::schema_for;
 use sync::sync;
 use upload::upload;
+
+use crate::config::Config;
 
 mod asset;
 mod auth;
@@ -45,5 +49,17 @@ async fn main() -> anyhow::Result<()> {
         Commands::Sync(args) => sync(multi_progress, args).await,
         Commands::Upload(args) => upload(args).await,
         Commands::MigrateLockfile(args) => migrate_lockfile(args).await,
+        Commands::GenerateConfigSchema => generate_config_schema().await,
     }
+}
+
+async fn generate_config_schema() -> anyhow::Result<()> {
+    let schema = schema_for!(Config);
+    fs::write(
+        "schema.json",
+        serde_json::to_string_pretty(&schema).unwrap(),
+    )
+    .await?;
+
+    Ok(())
 }
