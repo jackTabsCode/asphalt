@@ -96,6 +96,8 @@ Asphalt is configured with a project file called `asphalt.toml`. It is required 
 <summary>See an example</summary>
 
 ```toml
+#:schema https://raw.githubusercontent.com/jackTabsCode/asphalt/refs/heads/main/schema.json
+
 [creator]
 type = "user"
 id = 9670971
