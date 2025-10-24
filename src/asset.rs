@@ -1,4 +1,4 @@
-use crate::util::{alpha_bleed::alpha_bleed, animation::get_animation, svg::svg_to_png};
+use crate::util::{alpha_bleed::alpha_bleed, svg::svg_to_png};
 use anyhow::{Context, bail};
 use blake3::Hasher;
 use image::DynamicImage;
@@ -34,15 +34,21 @@ impl Asset {
             "jpg" | "jpeg" => AssetType::Image(ImageType::Jpg),
             "bmp" => AssetType::Image(ImageType::Bmp),
             "tga" => AssetType::Image(ImageType::Tga),
-            "fbx" => AssetType::Model(ModelType::Model),
+            "fbx" => AssetType::Model(ModelType::Fbx),
+            "gltf" => AssetType::Model(ModelType::GltfJson),
+            "glb" => AssetType::Model(ModelType::GltfBinary),
             "rbxm" | "rbxmx" => {
                 let format = if ext == "rbxm" {
-                    ModelFileFormat::Binary
+                    RobloxModelFormat::Binary
                 } else {
-                    ModelFileFormat::Xml
+                    RobloxModelFormat::Xml
                 };
 
-                AssetType::Model(ModelType::Animation(format))
+                if is_animation(&data, &format)? {
+                    AssetType::Animation
+                } else {
+                    AssetType::Model(ModelType::Roblox)
+                }
             }
             "mp4" => AssetType::Video(VideoType::Mp4),
             "mov" => AssetType::Video(VideoType::Mov),
@@ -73,20 +79,14 @@ impl Asset {
             self.ext = "png".to_string();
         }
 
-        match self.ty {
-            AssetType::Model(ModelType::Animation(ref format)) => {
-                self.data = get_animation(&self.data, format)?;
-            }
-            AssetType::Image(_) if bleed => {
-                let mut image: DynamicImage = image::load_from_memory(&self.data)?;
-                alpha_bleed(&mut image);
+        if matches!(self.ty, AssetType::Image(ImageType::Png)) && bleed {
+            let mut image: DynamicImage = image::load_from_memory(&self.data)?;
+            alpha_bleed(&mut image);
 
-                let mut writer = Cursor::new(Vec::new());
-                image.write_to(&mut writer, image::ImageFormat::Png)?;
-                self.data = writer.into_inner();
-            }
-            _ => {}
-        };
+            let mut writer = Cursor::new(Vec::new());
+            image.write_to(&mut writer, image::ImageFormat::Png)?;
+            self.data = writer.into_inner();
+        }
 
         self.processed = true;
 
@@ -96,9 +96,10 @@ impl Asset {
 
 #[derive(Debug, Clone)]
 pub enum AssetType {
+    Model(ModelType),
+    Animation,
     Image(ImageType),
     Audio(AudioType),
-    Model(ModelType),
     Video(VideoType),
 }
 
@@ -107,8 +108,8 @@ impl AssetType {
 
     pub fn asset_type(&self) -> &'static str {
         match self {
-            AssetType::Model(ModelType::Model) => "Model",
-            AssetType::Model(ModelType::Animation(_)) => "Animation",
+            AssetType::Model(_) => "Model",
+            AssetType::Animation => "Animation",
             AssetType::Image(_) => "Image",
             AssetType::Audio(_) => "Audio",
             AssetType::Video(_) => "Video",
@@ -117,17 +118,23 @@ impl AssetType {
 
     pub fn file_type(&self) -> &'static str {
         match self {
-            AssetType::Model(ModelType::Model) => "model/fbx",
-            AssetType::Model(ModelType::Animation(ModelFileFormat::Binary)) => "model/x-rbxm",
-            AssetType::Model(ModelType::Animation(ModelFileFormat::Xml)) => "model/x-rbxmx",
+            AssetType::Animation => "model/x-rbxm",
+
+            AssetType::Model(ModelType::Fbx) => "model/fbx",
+            AssetType::Model(ModelType::GltfJson) => "model/gltf+json",
+            AssetType::Model(ModelType::GltfBinary) => "model/gltf-binary",
+            AssetType::Model(ModelType::Roblox) => "model/x-rbxm",
+
             AssetType::Image(ImageType::Png) => "image/png",
             AssetType::Image(ImageType::Jpg) => "image/jpeg",
             AssetType::Image(ImageType::Bmp) => "image/bmp",
             AssetType::Image(ImageType::Tga) => "image/tga",
+
             AssetType::Audio(AudioType::Mp3) => "audio/mpeg",
             AssetType::Audio(AudioType::Ogg) => "audio/ogg",
             AssetType::Audio(AudioType::Flac) => "audio/flac",
             AssetType::Audio(AudioType::Wav) => "audio/wav",
+
             AssetType::Video(VideoType::Mp4) => "video/mp4",
             AssetType::Video(VideoType::Mov) => "video/mov",
         }
@@ -161,18 +168,36 @@ pub enum ImageType {
 
 #[derive(Debug, Clone)]
 pub enum ModelType {
-    Model,
-    Animation(ModelFileFormat), // not uploadable with Open Cloud!
-}
-
-#[derive(Debug, Clone)]
-pub enum ModelFileFormat {
-    Binary,
-    Xml,
+    Fbx,
+    GltfJson,
+    GltfBinary,
+    Roblox,
 }
 
 #[derive(Debug, Clone)]
 pub enum VideoType {
     Mp4,
     Mov,
+}
+
+pub fn is_animation(data: &[u8], format: &RobloxModelFormat) -> anyhow::Result<bool> {
+    let dom = match format {
+        RobloxModelFormat::Binary => rbx_binary::from_reader(data)?,
+        RobloxModelFormat::Xml => rbx_xml::from_reader(data, Default::default())?,
+    };
+
+    let children = dom.root().children();
+
+    let first_ref = *children.first().context("No children found in root")?;
+    let first = dom
+        .get_by_ref(first_ref)
+        .context("Failed to get first child")?;
+
+    Ok(first.class == "KeyframeSequence" || first.class == "CurveAnimation")
+}
+
+#[derive(Debug, Clone)]
+pub enum RobloxModelFormat {
+    Binary,
+    Xml,
 }

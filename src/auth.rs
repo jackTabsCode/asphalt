@@ -2,25 +2,22 @@ use anyhow::bail;
 use std::env;
 
 pub struct Auth {
-    pub api_key: String,
-    pub cookie: Option<String>,
+    pub api_key: Option<String>,
 }
 
 impl Auth {
     pub fn new(arg_key: Option<String>, auth_required: bool) -> anyhow::Result<Self> {
         let env_key = env::var("ASPHALT_API_KEY").ok();
 
-        let cookie = rbx_cookie::get();
-
         let api_key = match arg_key.or(env_key) {
-            Some(key) => key,
+            Some(key) => Some(key),
             None if auth_required => {
                 bail!(err_str("API key"))
             }
-            None => String::new(),
+            None => None,
         };
 
-        Ok(Self { api_key, cookie })
+        Ok(Self { api_key })
     }
 }
 

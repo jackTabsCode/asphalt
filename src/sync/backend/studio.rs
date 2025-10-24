@@ -1,6 +1,6 @@
 use super::{BackendSyncResult, SyncBackend};
 use crate::{
-    asset::{Asset, AssetType, ModelType},
+    asset::{Asset, AssetType},
     sync::SyncState,
 };
 use anyhow::{Context, bail};
@@ -55,14 +55,16 @@ impl SyncBackend for StudioBackend {
         input_name: String,
         asset: &Asset,
     ) -> anyhow::Result<Option<BackendSyncResult>> {
-        if let AssetType::Model(ModelType::Animation(_)) = asset.ty {
+        if matches!(asset.ty, AssetType::Model(_) | AssetType::Animation) {
             return match state.existing_lockfile.get(&input_name, &asset.hash) {
                 Some(entry) => Ok(Some(BackendSyncResult::Studio(format!(
                     "rbxassetid://{}",
                     entry.asset_id
                 )))),
                 None => {
-                    warn!("Animations cannot be synced in this context");
+                    warn!(
+                        "Models and Animations cannot be synced to Studio without having been uploaded first"
+                    );
                     Ok(None)
                 }
             };

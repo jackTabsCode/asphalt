@@ -5,14 +5,14 @@ It's a modern alternative to [Tarmac](https://github.com/Roblox/Tarmac).
 
 ## Features
 
--   Syncs your images, sounds, [videos](#videos), [animations](#animations), and [3D models](#models) to Roblox
--   Generates Luau or Typescript code so you can use them in your game
+-   Syncs your images, sounds, videos, animations, and models to Roblox! See the [supported asset types](#supported-asset-types)
+-   Generates Luau or TypeScript code so you can use them in your game
 -   Can target Roblox users or groups
 -   Processes SVGs into PNGs and alpha bleeds images for crisp edges
--   Allows defining existing uploaded assets, so all of your stuff can be referenced in one place
+-   Allows defining assets you already uploaded
 
 ## Features Coming Soon
--  Capablility to pack your images into spritesheets for lower client memory usage
+-  Capability to pack your images into spritesheets for lower client memory usage
 
 ## Installation
 
@@ -117,11 +117,11 @@ output_path = "src/shared"
 
 ### Format
 
--   `creator`: Creator
+-   `creator`: [Creator](#creator)
 	-   The Roblox creator to upload the assets under.
--   `codegen`: Codegen (optional)
+-   `codegen`: [Codegen](#codegen) (optional)
 	-   Code generation options.
--	`inputs`: map<string, Input>
+-	`inputs`: map<string, [Input](#input)>
 	-   A map of input names to input configurations.
 
 #### Creator
@@ -132,9 +132,9 @@ output_path = "src/shared"
 #### Codegen
 
 -   `typescript`: boolean (optional)
-    -   Generate a Typescript definition file.
+    -   Generate a TypeScript definition file.
 -   `style`: "flat" | "nested" (optional)
-    -   The code-generation style to use. Defaults to `flat`, which makes accessing assets feel like writing file paths. You may consider using `nested` if you are not a TypeScript user, however, as Luau does not support template literal types.
+    -   The code generation style to use. Defaults to `flat`, which lets you index assets as if they were paths. You may consider using `nested` if you are not a TypeScript user as Luau does not support template literal types.
 -   `strip_extensions`: boolean (optional)
     -   Whether to strip the file extension. Defaults to `false` for the same reason described above.
 -   `content`: boolean (optional)
@@ -145,7 +145,7 @@ output_path = "src/shared"
 	-	A glob pattern to match files to upload.
 -	`output_path`: string
 	-	The directory path to output the generated code.
--	`web`: map<string, WebAsset>
+-	`web`: map<string, [WebAsset](#webasset)>
 	-	A map of paths relative to the input path to existing assets on Roblox.
 - 	`bleed`: boolean (optional)
 	- 	Whether to alpha bleed images. Defaults to `true`. Keep in mind that changing this setting won't invalidate your lockfile or reupload your images.
@@ -156,24 +156,9 @@ output_path = "src/shared"
 
 -   `id`: number
 
-## Code Generation
-
-The formatting of code generation (such as spaces, tabs, width, and semicolons) is not guaranteed by Asphalt and may change between releases without being noted as a breaking change.
-
-Therefore, it is recommended to add Asphalt's generated files to your linter/formatter's "ignore" list. Here are instructions for the most commonly used tools:
-
-- [Stylua](https://github.com/JohnnyMorganz/StyLua?tab=readme-ov-file#glob-filtering)
-- [Biome](https://biomejs.dev/guides/configure-biome/#ignore-files)
-- [ESLint](https://eslint.org/docs/latest/use/configure/ignore)
-
 ## Authentication
 
-- A properly scoped API key is always required.
-- A cookie is required for animation uploads.
-
-### API Key
-
-You can specify this using the `--api-key` argument, or the `ASPHALT_API_KEY` environment variable.
+You can specify your API key this using the `--api-key` argument, or the `ASPHALT_API_KEY` environment variable.
 
 You can get one from the [Creator Dashboard](https://create.roblox.com/dashboard/credentials).
 
@@ -183,28 +168,28 @@ The following permissions are required:
 
 Make sure that you select an appropriate IP and that your API key is under the Creator (user, or group) that you've defined in `asphalt.toml`.
 
-### Cookie
+## Supported Asset Types
 
-Your cookie will be pulled from your `ROBLOSECURITY` environment variable. If not present, it be automatically detected from the current Roblox Studio installation.
+- Images (.png, .jpg, .bmp, .tga, .svg)
+	- SVGs are supported by Asphalt by converting them to PNGs.
+- Audio (.mp3, .ogg, .wav, .flac)
+- Videos (.mp4, .mov)
+	- When uploading videos, you must provide the `--expected-price` argument, which is the price you expect to be charged for the video. See the [Roblox documentation on Videos](https://create.roblox.com/docs/en-us/ui/video-frames#upload-videos) for more details.
+- Animations (.rbxm, .rbxmx)
+	- Asphalt detects animations by looking to see if the saved class is a KeyframeSequence or a CurveAnimation. If it isn't, Asphalt will assume it is a Model.
+- Roblox Models (.rbxm, .rbxmx)
+- 3D Models (.fbx, .gltf, .glb)
+	- Roblox does not offer control over the import settings through the web API. As such, this is not a route most should take. You should instead use the [3D Importer](https://create.roblox.com/docs/art/modeling/3d-importer) to upload these assets, then either sync them with Rojo or save them as Roblox model files.
 
-You will probably want to [disable Session Protection](https://create.roblox.com/settings/advanced) if you are using Asphalt in an environment where your IP address changes frequently, but we don't recommend this on your main Roblox account, as it makes your account less secure.
+## Code Generation
 
-## Animations
+The formatting of code generation (such as spaces, tabs, width, and semicolons) is not guaranteed by Asphalt and may change between releases without being noted as a breaking change.
 
-> [!WARNING]
-> This feature uses a private Studio API, so this feature may break without warning.
+Therefore, it is recommended to add Asphalt's generated files to your linter/formatter's "ignore" list. Here are instructions for the most commonly used tools:
 
-Asphalt expects a single [KeyframeSequence](https://create.roblox.com/docs/reference/engine/classes/KeyframeSequence) to be saved as either a `.rbxm` or `.rbxmx` file.
-
-## Videos
-
-When uploading videos, you must provide the `--expected-price` argument, which is the price you expect to be charged for the video. See the [Roblox documentation on Videos](https://create.roblox.com/docs/en-us/ui/video-frames#upload-videos) for more details.
-
-## Models
-
-Asphalt supports uploading `.fbx` files purely out of ease, but Roblox does not offer control over the import settings through the web API. As such, this is not a feature that most developers use.
-
-We instead recommend uploading your models with the 3D Importer in Studio, which provides a 3D preview, error checking, and customizable settings. You can then use a tool like [Rojo](https://github.com/rojo-rbx/rojo) to build them into your project.
+- [Stylua](https://github.com/JohnnyMorganz/StyLua?tab=readme-ov-file#glob-filtering)
+- [Biome](https://biomejs.dev/guides/configure-biome/#ignore-files)
+- [ESLint](https://eslint.org/docs/latest/use/configure/ignore)
 
 ## Attributions
 
