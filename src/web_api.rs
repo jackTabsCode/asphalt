@@ -4,7 +4,6 @@ use crate::{
     config::{Creator, CreatorType},
 };
 use anyhow::{Context, bail};
-use bytes::Bytes;
 use log::{debug, warn};
 use reqwest::{
     RequestBuilder, Response, StatusCode,
@@ -56,19 +55,20 @@ impl WebApiClient {
             description: ASSET_DESCRIPTION,
         };
 
-        let bytes = Bytes::copy_from_slice(&asset.data);
-        let len = bytes.len() as u64;
+        let len = asset.data.len() as u64;
         let req_json = serde_json::to_string(&req)?;
         let mime = req.asset_type.file_type().to_owned();
         let name = file_name.to_owned();
 
         let res = self
             .send_with_retry(|| {
-                let file_part =
-                    multipart::Part::stream_with_length(reqwest::Body::from(bytes.clone()), len)
-                        .file_name(name.clone())
-                        .mime_str(&mime)
-                        .unwrap();
+                let file_part = multipart::Part::stream_with_length(
+                    reqwest::Body::from(asset.data.clone()),
+                    len,
+                )
+                .file_name(name.clone())
+                .mime_str(&mime)
+                .unwrap();
 
                 let form = multipart::Form::new()
                     .text("request", req_json.clone())

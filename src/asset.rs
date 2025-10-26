@@ -1,6 +1,7 @@
 use crate::util::{alpha_bleed::alpha_bleed, svg::svg_to_png};
 use anyhow::{Context, bail};
 use blake3::Hasher;
+use bytes::Bytes;
 use image::DynamicImage;
 use relative_path::RelativePathBuf;
 use resvg::usvg::fontdb::Database;
@@ -10,7 +11,7 @@ use std::{io::Cursor, sync::Arc};
 pub struct Asset {
     /// Relative to Input prefix
     pub path: RelativePathBuf,
-    pub data: Vec<u8>,
+    pub data: Bytes,
     pub ty: AssetType,
     processed: bool,
     pub ext: String,
@@ -55,6 +56,8 @@ impl Asset {
             _ => bail!("Unknown extension .{ext}"),
         };
 
+        let data = Bytes::from(data);
+
         let mut hasher = Hasher::new();
         hasher.update(&data);
         let hash = hasher.finalize().to_string();
@@ -75,7 +78,7 @@ impl Asset {
         }
 
         if self.ext == "svg" {
-            self.data = svg_to_png(&self.data, font_db.clone()).await?;
+            self.data = svg_to_png(&self.data, font_db.clone()).await?.into();
             self.ext = "png".to_string();
         }
 
@@ -85,7 +88,7 @@ impl Asset {
 
             let mut writer = Cursor::new(Vec::new());
             image.write_to(&mut writer, image::ImageFormat::Png)?;
-            self.data = writer.into_inner();
+            self.data = Bytes::from(writer.into_inner());
         }
 
         self.processed = true;
