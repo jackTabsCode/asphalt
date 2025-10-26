@@ -1,9 +1,9 @@
 use crate::{
     asset::{Asset, AssetType},
     auth::Auth,
-    config::{Creator, CreatorType},
+    config,
 };
-use anyhow::{Context, bail};
+use anyhow::{Context, anyhow};
 use log::{debug, warn};
 use reqwest::{
     RequestBuilder, Response, StatusCode,
@@ -18,15 +18,28 @@ const OPERATION_URL: &str = "https://apis.roblox.com/assets/v1/operations";
 const ASSET_DESCRIPTION: &str = "Uploaded by Asphalt";
 const MAX_DISPLAY_NAME_LENGTH: usize = 50;
 
+#[derive(Debug, thiserror::Error)]
+pub enum UploadError {
+    #[error("Fatal error: (status: {status}, message: {message}, body: {body})")]
+    Fatal {
+        status: StatusCode,
+        message: String,
+        body: String,
+    },
+
+    #[error(transparent)]
+    Other(#[from] anyhow::Error),
+}
+
 pub struct WebApiClient {
     inner: reqwest::Client,
     auth: Auth,
-    creator: Creator,
+    creator: config::Creator,
     expected_price: Option<u32>,
 }
 
 impl WebApiClient {
-    pub fn new(auth: Auth, creator: Creator, expected_price: Option<u32>) -> Self {
+    pub fn new(auth: Auth, creator: config::Creator, expected_price: Option<u32>) -> Self {
         WebApiClient {
             inner: reqwest::Client::new(),
             auth,
@@ -35,7 +48,7 @@ impl WebApiClient {
         }
     }
 
-    pub async fn upload(&self, asset: &Asset) -> anyhow::Result<u64> {
+    pub async fn upload(&self, asset: &Asset) -> Result<u64, UploadError> {
         let api_key = self
             .auth
             .api_key
@@ -45,10 +58,10 @@ impl WebApiClient {
         let file_name = asset.path.file_name().unwrap();
         let display_name = trim_display_name(file_name);
 
-        let req = WebAssetRequest {
+        let req = Request {
             display_name,
             asset_type: asset.ty.clone(),
-            creation_context: WebAssetRequestCreationContext {
+            creation_context: CreationContext {
                 creator: self.creator.clone().into(),
                 expected_price: self.expected_price,
             },
@@ -56,7 +69,7 @@ impl WebApiClient {
         };
 
         let len = asset.data.len() as u64;
-        let req_json = serde_json::to_string(&req)?;
+        let req_json = serde_json::to_string(&req).map_err(anyhow::Error::from)?;
         let mime = req.asset_type.file_type().to_owned();
         let name = file_name.to_owned();
 
@@ -81,23 +94,18 @@ impl WebApiClient {
             })
             .await?;
 
-        let status = res.status();
-        let body = res.text().await?;
+        let body = res.text().await.map_err(anyhow::Error::from)?;
 
-        if status.is_success() {
-            let operation: WebAssetOperation = serde_json::from_str(&body)?;
+        let operation: Operation = serde_json::from_str(&body).map_err(anyhow::Error::from)?;
 
-            match self.poll_operation(operation.operation_id, &api_key).await {
-                Ok(Some(id)) => Ok(id),
-                Ok(None) => bail!("Failed to get asset ID"),
-                Err(e) => Err(e),
-            }
-        } else {
-            bail!("Failed to upload asset: {} - {}", status, body)
-        }
+        let id = self
+            .poll_operation(operation.operation_id, &api_key)
+            .await?;
+
+        Ok(id)
     }
 
-    async fn poll_operation(&self, id: String, api_key: &str) -> anyhow::Result<Option<u64>> {
+    async fn poll_operation(&self, id: String, api_key: &str) -> Result<u64, UploadError> {
         let mut delay = Duration::from_secs(1);
         const MAX_POLLS: u32 = 10;
 
@@ -111,19 +119,19 @@ impl WebApiClient {
                 .await?;
 
             let status = res.status();
-            let text = res.text().await?;
+            let text = res.text().await.map_err(anyhow::Error::from)?;
 
             if !status.is_success() {
-                bail!("Failed to poll operation: {} - {}", status, text);
+                return Err(anyhow!("Failed to poll operation: {} - {}", status, text).into());
             }
 
-            let operation: WebAssetOperation = serde_json::from_str(&text)?;
+            let operation: Operation = serde_json::from_str(&text).map_err(anyhow::Error::from)?;
 
             if operation.done {
                 if let Some(response) = operation.response {
-                    return Ok(Some(response.asset_id.parse()?));
+                    return Ok(response.asset_id.parse().map_err(anyhow::Error::from)?);
                 } else {
-                    bail!("Operation completed but no response provided")
+                    return Err(anyhow!("Operation completed but no response provided").into());
                 }
             }
 
@@ -135,10 +143,10 @@ impl WebApiClient {
             }
         }
 
-        bail!("Operation polling exceeded maximum retries")
+        Err(anyhow!("Operation polling exceeded maximum retries").into())
     }
 
-    async fn send_with_retry<F>(&self, make_req: F) -> anyhow::Result<Response>
+    async fn send_with_retry<F>(&self, make_req: F) -> Result<Response, UploadError>
     where
         F: Fn() -> RequestBuilder,
     {
@@ -146,9 +154,10 @@ impl WebApiClient {
         let mut attempt = 0;
 
         loop {
-            let res = make_req().send().await?;
+            let res = make_req().send().await.map_err(anyhow::Error::from)?;
+            let status = res.status();
 
-            match res.status() {
+            match status {
                 StatusCode::TOO_MANY_REQUESTS if attempt < MAX => {
                     let wait = res
                         .headers()
@@ -168,7 +177,17 @@ impl WebApiClient {
 
                     continue;
                 }
-                _ => return Ok(res),
+                StatusCode::OK => return Ok(res),
+                _ => {
+                    let body = res.text().await.map_err(anyhow::Error::from)?;
+                    let message = extract_error_message(&body);
+
+                    return Err(UploadError::Fatal {
+                        status,
+                        message,
+                        body,
+                    });
+                }
             }
         }
     }
@@ -176,34 +195,34 @@ impl WebApiClient {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct WebAssetRequest {
+struct Request {
     asset_type: AssetType,
     display_name: String,
     description: &'static str,
-    creation_context: WebAssetRequestCreationContext,
+    creation_context: CreationContext,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct WebAssetRequestCreationContext {
-    creator: WebAssetCreator,
+struct CreationContext {
+    creator: Creator,
     expected_price: Option<u32>,
 }
 
 #[derive(Serialize)]
 #[serde(untagged)]
-enum WebAssetCreator {
-    User(WebAssetUserCreator),
-    Group(WebAssetGroupCreator),
+enum Creator {
+    User(UserCreator),
+    Group(GroupCreator),
 }
 
-impl From<Creator> for WebAssetCreator {
-    fn from(value: Creator) -> Self {
+impl From<config::Creator> for Creator {
+    fn from(value: config::Creator) -> Self {
         match value.ty {
-            CreatorType::User => WebAssetCreator::User(WebAssetUserCreator {
+            config::CreatorType::User => Creator::User(UserCreator {
                 user_id: value.id.to_string(),
             }),
-            CreatorType::Group => WebAssetCreator::Group(WebAssetGroupCreator {
+            config::CreatorType::Group => Creator::Group(GroupCreator {
                 group_id: value.id.to_string(),
             }),
         }
@@ -212,27 +231,27 @@ impl From<Creator> for WebAssetCreator {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct WebAssetUserCreator {
+struct UserCreator {
     user_id: String,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct WebAssetGroupCreator {
+struct GroupCreator {
     group_id: String,
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct WebAssetOperation {
+struct Operation {
     done: bool,
     operation_id: String,
-    response: Option<WebAssetOperationResponse>,
+    response: Option<OperationResponse>,
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct WebAssetOperationResponse {
+struct OperationResponse {
     asset_id: String,
 }
 
@@ -244,4 +263,19 @@ fn trim_display_name(name: &str) -> String {
     } else {
         full_path
     }
+}
+
+#[derive(Deserialize)]
+struct ErrorBody {
+    errors: Vec<ErrorItem>,
+}
+
+#[derive(Deserialize)]
+struct ErrorItem {
+    message: String,
+}
+
+fn extract_error_message(body: &str) -> String {
+    let error_body: ErrorBody = serde_json::from_str(body).unwrap();
+    error_body.errors[0].message.clone()
 }

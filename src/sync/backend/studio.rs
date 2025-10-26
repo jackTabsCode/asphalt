@@ -1,7 +1,7 @@
-use super::{BackendSyncResult, SyncBackend};
+use super::{AssetRef, SyncBackend};
 use crate::{
     asset::{Asset, AssetType},
-    sync::SyncState,
+    sync::{SyncState, backend::SyncError},
 };
 use anyhow::{Context, bail};
 use fs_err::tokio as fs;
@@ -54,10 +54,10 @@ impl SyncBackend for StudioBackend {
         state: Arc<SyncState>,
         input_name: String,
         asset: &Asset,
-    ) -> anyhow::Result<Option<BackendSyncResult>> {
+    ) -> Result<Option<AssetRef>, SyncError> {
         if matches!(asset.ty, AssetType::Model(_) | AssetType::Animation) {
             return match state.existing_lockfile.get(&input_name, &asset.hash) {
-                Some(entry) => Ok(Some(BackendSyncResult::Studio(format!(
+                Some(entry) => Ok(Some(AssetRef::Studio(format!(
                     "rbxassetid://{}",
                     entry.asset_id
                 )))),
@@ -74,12 +74,16 @@ impl SyncBackend for StudioBackend {
         let target_path = rel_target_path.to_logical_path(&self.sync_path);
 
         if let Some(parent) = target_path.parent() {
-            fs::create_dir_all(parent).await?;
+            fs::create_dir_all(parent)
+                .await
+                .map_err(anyhow::Error::from)?;
         }
 
-        fs::write(&target_path, &asset.data).await?;
+        fs::write(&target_path, &asset.data)
+            .await
+            .map_err(anyhow::Error::from)?;
 
-        Ok(Some(BackendSyncResult::Studio(format!(
+        Ok(Some(AssetRef::Studio(format!(
             "rbxasset://{}/{}",
             self.identifier, rel_target_path
         ))))

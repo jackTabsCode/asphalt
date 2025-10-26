@@ -2,7 +2,13 @@ use super::{
     SyncState,
     backend::{SyncBackend, cloud::CloudBackend, debug::DebugBackend, studio::StudioBackend},
 };
-use crate::{asset::Asset, cli::SyncTarget, progress_bar::ProgressBar, sync::SyncResult};
+use crate::{
+    asset::Asset,
+    cli::SyncTarget,
+    progress_bar::ProgressBar,
+    sync::{SyncResult, backend::SyncError},
+};
+use anyhow::bail;
 use log::warn;
 use std::sync::Arc;
 
@@ -38,21 +44,24 @@ pub async fn perform(
         };
 
         match res {
-            Ok(Some(result)) => {
+            Ok(Some(asset_ref)) => {
                 state
                     .result_tx
                     .send(SyncResult {
                         input_name: input_name.clone(),
                         hash: asset.hash.clone(),
                         path: asset.path.clone(),
-                        backend: result,
+                        asset_ref,
                     })
                     .await?;
+            }
+            Ok(None) => {}
+            Err(SyncError::Fatal(err)) => {
+                bail!("Failed to sync asset {file_name}: {err:?}");
             }
             Err(err) => {
                 warn!("Failed to sync asset {file_name}: {err:?}");
             }
-            _ => {}
         };
 
         pb.inc(1);

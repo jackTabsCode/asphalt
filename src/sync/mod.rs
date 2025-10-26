@@ -6,7 +6,7 @@ use crate::{
     web_api::WebApiClient,
 };
 use anyhow::{Context, Result, bail};
-use backend::BackendSyncResult;
+use backend::AssetRef;
 use indicatif::MultiProgress;
 use log::{info, warn};
 use relative_path::RelativePathBuf;
@@ -232,7 +232,7 @@ pub struct SyncResult {
     hash: String,
     path: RelativePathBuf,
     input_name: String,
-    backend: BackendSyncResult,
+    asset_ref: AssetRef,
 }
 
 async fn handle_sync_results(
@@ -241,7 +241,7 @@ async fn handle_sync_results(
     lockfile_tx: Sender<LockfileInsertion>,
 ) -> anyhow::Result<()> {
     while let Some(result) = rx.recv().await {
-        if let BackendSyncResult::Cloud(asset_id) = result.backend {
+        if let AssetRef::Cloud(asset_id) = result.asset_ref {
             lockfile_tx
                 .send(LockfileInsertion {
                     input_name: result.input_name.clone(),
@@ -258,7 +258,7 @@ async fn handle_sync_results(
                     asset_id: format!("rbxassetid://{asset_id}"),
                 })
                 .await?;
-        } else if let BackendSyncResult::Studio(asset_id) = result.backend {
+        } else if let AssetRef::Studio(asset_id) = result.asset_ref {
             codegen_tx
                 .send(CodegenInsertion {
                     input_name: result.input_name,

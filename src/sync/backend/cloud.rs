@@ -1,5 +1,10 @@
-use super::{BackendSyncResult, SyncBackend};
-use crate::{asset::Asset, sync::SyncState};
+use super::{AssetRef, SyncBackend};
+use crate::{
+    asset::Asset,
+    sync::{SyncState, backend::SyncError},
+    web_api::UploadError,
+};
+use anyhow::anyhow;
 use std::sync::Arc;
 use tokio::time;
 
@@ -18,14 +23,16 @@ impl SyncBackend for CloudBackend {
         state: Arc<SyncState>,
         _input_name: String,
         asset: &Asset,
-    ) -> anyhow::Result<Option<BackendSyncResult>> {
+    ) -> Result<Option<AssetRef>, SyncError> {
         if cfg!(feature = "mock_cloud") {
             time::sleep(time::Duration::from_secs(1)).await;
-            return Ok(Some(BackendSyncResult::Cloud(1337)));
+            return Ok(Some(AssetRef::Cloud(1337)));
         }
 
-        let asset_id = state.client.upload(asset).await?;
-
-        Ok(Some(BackendSyncResult::Cloud(asset_id)))
+        match state.client.upload(asset).await {
+            Ok(id) => Ok(Some(AssetRef::Cloud(id))),
+            Err(UploadError::Fatal { message, .. }) => Err(SyncError::Fatal(anyhow!(message))),
+            Err(UploadError::Other(e)) => Err(SyncError::Fatal(e)),
+        }
     }
 }

@@ -7,11 +7,6 @@ pub mod cloud;
 pub mod debug;
 pub mod studio;
 
-pub enum BackendSyncResult {
-    Cloud(u64),
-    Studio(String),
-}
-
 pub trait SyncBackend {
     async fn new() -> anyhow::Result<Self>
     where
@@ -22,5 +17,19 @@ pub trait SyncBackend {
         state: Arc<SyncState>,
         input_name: String,
         asset: &Asset,
-    ) -> anyhow::Result<Option<BackendSyncResult>>;
+    ) -> Result<Option<AssetRef>, SyncError>;
+}
+
+pub enum AssetRef {
+    Cloud(u64),
+    Studio(String),
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum SyncError {
+    #[error("Fatal error: {0}")]
+    Fatal(anyhow::Error),
+
+    #[error(transparent)]
+    Other(#[from] anyhow::Error),
 }

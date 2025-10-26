@@ -1,5 +1,8 @@
-use super::{BackendSyncResult, SyncBackend};
-use crate::{asset::Asset, sync::SyncState};
+use super::{AssetRef, SyncBackend};
+use crate::{
+    asset::Asset,
+    sync::{SyncState, backend::SyncError},
+};
 use anyhow::Context;
 use fs_err::tokio as fs;
 use log::info;
@@ -37,7 +40,7 @@ impl SyncBackend for DebugBackend {
         _state: Arc<SyncState>,
         _input_name: String,
         asset: &Asset,
-    ) -> anyhow::Result<Option<BackendSyncResult>> {
+    ) -> Result<Option<AssetRef>, SyncError> {
         let target_path = asset.path.to_logical_path(&self.sync_path);
 
         if let Some(parent) = target_path.parent() {
