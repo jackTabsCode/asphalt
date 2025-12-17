@@ -1,20 +1,17 @@
 use crate::{
-    auth::Auth,
+    asset::AssetRef,
     cli::{SyncArgs, SyncTarget},
-    config::{Config, Input},
+    config::Config,
     lockfile::{Lockfile, LockfileEntry, RawLockfile},
+    sync::codegen::NodeSource,
     web_api::WebApiClient,
 };
 use anyhow::{Context, Result, bail};
-use backend::AssetRef;
 use indicatif::MultiProgress;
 use log::{info, warn};
 use relative_path::RelativePathBuf;
 use resvg::usvg::fontdb;
-use std::{
-    collections::{BTreeMap, HashMap},
-    sync::Arc,
-};
+use std::{collections::HashMap, sync::Arc};
 use tokio::{
     fs,
     sync::mpsc::{self, Receiver, Sender},
@@ -29,15 +26,20 @@ mod walk;
 
 pub struct SyncState {
     args: SyncArgs,
-
     existing_lockfile: Lockfile,
-    result_tx: mpsc::Sender<SyncResult>,
-
+    event_tx: Sender<SyncEvent>,
     multi_progress: MultiProgress,
-
     font_db: Arc<fontdb::Database>,
-
     client: WebApiClient,
+}
+
+#[derive(Debug)]
+pub struct SyncEvent {
+    write_lockfile: bool,
+    input_name: String,
+    path: RelativePathBuf,
+    hash: String,
+    asset_ref: AssetRef,
 }
 
 pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
@@ -46,12 +48,8 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
     }
 
     let config = Config::read().await?;
-    let codegen_config = config.codegen.clone();
 
-    let lockfile = RawLockfile::read().await?.into_lockfile()?;
-
-    let key_required = matches!(args.target, SyncTarget::Cloud) && !args.dry_run;
-    let auth = Auth::new(args.api_key.clone(), key_required)?;
+    let existing_lockfile = RawLockfile::read().await?.into_lockfile()?;
 
     let font_db = Arc::new({
         let mut db = fontdb::Database::new();
@@ -59,38 +57,20 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
         db
     });
 
-    let (codegen_tx, codegen_rx) = mpsc::channel::<CodegenInsertion>(100);
+    let (event_tx, event_rx) = mpsc::channel::<SyncEvent>(100);
 
-    let codegen_handle = {
-        let inputs = config.inputs.clone();
-        tokio::spawn(async move { collect_codegen_insertions(codegen_rx, inputs).await })
-    };
-
-    let (lockfile_tx, lockfile_rx) = mpsc::channel::<LockfileInsertion>(100);
-
-    let lockfile_handle =
-        tokio::spawn(async move { collect_lockfile_insertions(lockfile_rx).await });
-
-    let (result_tx, result_rx) = mpsc::channel::<SyncResult>(100);
-
-    let result_handle = {
-        let codegen_tx = codegen_tx.clone();
-        let lockfile_tx = lockfile_tx.clone();
-
-        tokio::spawn(async move { handle_sync_results(result_rx, codegen_tx, lockfile_tx).await })
-    };
+    let collector_handle = tokio::spawn({
+        let config = config.clone();
+        async move { collect_events(event_rx, config).await }
+    });
 
     let state = Arc::new(SyncState {
         args: args.clone(),
-
-        existing_lockfile: lockfile,
-        result_tx,
-
+        existing_lockfile,
+        event_tx,
         multi_progress,
-
         font_db,
-
-        client: WebApiClient::new(auth, config.creator, args.expected_price),
+        client: WebApiClient::new(args.api_key, config.creator, args.expected_price),
     });
 
     let mut duplicate_assets = HashMap::<String, Vec<DuplicateFile>>::new();
@@ -111,23 +91,14 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
                         continue;
                     }
 
-                    if matches!(args.target, SyncTarget::Cloud) {
-                        lockfile_tx
-                            .send(LockfileInsertion {
-                                input_name: input_name.clone(),
-                                hash: existing.hash,
-                                entry: existing.entry.clone(),
-                                // This takes too long, and we're not really losing anything here.
-                                write: false,
-                            })
-                            .await?;
-                    }
-
-                    codegen_tx
-                        .send(CodegenInsertion {
+                    state
+                        .event_tx
+                        .send(SyncEvent {
+                            write_lockfile: false,
                             input_name: input_name.clone(),
-                            asset_path: existing.path.clone(),
-                            asset_id: format!("rbxassetid://{}", existing.entry.asset_id),
+                            path: existing.path,
+                            hash: existing.hash,
+                            asset_ref: AssetRef::Cloud(existing.entry.asset_id),
                         })
                         .await?;
                 }
@@ -179,23 +150,19 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
 
     drop(state);
 
-    result_handle.await??;
+    let (new_lockfile, mut inputs_to_sources) = collector_handle.await??;
 
-    drop(codegen_tx);
-    drop(lockfile_tx);
-
-    let new_lockfile = lockfile_handle.await??;
     if matches!(args.target, SyncTarget::Cloud) {
         new_lockfile.write(None).await?;
     }
-
-    let mut inputs_to_sources = codegen_handle.await??;
 
     for (input_name, dupes) in duplicate_assets {
         let source = inputs_to_sources.get_mut(&input_name).unwrap();
 
         for dupe in dupes {
-            let original = source.get(&dupe.original_path).unwrap();
+            let original = source
+                .get(&dupe.original_path)
+                .expect("We marked a duplicate, but there was no source");
             source.insert(dupe.path, original.clone());
         }
     }
@@ -208,7 +175,7 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
 
         let mut langs_to_generate = vec![codegen::Language::Luau];
 
-        if codegen_config.typescript {
+        if config.codegen.typescript {
             langs_to_generate.push(codegen::Language::TypeScript);
         }
 
@@ -228,99 +195,40 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
     Ok(())
 }
 
-pub struct SyncResult {
-    hash: String,
-    path: RelativePathBuf,
-    input_name: String,
-    asset_ref: AssetRef,
-}
+async fn collect_events(
+    mut rx: Receiver<SyncEvent>,
+    config: Config,
+) -> Result<(Lockfile, HashMap<String, NodeSource>)> {
+    let mut lockfile = Lockfile::default();
 
-async fn handle_sync_results(
-    mut rx: Receiver<SyncResult>,
-    codegen_tx: Sender<CodegenInsertion>,
-    lockfile_tx: Sender<LockfileInsertion>,
-) -> anyhow::Result<()> {
-    while let Some(result) = rx.recv().await {
-        if let AssetRef::Cloud(asset_id) = result.asset_ref {
-            lockfile_tx
-                .send(LockfileInsertion {
-                    input_name: result.input_name.clone(),
-                    hash: result.hash,
-                    entry: LockfileEntry { asset_id },
-                    write: true,
-                })
-                .await?;
-
-            codegen_tx
-                .send(CodegenInsertion {
-                    input_name: result.input_name,
-                    asset_path: result.path,
-                    asset_id: format!("rbxassetid://{asset_id}"),
-                })
-                .await?;
-        } else if let AssetRef::Studio(asset_id) = result.asset_ref {
-            codegen_tx
-                .send(CodegenInsertion {
-                    input_name: result.input_name,
-                    asset_path: result.path.clone(),
-                    asset_id,
-                })
-                .await?;
+    let mut inputs_to_sources: HashMap<String, NodeSource> = HashMap::new();
+    for (input_name, input) in &config.inputs {
+        for (rel_path, web_asset) in &input.web {
+            inputs_to_sources
+                .entry(input_name.clone())
+                .or_default()
+                .insert(rel_path.clone(), web_asset.clone().into());
         }
     }
 
-    Ok(())
-}
+    while let Some(event) = rx.recv().await {
+        inputs_to_sources
+            .entry(event.input_name.clone())
+            .or_default()
+            .insert(event.path, event.asset_ref.clone());
 
-struct CodegenInsertion {
-    input_name: String,
-    asset_path: RelativePathBuf,
-    asset_id: String,
-}
+        if let AssetRef::Cloud(id) = event.asset_ref {
+            lockfile.insert(
+                &event.input_name,
+                &event.hash,
+                LockfileEntry { asset_id: id },
+            );
+        }
 
-async fn collect_codegen_insertions(
-    mut rx: Receiver<CodegenInsertion>,
-    inputs: HashMap<String, Input>,
-) -> anyhow::Result<HashMap<String, BTreeMap<RelativePathBuf, String>>> {
-    let mut inputs_to_sources: HashMap<String, BTreeMap<RelativePathBuf, String>> = HashMap::new();
-
-    for (input_name, input) in &inputs {
-        for (rel_path, asset) in &input.web {
-            let entry = inputs_to_sources.entry(input_name.clone()).or_default();
-
-            entry.insert(rel_path.clone(), format!("rbxassetid://{}", asset.id));
+        if event.write_lockfile {
+            lockfile.write(None).await?;
         }
     }
 
-    while let Some(insertion) = rx.recv().await {
-        let source = inputs_to_sources
-            .entry(insertion.input_name.clone())
-            .or_default();
-
-        source.insert(insertion.asset_path, insertion.asset_id);
-    }
-
-    Ok(inputs_to_sources)
-}
-
-struct LockfileInsertion {
-    input_name: String,
-    hash: String,
-    entry: LockfileEntry,
-    write: bool,
-}
-
-async fn collect_lockfile_insertions(
-    mut rx: Receiver<LockfileInsertion>,
-) -> anyhow::Result<Lockfile> {
-    let mut new_lockfile = Lockfile::default();
-
-    while let Some(insertion) = rx.recv().await {
-        new_lockfile.insert(&insertion.input_name, &insertion.hash, insertion.entry);
-        if insertion.write {
-            new_lockfile.write(None).await?;
-        }
-    }
-
-    Ok(new_lockfile)
+    Ok((lockfile, inputs_to_sources))
 }

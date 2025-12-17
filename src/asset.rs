@@ -1,4 +1,7 @@
-use crate::util::{alpha_bleed::alpha_bleed, svg::svg_to_png};
+use crate::{
+    config::WebAsset,
+    util::{alpha_bleed::alpha_bleed, svg::svg_to_png},
+};
 use anyhow::{Context, bail};
 use blake3::Hasher;
 use bytes::Bytes;
@@ -6,7 +9,7 @@ use image::DynamicImage;
 use relative_path::RelativePathBuf;
 use resvg::usvg::fontdb::Database;
 use serde::Serialize;
-use std::{io::Cursor, sync::Arc};
+use std::{fmt, io::Cursor, sync::Arc};
 
 pub struct Asset {
     /// Relative to Input prefix
@@ -203,4 +206,25 @@ pub fn is_animation(data: &[u8], format: &RobloxModelFormat) -> anyhow::Result<b
 pub enum RobloxModelFormat {
     Binary,
     Xml,
+}
+
+#[derive(Debug, Clone)]
+pub enum AssetRef {
+    Cloud(u64),
+    Studio(String),
+}
+
+impl fmt::Display for AssetRef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            AssetRef::Cloud(id) => write!(f, "rbxassetid://{id}"),
+            AssetRef::Studio(name) => write!(f, "rbxasset://{name}"),
+        }
+    }
+}
+
+impl From<WebAsset> for AssetRef {
+    fn from(value: WebAsset) -> Self {
+        AssetRef::Cloud(value.id)
+    }
 }

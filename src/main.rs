@@ -12,7 +12,6 @@ use upload::upload;
 use crate::config::Config;
 
 mod asset;
-mod auth;
 mod cli;
 mod config;
 mod glob;

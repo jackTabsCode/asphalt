@@ -1,6 +1,6 @@
-use super::{AssetRef, SyncBackend};
+use super::SyncBackend;
 use crate::{
-    asset::Asset,
+    asset::{Asset, AssetRef},
     sync::{SyncState, backend::SyncError},
     web_api::UploadError,
 };

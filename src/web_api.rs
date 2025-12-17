@@ -1,6 +1,5 @@
 use crate::{
     asset::{Asset, AssetType},
-    auth::Auth,
     config,
 };
 use anyhow::{Context, anyhow};
@@ -33,16 +32,20 @@ pub enum UploadError {
 
 pub struct WebApiClient {
     inner: reqwest::Client,
-    auth: Auth,
+    api_key: Option<String>,
     creator: config::Creator,
     expected_price: Option<u32>,
 }
 
 impl WebApiClient {
-    pub fn new(auth: Auth, creator: config::Creator, expected_price: Option<u32>) -> Self {
+    pub fn new(
+        api_key: Option<String>,
+        creator: config::Creator,
+        expected_price: Option<u32>,
+    ) -> Self {
         WebApiClient {
             inner: reqwest::Client::new(),
-            auth,
+            api_key,
             creator,
             expected_price,
         }
@@ -50,7 +53,6 @@ impl WebApiClient {
 
     pub async fn upload(&self, asset: &Asset) -> Result<u64, UploadError> {
         let api_key = self
-            .auth
             .api_key
             .clone()
             .context("An API key is necessary to upload")?;

@@ -42,8 +42,7 @@ pub enum SyncTarget {
 #[derive(Args, Clone)]
 pub struct SyncArgs {
     /// Your Open Cloud API key.
-    /// Can also be set with the ASPHALT_API_KEY environment variable.
-    #[arg(short, long)]
+    #[arg(short, long, env = "ASPHALT_API_KEY")]
     pub api_key: Option<String>,
 
     /// Where Asphalt should sync assets to.

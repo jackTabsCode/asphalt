@@ -1,4 +1,4 @@
-use crate::{asset::Asset, auth::Auth, cli::UploadArgs, config::Creator, web_api::WebApiClient};
+use crate::{asset::Asset, cli::UploadArgs, config::Creator, web_api::WebApiClient};
 use fs_err::tokio as fs;
 use relative_path::PathExt;
 use resvg::usvg::fontdb::Database;
@@ -19,9 +19,8 @@ pub async fn upload(args: UploadArgs) -> anyhow::Result<()> {
         ty: args.creator_type,
         id: args.creator_id,
     };
-    let auth = Auth::new(args.api_key, true)?;
 
-    let client = WebApiClient::new(auth, creator, args.expected_price);
+    let client = WebApiClient::new(args.api_key, creator, args.expected_price);
 
     let asset_id = client.upload(&asset).await?;
 

@@ -6,7 +6,7 @@ use crate::{
     asset::Asset,
     cli::SyncTarget,
     progress_bar::ProgressBar,
-    sync::{SyncResult, backend::SyncError},
+    sync::{SyncEvent, backend::SyncError},
 };
 use anyhow::bail;
 use log::warn;
@@ -46,14 +46,15 @@ pub async fn perform(
         match res {
             Ok(Some(asset_ref)) => {
                 state
-                    .result_tx
-                    .send(SyncResult {
-                        input_name: input_name.clone(),
-                        hash: asset.hash.clone(),
+                    .event_tx
+                    .send(SyncEvent {
                         path: asset.path.clone(),
                         asset_ref,
+                        write_lockfile: matches!(backend, TargetBackend::Cloud(_)),
+                        hash: asset.hash.clone(),
+                        input_name,
                     })
-                    .await?;
+                    .await?
             }
             Ok(None) => {}
             Err(SyncError::Fatal(err)) => {

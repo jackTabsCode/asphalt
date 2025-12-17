@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use super::SyncState;
-use crate::asset::Asset;
+use crate::asset::{Asset, AssetRef};
 
 pub mod cloud;
 pub mod debug;
@@ -18,11 +18,6 @@ pub trait SyncBackend {
         input_name: String,
         asset: &Asset,
     ) -> Result<Option<AssetRef>, SyncError>;
-}
-
-pub enum AssetRef {
-    Cloud(u64),
-    Studio(String),
 }
 
 #[derive(Debug, thiserror::Error)]
