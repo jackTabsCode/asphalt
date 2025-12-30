@@ -10,7 +10,7 @@ use reqwest::{
     multipart,
 };
 use serde::{Deserialize, Serialize};
-use std::time::Duration;
+use std::{env, time::Duration};
 
 const UPLOAD_URL: &str = "https://apis.roblox.com/assets/v1/assets";
 const OPERATION_URL: &str = "https://apis.roblox.com/assets/v1/operations";
@@ -52,6 +52,10 @@ impl WebApiClient {
     }
 
     pub async fn upload(&self, asset: &Asset) -> Result<u64, UploadError> {
+        if env::var("ASPHALT_TEST").is_ok() {
+            return Ok(1337);
+        }
+
         let api_key = self
             .api_key
             .clone()

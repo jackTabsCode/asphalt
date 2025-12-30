@@ -6,7 +6,6 @@ use crate::{
 };
 use anyhow::anyhow;
 use std::sync::Arc;
-use tokio::time;
 
 pub struct CloudBackend;
 
@@ -24,11 +23,6 @@ impl SyncBackend for CloudBackend {
         _input_name: String,
         asset: &Asset,
     ) -> Result<Option<AssetRef>, SyncError> {
-        if cfg!(feature = "mock_cloud") {
-            time::sleep(time::Duration::from_secs(1)).await;
-            return Ok(Some(AssetRef::Cloud(1337)));
-        }
-
         match state.client.upload(asset).await {
             Ok(id) => Ok(Some(AssetRef::Cloud(id))),
             Err(UploadError::Fatal { message, .. }) => Err(SyncError::Fatal(anyhow!(message))),
