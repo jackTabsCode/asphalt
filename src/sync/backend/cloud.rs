@@ -1,32 +1,41 @@
-use super::SyncBackend;
+use super::Backend;
 use crate::{
     asset::{Asset, AssetRef},
-    sync::{SyncState, backend::SyncError},
-    web_api::UploadError,
+    sync::{State, backend::Params},
+    web_api::WebApiClient,
 };
-use anyhow::anyhow;
+use anyhow::{Context, bail};
 use std::sync::Arc;
 
-pub struct CloudBackend;
+pub struct Cloud {
+    client: WebApiClient,
+}
 
-impl SyncBackend for CloudBackend {
-    async fn new() -> anyhow::Result<Self>
+impl Backend for Cloud {
+    async fn new(params: Params) -> anyhow::Result<Self>
     where
         Self: Sized,
     {
-        Ok(Self)
+        Ok(Self {
+            client: WebApiClient::new(
+                params
+                    .api_key
+                    .context("An API key is required to use the Cloud backend")?,
+                params.creator,
+                params.expected_price,
+            ),
+        })
     }
 
     async fn sync(
         &self,
-        state: Arc<SyncState>,
-        _input_name: String,
+        _: Arc<State>,
+        _: String,
         asset: &Asset,
-    ) -> Result<Option<AssetRef>, SyncError> {
-        match state.client.upload(asset).await {
+    ) -> anyhow::Result<Option<AssetRef>> {
+        match self.client.upload(asset).await {
             Ok(id) => Ok(Some(AssetRef::Cloud(id))),
-            Err(UploadError::Fatal { message, .. }) => Err(SyncError::Fatal(anyhow!(message))),
-            Err(UploadError::Other(e)) => Err(SyncError::Fatal(e)),
+            Err(err) => bail!("Failed to upload asset: {err:?}"),
         }
     }
 }

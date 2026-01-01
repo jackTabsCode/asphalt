@@ -2,7 +2,7 @@ use crate::{
     asset::{Asset, AssetType},
     config,
 };
-use anyhow::{Context, anyhow};
+use anyhow::{Context, bail};
 use log::{debug, warn};
 use reqwest::{
     RequestBuilder, Response, StatusCode,
@@ -10,56 +10,40 @@ use reqwest::{
     multipart,
 };
 use serde::{Deserialize, Serialize};
-use std::{env, time::Duration};
+use std::{
+    env,
+    sync::atomic::{AtomicBool, Ordering},
+    time::Duration,
+};
 
 const UPLOAD_URL: &str = "https://apis.roblox.com/assets/v1/assets";
 const OPERATION_URL: &str = "https://apis.roblox.com/assets/v1/operations";
 const ASSET_DESCRIPTION: &str = "Uploaded by Asphalt";
 const MAX_DISPLAY_NAME_LENGTH: usize = 50;
 
-#[derive(Debug, thiserror::Error)]
-pub enum UploadError {
-    #[error("Fatal error: (status: {status}, message: {message}, body: {body})")]
-    Fatal {
-        status: StatusCode,
-        message: String,
-        body: String,
-    },
-
-    #[error(transparent)]
-    Other(#[from] anyhow::Error),
-}
-
 pub struct WebApiClient {
     inner: reqwest::Client,
-    api_key: Option<String>,
+    api_key: String,
     creator: config::Creator,
     expected_price: Option<u32>,
+    fatally_failed: AtomicBool,
 }
 
 impl WebApiClient {
-    pub fn new(
-        api_key: Option<String>,
-        creator: config::Creator,
-        expected_price: Option<u32>,
-    ) -> Self {
+    pub fn new(api_key: String, creator: config::Creator, expected_price: Option<u32>) -> Self {
         WebApiClient {
             inner: reqwest::Client::new(),
             api_key,
             creator,
             expected_price,
+            fatally_failed: AtomicBool::new(false),
         }
     }
 
-    pub async fn upload(&self, asset: &Asset) -> Result<u64, UploadError> {
+    pub async fn upload(&self, asset: &Asset) -> anyhow::Result<u64> {
         if env::var("ASPHALT_TEST").is_ok() {
             return Ok(1337);
         }
-
-        let api_key = self
-            .api_key
-            .clone()
-            .context("An API key is necessary to upload")?;
 
         let file_name = asset.path.file_name().unwrap();
         let display_name = trim_display_name(file_name);
@@ -75,12 +59,12 @@ impl WebApiClient {
         };
 
         let len = asset.data.len() as u64;
-        let req_json = serde_json::to_string(&req).map_err(anyhow::Error::from)?;
+        let req_json = serde_json::to_string(&req)?;
         let mime = req.asset_type.file_type().to_owned();
         let name = file_name.to_owned();
 
         let res = self
-            .send_with_retry(|| {
+            .send_with_retry(|client| {
                 let file_part = multipart::Part::stream_with_length(
                     reqwest::Body::from(asset.data.clone()),
                     len,
@@ -93,51 +77,47 @@ impl WebApiClient {
                     .text("request", req_json.clone())
                     .part("fileContent", file_part);
 
-                self.inner
+                client
                     .post(UPLOAD_URL)
-                    .header("x-api-key", &api_key)
+                    .header("x-api-key", &self.api_key)
                     .multipart(form)
             })
             .await?;
 
-        let body = res.text().await.map_err(anyhow::Error::from)?;
+        let body = res.text().await?;
 
-        let operation: Operation = serde_json::from_str(&body).map_err(anyhow::Error::from)?;
+        let operation: Operation = serde_json::from_str(&body)?;
 
         let id = self
-            .poll_operation(operation.operation_id, &api_key)
-            .await?;
+            .poll_operation(operation.operation_id, &self.api_key)
+            .await
+            .context("Failed to poll operation")?;
 
         Ok(id)
     }
 
-    async fn poll_operation(&self, id: String, api_key: &str) -> Result<u64, UploadError> {
+    async fn poll_operation(&self, id: String, api_key: &str) -> anyhow::Result<u64> {
         let mut delay = Duration::from_secs(1);
         const MAX_POLLS: u32 = 10;
 
         for attempt in 0..MAX_POLLS {
             let res = self
-                .send_with_retry(|| {
-                    self.inner
+                .send_with_retry(|client| {
+                    client
                         .get(format!("{OPERATION_URL}/{id}"))
                         .header("x-api-key", api_key)
                 })
                 .await?;
 
-            let status = res.status();
-            let text = res.text().await.map_err(anyhow::Error::from)?;
+            let text = res.text().await?;
 
-            if !status.is_success() {
-                return Err(anyhow!("Failed to poll operation: {} - {}", status, text).into());
-            }
-
-            let operation: Operation = serde_json::from_str(&text).map_err(anyhow::Error::from)?;
+            let operation: Operation = serde_json::from_str(&text)?;
 
             if operation.done {
                 if let Some(response) = operation.response {
-                    return Ok(response.asset_id.parse().map_err(anyhow::Error::from)?);
+                    return Ok(response.asset_id.parse()?);
                 } else {
-                    return Err(anyhow!("Operation completed but no response provided").into());
+                    bail!("Operation completed but no response provided");
                 }
             }
 
@@ -149,18 +129,22 @@ impl WebApiClient {
             }
         }
 
-        Err(anyhow!("Operation polling exceeded maximum retries").into())
+        bail!("Operation polling exceeded maximum retries")
     }
 
-    async fn send_with_retry<F>(&self, make_req: F) -> Result<Response, UploadError>
+    async fn send_with_retry<F>(&self, make_req: F) -> anyhow::Result<Response>
     where
-        F: Fn() -> RequestBuilder,
+        F: Fn(&reqwest::Client) -> RequestBuilder,
     {
+        if self.fatally_failed.load(Ordering::SeqCst) {
+            bail!("A previous request failed due to a fatal error");
+        }
+
         const MAX: u8 = 5;
         let mut attempt = 0;
 
         loop {
-            let res = make_req().send().await.map_err(anyhow::Error::from)?;
+            let res = make_req(&self.inner).send().await?;
             let status = res.status();
 
             match status {
@@ -185,14 +169,9 @@ impl WebApiClient {
                 }
                 StatusCode::OK => return Ok(res),
                 _ => {
-                    let body = res.text().await.map_err(anyhow::Error::from)?;
-                    let message = extract_error_message(&body);
-
-                    return Err(UploadError::Fatal {
-                        status,
-                        message,
-                        body,
-                    });
+                    let body = res.text().await?;
+                    self.fatally_failed.store(true, Ordering::SeqCst);
+                    bail!("Request failed with status {status}:\n{body}");
                 }
             }
         }
@@ -269,19 +248,4 @@ fn trim_display_name(name: &str) -> String {
     } else {
         full_path
     }
-}
-
-#[derive(Deserialize)]
-struct ErrorBody {
-    errors: Vec<ErrorItem>,
-}
-
-#[derive(Deserialize)]
-struct ErrorItem {
-    message: String,
-}
-
-fn extract_error_message(body: &str) -> String {
-    let error_body: ErrorBody = serde_json::from_str(body).unwrap();
-    error_body.errors[0].message.clone()
 }

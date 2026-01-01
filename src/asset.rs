@@ -9,7 +9,47 @@ use image::DynamicImage;
 use relative_path::RelativePathBuf;
 use resvg::usvg::fontdb::Database;
 use serde::Serialize;
-use std::{fmt, io::Cursor, sync::Arc};
+use std::{ffi::OsStr, fmt, io::Cursor, sync::Arc};
+
+type AssetCtor = fn(&[u8]) -> anyhow::Result<AssetType>;
+
+const SUPPORTED_EXTENSIONS: &[(&str, AssetCtor)] = &[
+    ("mp3", |_| Ok(AssetType::Audio(AudioType::Mp3))),
+    ("ogg", |_| Ok(AssetType::Audio(AudioType::Ogg))),
+    ("flac", |_| Ok(AssetType::Audio(AudioType::Flac))),
+    ("wav", |_| Ok(AssetType::Audio(AudioType::Wav))),
+    ("png", |_| Ok(AssetType::Image(ImageType::Png))),
+    ("svg", |_| Ok(AssetType::Image(ImageType::Png))),
+    ("jpg", |_| Ok(AssetType::Image(ImageType::Jpg))),
+    ("jpeg", |_| Ok(AssetType::Image(ImageType::Jpg))),
+    ("bmp", |_| Ok(AssetType::Image(ImageType::Bmp))),
+    ("tga", |_| Ok(AssetType::Image(ImageType::Tga))),
+    ("fbx", |_| Ok(AssetType::Model(ModelType::Fbx))),
+    ("gltf", |_| Ok(AssetType::Model(ModelType::GltfJson))),
+    ("glb", |_| Ok(AssetType::Model(ModelType::GltfBinary))),
+    ("rbxm", |data| {
+        let format = RobloxModelFormat::Binary;
+        if is_animation(data, &format)? {
+            Ok(AssetType::Animation)
+        } else {
+            Ok(AssetType::Model(ModelType::Roblox))
+        }
+    }),
+    ("rbxmx", |data| {
+        let format = RobloxModelFormat::Xml;
+        if is_animation(data, &format)? {
+            Ok(AssetType::Animation)
+        } else {
+            Ok(AssetType::Model(ModelType::Roblox))
+        }
+    }),
+    ("mp4", |_| Ok(AssetType::Video(VideoType::Mp4))),
+    ("mov", |_| Ok(AssetType::Video(VideoType::Mov))),
+];
+
+pub fn is_supported_extension(ext: &OsStr) -> bool {
+    SUPPORTED_EXTENSIONS.iter().any(|(e, _)| *e == ext)
+}
 
 pub struct Asset {
     /// Relative to Input prefix
@@ -23,41 +63,17 @@ pub struct Asset {
 }
 
 impl Asset {
-    pub fn new(path: RelativePathBuf, data: Vec<u8>) -> anyhow::Result<Self> {
+    pub async fn new(path: RelativePathBuf, data: Vec<u8>) -> anyhow::Result<Self> {
         let ext = path
             .extension()
             .context("File has no extension")?
             .to_string();
 
-        let ty = match ext.as_str() {
-            "mp3" => AssetType::Audio(AudioType::Mp3),
-            "ogg" => AssetType::Audio(AudioType::Ogg),
-            "flac" => AssetType::Audio(AudioType::Flac),
-            "wav" => AssetType::Audio(AudioType::Wav),
-            "png" | "svg" => AssetType::Image(ImageType::Png),
-            "jpg" | "jpeg" => AssetType::Image(ImageType::Jpg),
-            "bmp" => AssetType::Image(ImageType::Bmp),
-            "tga" => AssetType::Image(ImageType::Tga),
-            "fbx" => AssetType::Model(ModelType::Fbx),
-            "gltf" => AssetType::Model(ModelType::GltfJson),
-            "glb" => AssetType::Model(ModelType::GltfBinary),
-            "rbxm" | "rbxmx" => {
-                let format = if ext == "rbxm" {
-                    RobloxModelFormat::Binary
-                } else {
-                    RobloxModelFormat::Xml
-                };
-
-                if is_animation(&data, &format)? {
-                    AssetType::Animation
-                } else {
-                    AssetType::Model(ModelType::Roblox)
-                }
-            }
-            "mp4" => AssetType::Video(VideoType::Mp4),
-            "mov" => AssetType::Video(VideoType::Mov),
-            _ => bail!("Unknown extension .{ext}"),
-        };
+        let ty = SUPPORTED_EXTENSIONS
+            .iter()
+            .find(|(e, _)| *e == ext)
+            .map(|(_, func)| func(&data))
+            .context("Unknown file type")??;
 
         let data = Bytes::from(data);
 

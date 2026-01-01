@@ -41,6 +41,7 @@ impl Project {
     pub fn run(&self) -> assert_cmd::Command {
         let mut cmd = cargo_bin_cmd!();
         cmd.env("ASPHALT_TEST", "true");
+        cmd.env("ASPHALT_API_KEY", "test");
         cmd.current_dir(self.dir.path());
         cmd
     }

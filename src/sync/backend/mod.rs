@@ -1,30 +1,35 @@
 use std::sync::Arc;
 
-use super::SyncState;
-use crate::asset::{Asset, AssetRef};
+use super::State;
+use crate::{
+    asset::{Asset, AssetRef},
+    config,
+};
 
-pub mod cloud;
-pub mod debug;
-pub mod studio;
+mod cloud;
+pub use cloud::Cloud;
 
-pub trait SyncBackend {
-    async fn new() -> anyhow::Result<Self>
+mod debug;
+pub use debug::Debug;
+
+mod studio;
+pub use studio::Studio;
+
+pub trait Backend {
+    async fn new(params: Params) -> anyhow::Result<Self>
     where
         Self: Sized;
 
     async fn sync(
         &self,
-        state: Arc<SyncState>,
+        state: Arc<State>,
         input_name: String,
         asset: &Asset,
-    ) -> Result<Option<AssetRef>, SyncError>;
+    ) -> anyhow::Result<Option<AssetRef>>;
 }
 
-#[derive(Debug, thiserror::Error)]
-pub enum SyncError {
-    #[error("Fatal error: {0}")]
-    Fatal(anyhow::Error),
-
-    #[error(transparent)]
-    Other(#[from] anyhow::Error),
+pub struct Params {
+    pub api_key: Option<String>,
+    pub creator: config::Creator,
+    pub expected_price: Option<u32>,
 }
