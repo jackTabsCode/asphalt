@@ -9,12 +9,10 @@ pub async fn upload(args: UploadArgs) -> anyhow::Result<()> {
     let path = PathBuf::from(&args.path);
     let data = fs::read(&path).await?;
 
-    let mut asset = Asset::new(path.relative_to(".")?, data).await?;
-
     let mut font_db = Database::new();
     font_db.load_system_fonts();
 
-    asset.process(Arc::new(font_db), args.bleed).await?;
+    let asset = Asset::new(path.relative_to(".")?, data, Arc::new(font_db), args.bleed).await?;
 
     let creator = Creator {
         ty: args.creator_type,

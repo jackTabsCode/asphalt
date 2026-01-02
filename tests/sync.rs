@@ -44,11 +44,7 @@ fn debug_creates_output() {
     });
     let test_file = project.add_file("test1.png");
 
-    project
-        .run()
-        .args(["sync", "--target", "debug"])
-        .assert()
-        .success();
+    project.run().args(["sync", "debug"]).assert().success();
 
     project
         .dir
@@ -72,11 +68,7 @@ fn debug_web_assets() {
         "existing.png" = { id = 1234 }
     });
 
-    project
-        .run()
-        .args(["sync", "--target", "debug"])
-        .assert()
-        .success();
+    project.run().args(["sync", "debug"]).assert().success();
 
     project
         .dir
@@ -142,7 +134,7 @@ fn dry_run_none() {
 
     project
         .run()
-        .args(["sync", "--dry-run"])
+        .args(["sync", "cloud", "--dry-run"])
         .assert()
         .success()
         .stderr(contains("No new assets"));
@@ -164,7 +156,7 @@ fn dry_run_1_new() {
 
     project
         .run()
-        .args(["sync", "--dry-run"])
+        .args(["sync", "cloud", "--dry-run"])
         .assert()
         .failure()
         .stderr(contains("1 new assets"));
@@ -208,7 +200,7 @@ fn dry_run_1_new_1_old() {
 
     project
         .run()
-        .args(["sync", "--dry-run"])
+        .args(["sync", "cloud", "--dry-run"])
         .assert()
         .failure()
         .stderr(contains("1 new assets"));
@@ -257,7 +249,7 @@ fn dry_run_2_old() {
 
     project
         .run()
-        .args(["sync", "--dry-run"])
+        .args(["sync", "cloud", "--dry-run"])
         .assert()
         .success()
         .stderr(contains("No new assets"));

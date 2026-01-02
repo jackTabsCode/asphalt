@@ -44,7 +44,7 @@ async fn main() -> anyhow::Result<()> {
     log::set_max_level(level);
 
     match args.command {
-        Commands::Sync(args) => sync(multi_progress, args).await,
+        Commands::Sync(args) => sync(args, multi_progress).await,
         Commands::Upload(args) => upload(args).await,
         Commands::MigrateLockfile(args) => migrate_lockfile(args).await,
         Commands::GenerateConfigSchema => generate_config_schema().await,

@@ -18,6 +18,8 @@ pub struct Config {
     pub inputs: HashMap<String, Input>,
 }
 
+pub type InputMap = HashMap<String, Input>;
+
 pub const FILE_NAME: &str = "asphalt.toml";
 
 impl Config {

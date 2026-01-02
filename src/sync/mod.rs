@@ -2,30 +2,22 @@ use crate::{
     asset::{Asset, AssetRef},
     cli::{SyncArgs, SyncTarget},
     config::Config,
-    lockfile::{Lockfile, RawLockfile},
+    lockfile::{LockfileEntry, RawLockfile},
     sync::{backend::Backend, collect::collect_events},
 };
 use anyhow::{Context, bail};
 use fs_err::tokio as fs;
-use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
-use log::{info, warn};
+use indicatif::MultiProgress;
+use log::info;
 use relative_path::RelativePathBuf;
 use resvg::usvg::fontdb;
 use std::sync::Arc;
-use tokio::sync::mpsc::{self, Sender};
+use tokio::sync::mpsc::{self};
 
 mod backend;
 mod codegen;
 mod collect;
 mod walk;
-
-pub struct State {
-    args: SyncArgs,
-    existing_lockfile: Lockfile,
-    event_tx: Sender<Event>,
-    font_db: Arc<fontdb::Database>,
-    target_backend: TargetBackend,
-}
 
 enum TargetBackend {
     Cloud(backend::Cloud),
@@ -36,40 +28,35 @@ enum TargetBackend {
 impl TargetBackend {
     pub async fn sync(
         &self,
-        state: Arc<State>,
-        input_name: String,
         asset: &Asset,
+        lockfile_entry: Option<&LockfileEntry>,
     ) -> anyhow::Result<Option<AssetRef>> {
         match self {
-            Self::Cloud(cloud_backend) => cloud_backend.sync(state, input_name, asset).await,
-            Self::Debug(debug_backend) => debug_backend.sync(state, input_name, asset).await,
-            Self::Studio(studio_backend) => studio_backend.sync(state, input_name, asset).await,
+            Self::Cloud(cloud_backend) => cloud_backend.sync(asset, lockfile_entry).await,
+            Self::Debug(debug_backend) => debug_backend.sync(asset, lockfile_entry).await,
+            Self::Studio(studio_backend) => studio_backend.sync(asset, lockfile_entry).await,
         }
     }
 }
 
 #[derive(Debug)]
-enum Event {
-    Process {
-        new: bool,
-        input_name: String,
-        path: RelativePathBuf,
-        hash: String,
-        asset_ref: Option<AssetRef>,
-    },
-    Duplicate {
-        input_name: String,
-        path: RelativePathBuf,
-        original_path: RelativePathBuf,
-    },
+struct Event {
+    ty: EventType,
+    input_name: String,
+    path: RelativePathBuf,
+    hash: String,
+    asset_ref: Option<AssetRef>,
 }
 
-pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> anyhow::Result<()> {
-    if args.dry_run && !matches!(args.target, SyncTarget::Cloud) {
-        bail!("A dry run doesn't make sense in this context");
-    }
+#[derive(Debug)]
+enum EventType {
+    Synced { new: bool },
+    Duplicate,
+}
 
+pub async fn sync(args: SyncArgs, mp: MultiProgress) -> anyhow::Result<()> {
     let config = Config::read().await?;
+    let target = args.target();
 
     let existing_lockfile = RawLockfile::read().await?.into_lockfile()?;
 
@@ -81,53 +68,40 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> anyhow::Resu
 
     let (event_tx, event_rx) = mpsc::channel::<Event>(100);
 
-    let spinner = multi_progress.add(ProgressBar::new_spinner());
-    spinner.set_style(
-        ProgressStyle::default_spinner()
-            .template("{spinner:.cyan} {msg}")
-            .unwrap(),
-    );
-    spinner.enable_steady_tick(std::time::Duration::from_millis(100));
-    spinner.set_message("Starting sync...");
-
     let collector_handle = tokio::spawn({
-        let config = config.clone();
-        let spinner = spinner.clone();
-        async move { collect_events(event_rx, config, args.dry_run, spinner).await }
+        let inputs = config.inputs.clone();
+        async move { collect_events(event_rx, target, inputs, mp).await }
     });
 
-    walk::walk(
-        State {
-            args: args.clone(),
-            existing_lockfile,
-            event_tx,
-            font_db,
-            target_backend: {
-                let params = backend::Params {
-                    api_key: args.api_key,
-                    creator: config.creator.clone(),
-                    expected_price: args.expected_price,
-                };
-                match args.target {
-                    SyncTarget::Cloud => TargetBackend::Cloud(backend::Cloud::new(params).await?),
-                    SyncTarget::Debug => TargetBackend::Debug(backend::Debug::new(params).await?),
-                    SyncTarget::Studio => {
-                        TargetBackend::Studio(backend::Studio::new(params).await?)
-                    }
+    let params = walk::Params {
+        target,
+        existing_lockfile,
+        font_db,
+        backend: {
+            let params = backend::Params {
+                api_key: args.api_key,
+                creator: config.creator.clone(),
+                expected_price: args.expected_price,
+            };
+            match &target {
+                SyncTarget::Cloud { dry_run: false } => {
+                    Some(TargetBackend::Cloud(backend::Cloud::new(params).await?))
                 }
-            },
+                SyncTarget::Cloud { dry_run: true } => None,
+                SyncTarget::Debug => Some(TargetBackend::Debug(backend::Debug::new(params).await?)),
+                SyncTarget::Studio => {
+                    Some(TargetBackend::Studio(backend::Studio::new(params).await?))
+                }
+            }
         },
-        &config,
-    )
-    .await;
+    };
+
+    walk::walk(params, &config, &event_tx).await;
+    drop(event_tx);
 
     let results = collector_handle.await??;
 
-    if results.dupe_count > 0 {
-        warn!("{} duplicate files found", results.dupe_count);
-    }
-
-    if args.dry_run {
+    if matches!(target, SyncTarget::Cloud { dry_run: true }) {
         if results.new_count > 0 {
             bail!("Dry run: {} new assets would be synced", results.new_count)
         } else {
@@ -136,7 +110,7 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> anyhow::Resu
         }
     }
 
-    if matches!(args.target, SyncTarget::Cloud) {
+    if target.write_on_sync() {
         results.new_lockfile.write(None).await?;
     }
 
@@ -164,8 +138,6 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> anyhow::Resu
             fs::write(input.output_path.join(format!("{input_name}.{ext}")), code).await?;
         }
     }
-
-    spinner.tick();
 
     Ok(())
 }

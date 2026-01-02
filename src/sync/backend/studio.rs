@@ -1,14 +1,15 @@
 use super::{AssetRef, Backend};
 use crate::{
     asset::{Asset, AssetType},
-    sync::{State, backend::Params},
+    lockfile::LockfileEntry,
+    sync::backend::Params,
 };
 use anyhow::{Context, bail};
 use fs_err::tokio as fs;
 use log::{debug, info, warn};
 use relative_path::RelativePathBuf;
 use roblox_install::RobloxStudio;
-use std::{env, path::PathBuf, sync::Arc};
+use std::{env, path::PathBuf};
 
 pub struct Studio {
     identifier: String,
@@ -51,12 +52,11 @@ impl Backend for Studio {
 
     async fn sync(
         &self,
-        state: Arc<State>,
-        input_name: String,
         asset: &Asset,
+        lockfile_entry: Option<&LockfileEntry>,
     ) -> anyhow::Result<Option<AssetRef>> {
         if matches!(asset.ty, AssetType::Model(_) | AssetType::Animation) {
-            return match state.existing_lockfile.get(&input_name, &asset.hash) {
+            return match lockfile_entry {
                 Some(entry) => Ok(Some(AssetRef::Studio(format!(
                     "rbxassetid://{}",
                     entry.asset_id

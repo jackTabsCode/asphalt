@@ -1,5 +1,5 @@
 use crate::config::CreatorType;
-use clap::{Args, Parser, Subcommand, ValueEnum};
+use clap::{Args, Parser, Subcommand};
 use clap_verbosity_flag::{InfoLevel, Verbosity};
 
 #[derive(Parser)]
@@ -32,11 +32,24 @@ pub enum Commands {
     GenerateConfigSchema,
 }
 
-#[derive(ValueEnum, Clone, Copy)]
+#[derive(Subcommand, Clone, Copy)]
 pub enum SyncTarget {
-    Cloud,
+    /// Upload assets to Roblox cloud.
+    Cloud {
+        /// Error if assets would be uploaded.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Write assets to the Roblox Studio content folder.
     Studio,
+    /// Write assets to the .asphalt-debug folder.
     Debug,
+}
+
+impl SyncTarget {
+    pub fn write_on_sync(&self) -> bool {
+        matches!(self, SyncTarget::Cloud { dry_run: false })
+    }
 }
 
 #[derive(Args, Clone)]
@@ -46,16 +59,18 @@ pub struct SyncArgs {
     pub api_key: Option<String>,
 
     /// Where Asphalt should sync assets to.
-    #[arg(short, long, default_value = "cloud")]
-    pub target: SyncTarget,
-
-    /// Skip asset syncing and only display what assets will be synced.
-    #[arg(long)]
-    pub dry_run: bool,
+    #[command(subcommand)]
+    target: Option<SyncTarget>,
 
     /// Provides Roblox with the amount of Robux that you are willing to spend on each non-free asset upload.
     #[arg(long)]
     pub expected_price: Option<u32>,
+}
+
+impl SyncArgs {
+    pub fn target(&self) -> SyncTarget {
+        self.target.unwrap_or(SyncTarget::Cloud { dry_run: false })
+    }
 }
 
 #[derive(Args)]

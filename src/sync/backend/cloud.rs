@@ -1,11 +1,11 @@
 use super::Backend;
 use crate::{
     asset::{Asset, AssetRef},
-    sync::{State, backend::Params},
+    lockfile::LockfileEntry,
+    sync::backend::Params,
     web_api::WebApiClient,
 };
 use anyhow::{Context, bail};
-use std::sync::Arc;
 
 pub struct Cloud {
     client: WebApiClient,
@@ -29,10 +29,13 @@ impl Backend for Cloud {
 
     async fn sync(
         &self,
-        _: Arc<State>,
-        _: String,
         asset: &Asset,
+        lockfile_entry: Option<&LockfileEntry>,
     ) -> anyhow::Result<Option<AssetRef>> {
+        if let Some(lockfile_entry) = lockfile_entry {
+            return Ok(Some(lockfile_entry.into()));
+        }
+
         match self.client.upload(asset).await {
             Ok(id) => Ok(Some(AssetRef::Cloud(id))),
             Err(err) => bail!("Failed to upload asset: {err:?}"),

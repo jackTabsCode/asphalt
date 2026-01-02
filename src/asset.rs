@@ -1,13 +1,14 @@
 use crate::{
     config::WebAsset,
+    lockfile::LockfileEntry,
     util::{alpha_bleed::alpha_bleed, svg::svg_to_png},
 };
-use anyhow::{Context, bail};
+use anyhow::Context;
 use blake3::Hasher;
 use bytes::Bytes;
 use image::DynamicImage;
 use relative_path::RelativePathBuf;
-use resvg::usvg::fontdb::Database;
+use resvg::usvg::fontdb::{self};
 use serde::Serialize;
 use std::{ffi::OsStr, fmt, io::Cursor, sync::Arc};
 
@@ -56,15 +57,19 @@ pub struct Asset {
     pub path: RelativePathBuf,
     pub data: Bytes,
     pub ty: AssetType,
-    processed: bool,
     pub ext: String,
     /// The hash before processing
     pub hash: String,
 }
 
 impl Asset {
-    pub async fn new(path: RelativePathBuf, data: Vec<u8>) -> anyhow::Result<Self> {
-        let ext = path
+    pub async fn new(
+        path: RelativePathBuf,
+        data: Vec<u8>,
+        font_db: Arc<fontdb::Database>,
+        bleed: bool,
+    ) -> anyhow::Result<Self> {
+        let mut ext = path
             .extension()
             .context("File has no extension")?
             .to_string();
@@ -75,44 +80,33 @@ impl Asset {
             .map(|(_, func)| func(&data))
             .context("Unknown file type")??;
 
-        let data = Bytes::from(data);
+        let mut data = Bytes::from(data);
 
         let mut hasher = Hasher::new();
         hasher.update(&data);
         let hash = hasher.finalize().to_string();
 
-        Ok(Self {
-            path,
-            data,
-            ty,
-            processed: false,
-            ext,
-            hash,
-        })
-    }
-
-    pub async fn process(&mut self, font_db: Arc<Database>, bleed: bool) -> anyhow::Result<()> {
-        if self.processed {
-            bail!("Asset has already been processed");
+        if ext == "svg" {
+            data = svg_to_png(&data, font_db.clone()).await?.into();
+            ext = "png".to_string();
         }
 
-        if self.ext == "svg" {
-            self.data = svg_to_png(&self.data, font_db.clone()).await?.into();
-            self.ext = "png".to_string();
-        }
-
-        if matches!(self.ty, AssetType::Image(ImageType::Png)) && bleed {
-            let mut image: DynamicImage = image::load_from_memory(&self.data)?;
+        if matches!(ty, AssetType::Image(ImageType::Png)) && bleed {
+            let mut image: DynamicImage = image::load_from_memory(&data)?;
             alpha_bleed(&mut image);
 
             let mut writer = Cursor::new(Vec::new());
             image.write_to(&mut writer, image::ImageFormat::Png)?;
-            self.data = Bytes::from(writer.into_inner());
+            data = Bytes::from(writer.into_inner());
         }
 
-        self.processed = true;
-
-        Ok(())
+        Ok(Self {
+            path,
+            data,
+            ty,
+            ext,
+            hash,
+        })
     }
 }
 
@@ -242,5 +236,11 @@ impl fmt::Display for AssetRef {
 impl From<WebAsset> for AssetRef {
     fn from(value: WebAsset) -> Self {
         AssetRef::Cloud(value.id)
+    }
+}
+
+impl From<&LockfileEntry> for AssetRef {
+    fn from(value: &LockfileEntry) -> Self {
+        AssetRef::Cloud(value.asset_id)
     }
 }

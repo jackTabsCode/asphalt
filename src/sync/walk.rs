@@ -1,59 +1,87 @@
 use crate::{
-    asset::{self, Asset, AssetRef},
+    asset::{self, Asset},
     cli::SyncTarget,
     config::Config,
+    lockfile::Lockfile,
+    sync::TargetBackend,
 };
 use anyhow::Context;
-use dashmap::DashMap;
 use fs_err::tokio as fs;
 use log::{debug, warn};
 use relative_path::PathExt;
-use std::{path::PathBuf, sync::Arc};
-use tokio::task::JoinSet;
+use resvg::usvg::fontdb;
+use std::{
+    collections::{
+        HashMap,
+        hash_map::{self},
+    },
+    path::{Path, PathBuf},
+    sync::Arc,
+};
+use tokio::{
+    sync::{Mutex, Semaphore, mpsc::Sender},
+    task::JoinSet,
+};
 use walkdir::WalkDir;
 
+pub struct Params {
+    pub target: SyncTarget,
+    pub existing_lockfile: Lockfile,
+    pub font_db: Arc<fontdb::Database>,
+    pub backend: Option<TargetBackend>,
+}
+
 struct InputState {
-    sync_state: Arc<super::State>,
+    params: Arc<Params>,
     input_name: String,
     input_prefix: PathBuf,
-    seen_hashes: Arc<DashMap<String, PathBuf>>,
+    seen_hashes: Arc<Mutex<HashMap<String, PathBuf>>>,
     bleed: bool,
 }
 
-pub async fn walk(state: super::State, config: &Config) {
-    let state = Arc::new(state);
+pub async fn walk(params: Params, config: &Config, event_tx: &Sender<super::Event>) {
+    let params = Arc::new(params);
 
     for (input_name, input) in &config.inputs {
-        let prefix = input.include.get_prefix();
-        let entries = WalkDir::new(&prefix)
-            .into_iter()
-            .filter_entry(|entry| prefix == entry.path() || input.include.is_match(entry.path()))
-            .filter_map(Result::ok)
-            .filter(|entry| {
-                entry.file_type().is_file()
-                    && entry
-                        .path()
-                        .extension()
-                        .is_some_and(asset::is_supported_extension)
-            })
-            .collect::<Vec<_>>();
-
-        let ctx = Arc::new(InputState {
-            sync_state: state.clone(),
+        let state = Arc::new(InputState {
+            params: params.clone(),
             input_name: input_name.clone(),
-            input_prefix: prefix,
-            seen_hashes: Arc::new(DashMap::with_capacity(entries.len())),
+            input_prefix: input.include.get_prefix(),
+            seen_hashes: Arc::new(Mutex::new(HashMap::new())),
             bleed: input.bleed,
         });
 
         let mut join_set = JoinSet::new();
+        let semaphore = Arc::new(Semaphore::new(50));
 
-        for entry in entries {
-            let ctx = ctx.clone();
+        for entry in WalkDir::new(input.include.get_prefix())
+            .into_iter()
+            .filter_entry(|entry| {
+                let path = entry.path();
+                path == input.include.get_prefix() || input.include.is_match(path)
+            })
+        {
+            let Ok(entry) = entry else { continue };
+
+            let path = entry.into_path();
+            if !path.is_file() {
+                continue;
+            }
+            let Some(ext) = path.extension() else {
+                continue;
+            };
+            if !asset::is_supported_extension(ext) {
+                continue;
+            }
+
+            let ctx = state.clone();
+            let semaphore = semaphore.clone();
+            let event_tx = event_tx.clone();
 
             join_set.spawn(async move {
-                if let Err(e) = process_entry(ctx, &entry).await {
-                    warn!("Skipping file {}: {e:?}", entry.path().display());
+                let _permit = semaphore.acquire_owned().await.unwrap();
+                if let Err(e) = process_entry(ctx.clone(), &path, &event_tx).await {
+                    warn!("Skipping file {}: {e:?}", path.display());
                 }
             });
         }
@@ -62,84 +90,73 @@ pub async fn walk(state: super::State, config: &Config) {
     }
 }
 
-async fn process_entry(state: Arc<InputState>, entry: &walkdir::DirEntry) -> anyhow::Result<()> {
-    debug!("Handling entry: {}", entry.path().display());
+async fn process_entry(
+    state: Arc<InputState>,
+    path: &Path,
+    tx: &Sender<super::Event>,
+) -> anyhow::Result<()> {
+    debug!("Handling entry: {}", path.display());
 
-    let data = fs::read(entry.path()).await?;
-    let rel_path = entry.path().relative_to(&state.input_prefix)?;
+    let data = fs::read(path).await?;
+    let rel_path = path.relative_to(&state.input_prefix)?;
 
-    let mut asset = Asset::new(rel_path.clone(), data)
-        .await
-        .context("Failed to create asset")?;
-
-    if let Some(seen_path) = state.seen_hashes.get(&asset.hash) {
-        let rel_seen_path = seen_path.relative_to(&state.input_prefix)?;
-
-        debug!("Duplicate asset found: {} -> {}", rel_path, rel_seen_path);
-
-        state
-            .sync_state
-            .event_tx
-            .send(super::Event::Duplicate {
-                input_name: state.input_name.clone(),
-                path: rel_path.clone(),
-                original_path: rel_seen_path,
-            })
-            .await?;
-
-        return Ok(());
-    }
-
-    state
-        .seen_hashes
-        .insert(asset.hash.clone(), entry.path().into());
+    let asset = Asset::new(
+        rel_path.clone(),
+        data,
+        state.params.font_db.clone(),
+        state.bleed,
+    )
+    .await
+    .context("Failed to create asset")?;
 
     let lockfile_entry = state
-        .sync_state
+        .params
         .existing_lockfile
         .get(&state.input_name, &asset.hash);
 
-    let needs_sync = lockfile_entry.is_none()
-        || matches!(
-            state.sync_state.args.target,
-            SyncTarget::Debug | SyncTarget::Studio
-        );
+    {
+        let mut seen_hashes = state.seen_hashes.lock().await;
 
-    if needs_sync {
-        let font_db = state.sync_state.font_db.clone();
-        asset.process(font_db, state.bleed).await?;
+        match seen_hashes.entry(asset.hash.clone()) {
+            hash_map::Entry::Occupied(entry) => {
+                let seen_path = entry.get();
+                let rel_seen_path = seen_path.relative_to(&state.input_prefix)?;
 
-        let asset_ref = state
-            .sync_state
-            .target_backend
-            .sync(state.sync_state.clone(), state.input_name.clone(), &asset)
-            .await?;
+                debug!("Duplicate asset found: {} -> {}", rel_path, rel_seen_path);
 
-        state
-            .sync_state
-            .event_tx
-            .send(super::Event::Process {
-                new: matches!(state.sync_state.args.target, SyncTarget::Cloud)
-                    && lockfile_entry.is_none(),
-                input_name: state.input_name.clone(),
-                path: asset.path.clone(),
-                hash: asset.hash.clone(),
-                asset_ref,
-            })
-            .await?
-    } else if let Some(entry) = lockfile_entry {
-        state
-            .sync_state
-            .event_tx
-            .send(super::Event::Process {
-                new: false,
-                input_name: state.input_name.clone(),
-                path: asset.path.clone(),
-                hash: asset.hash.clone(),
-                asset_ref: Some(AssetRef::Cloud(entry.asset_id)),
-            })
-            .await?
+                let event = super::Event {
+                    ty: super::EventType::Duplicate,
+                    input_name: state.input_name.clone(),
+                    path: rel_path.clone(),
+                    asset_ref: lockfile_entry.map(Into::into),
+                    hash: asset.hash.clone(),
+                };
+                tx.send(event).await.unwrap();
+
+                return Ok(());
+            }
+            hash_map::Entry::Vacant(_) => {
+                seen_hashes.insert(asset.hash.clone(), path.into());
+            }
+        }
     }
+
+    let always_target = matches!(state.params.target, SyncTarget::Studio | SyncTarget::Debug);
+    let is_new = always_target || lockfile_entry.is_none();
+
+    let asset_ref = match state.params.backend {
+        Some(ref backend) => backend.sync(&asset, lockfile_entry).await?,
+        None => lockfile_entry.map(Into::into),
+    };
+
+    let event = super::Event {
+        ty: super::EventType::Synced { new: is_new },
+        input_name: state.input_name.clone(),
+        path: asset.path.clone(),
+        hash: asset.hash.clone(),
+        asset_ref,
+    };
+    tx.send(event).await.unwrap();
 
     Ok(())
 }

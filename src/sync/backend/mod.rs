@@ -1,9 +1,7 @@
-use std::sync::Arc;
-
-use super::State;
 use crate::{
     asset::{Asset, AssetRef},
     config,
+    lockfile::LockfileEntry,
 };
 
 mod cloud;
@@ -22,9 +20,8 @@ pub trait Backend {
 
     async fn sync(
         &self,
-        state: Arc<State>,
-        input_name: String,
         asset: &Asset,
+        lockfile_entry: Option<&LockfileEntry>,
     ) -> anyhow::Result<Option<AssetRef>>;
 }
 
