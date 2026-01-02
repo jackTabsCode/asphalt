@@ -2,12 +2,18 @@
 members = ["cargo:."]
 
 [dist]
-cargo-dist-version = "0.30.0"
+cargo-dist-version = "0.30.3"
 ci = "github"
 installers = ["homebrew"]
 tap = "jacktabscode/homebrew-tap"
 publish-jobs = ["homebrew"]
-targets = ["aarch64-apple-darwin", "aarch64-unknown-linux-gnu", "x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"]
+targets = [
+  "aarch64-apple-darwin",
+  "aarch64-unknown-linux-gnu",
+  "x86_64-apple-darwin",
+  "x86_64-unknown-linux-gnu",
+  "x86_64-pc-windows-msvc"
+]
 pr-run-mode = "skip"
 checksum = "false"
 source-tarball = false
