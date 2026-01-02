@@ -19,7 +19,7 @@ use std::{
     sync::Arc,
 };
 use tokio::{
-    sync::{Mutex, Semaphore, mpsc::Sender},
+    sync::{Mutex, Semaphore, mpsc::UnboundedSender},
     task::JoinSet,
 };
 use walkdir::WalkDir;
@@ -39,7 +39,7 @@ struct InputState {
     bleed: bool,
 }
 
-pub async fn walk(params: Params, config: &Config, tx: &Sender<super::Event>) {
+pub async fn walk(params: Params, config: &Config, tx: &UnboundedSender<super::Event>) {
     let params = Arc::new(params);
 
     for (input_name, input) in &config.inputs {
@@ -78,14 +78,16 @@ pub async fn walk(params: Params, config: &Config, tx: &Sender<super::Event>) {
             let semaphore = semaphore.clone();
             let tx = tx.clone();
 
+            tx.send(super::Event::Discovered(path.clone())).unwrap();
+
             join_set.spawn(async move {
                 let _permit = semaphore.acquire_owned().await.unwrap();
 
-                tx.send(super::Event::InFlight(path.clone())).await.unwrap();
+                tx.send(super::Event::InFlight(path.clone())).unwrap();
 
                 if let Err(e) = process_entry(state.clone(), &path, &tx).await {
                     warn!("Failed to process file {}: {e:?}", path.display());
-                    tx.send(super::Event::Failed(path.clone())).await.unwrap();
+                    tx.send(super::Event::Failed(path.clone())).unwrap();
                 }
             });
         }
@@ -97,7 +99,7 @@ pub async fn walk(params: Params, config: &Config, tx: &Sender<super::Event>) {
 async fn process_entry(
     state: Arc<InputState>,
     path: &Path,
-    tx: &Sender<super::Event>,
+    tx: &UnboundedSender<super::Event>,
 ) -> anyhow::Result<()> {
     debug!("Handling entry: {}", path.display());
 
@@ -137,7 +139,7 @@ async fn process_entry(
                     asset_ref: lockfile_entry.map(Into::into),
                     hash: asset.hash.clone(),
                 };
-                tx.send(event).await.unwrap();
+                tx.send(event).unwrap();
 
                 return Ok(());
             }
@@ -163,7 +165,7 @@ async fn process_entry(
         hash: asset.hash.clone(),
         asset_ref,
     };
-    tx.send(event).await.unwrap();
+    tx.send(event).unwrap();
 
     Ok(())
 }

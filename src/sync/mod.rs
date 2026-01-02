@@ -41,6 +41,8 @@ impl TargetBackend {
 
 #[derive(Debug)]
 enum Event {
+    Discovered(PathBuf),
+    InFlight(PathBuf),
     Finished {
         state: EventState,
         input_name: String,
@@ -49,7 +51,6 @@ enum Event {
         hash: String,
         asset_ref: Option<AssetRef>,
     },
-    InFlight(PathBuf),
     Failed(PathBuf),
 }
 
@@ -71,7 +72,7 @@ pub async fn sync(args: SyncArgs, mp: MultiProgress) -> anyhow::Result<()> {
         db
     });
 
-    let (event_tx, event_rx) = mpsc::channel::<Event>(100);
+    let (event_tx, event_rx) = mpsc::unbounded_channel::<Event>();
 
     let collector_handle = tokio::spawn({
         let inputs = config.inputs.clone();

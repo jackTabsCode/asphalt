@@ -3,7 +3,7 @@ use std::{
     collections::{HashMap, HashSet},
     path::PathBuf,
 };
-use tokio::sync::mpsc::Receiver;
+use tokio::sync::mpsc::UnboundedReceiver;
 
 use crate::{
     asset::AssetRef,
@@ -16,11 +16,11 @@ use crate::{
 pub struct CollectResults {
     pub new_lockfile: Lockfile,
     pub input_sources: HashMap<String, NodeSource>,
-    pub new_count: u32,
+    pub new_count: u64,
 }
 
 pub async fn collect_events(
-    mut rx: Receiver<super::Event>,
+    mut rx: UnboundedReceiver<super::Event>,
     target: SyncTarget,
     inputs: InputMap,
     mp: MultiProgress,
@@ -43,6 +43,16 @@ pub async fn collect_events(
 
     while let Some(event) = rx.recv().await {
         match event {
+            super::Event::Discovered(path) => {
+                if !seen_paths.contains(&path) {
+                    progress.discovered += 1;
+                }
+            }
+            super::Event::InFlight(path) => {
+                if !seen_paths.contains(&path) {
+                    progress.in_flight.insert(path.clone());
+                }
+            }
             super::Event::Finished {
                 state,
                 input_name,
@@ -81,18 +91,13 @@ pub async fn collect_events(
 
                 progress.in_flight.remove(&path);
             }
-            super::Event::InFlight(path) => {
-                if !seen_paths.contains(&path) {
-                    progress.in_flight.insert(path.clone());
-                }
-            }
             super::Event::Failed(path) => {
                 progress.failed += 1;
                 progress.in_flight.remove(&path);
             }
         }
 
-        progress.update_msg();
+        progress.update();
     }
 
     progress.finish();
@@ -105,30 +110,39 @@ pub async fn collect_events(
 }
 
 struct Progress {
-    spinner: ProgressBar,
+    inner: ProgressBar,
     target: SyncTarget,
     in_flight: HashSet<PathBuf>,
-    synced: u32,
-    new: u32,
-    dupes: u32,
-    failed: u32,
+    discovered: u64,
+    synced: u64,
+    new: u64,
+    dupes: u64,
+    failed: u64,
 }
 
 impl Progress {
+    fn get_style(finished: bool) -> ProgressStyle {
+        ProgressStyle::default_bar()
+            .template(&format!(
+                "{{prefix:.{prefix_color}.bold}}{bar} {{pos}}/{{len}} assets: ({{msg}})",
+                prefix_color = if finished { "green" } else { "cyan" },
+                bar = if finished { "" } else { " [{bar:40}]" },
+            ))
+            .unwrap()
+            .progress_chars("=> ")
+    }
+
     fn new(mp: MultiProgress, target: SyncTarget) -> Self {
         let spinner = mp.add(ProgressBar::new_spinner());
-        spinner.set_style(
-            ProgressStyle::default_spinner()
-                .template("{spinner:.cyan} {msg}")
-                .unwrap(),
-        );
+        spinner.set_style(Progress::get_style(false));
+        spinner.set_prefix("Syncing");
         spinner.enable_steady_tick(std::time::Duration::from_millis(100));
-        spinner.set_message("Starting sync...");
 
         Self {
-            spinner,
+            inner: spinner,
             target,
             in_flight: HashSet::new(),
+            discovered: 0,
             synced: 0,
             new: 0,
             dupes: 0,
@@ -137,16 +151,13 @@ impl Progress {
     }
 
     fn get_msg(&self) -> String {
-        let mut str = format!("Synced {} files", self.synced + self.dupes);
-
         let mut parts = Vec::new();
 
         if self.new > 0 {
             let target_msg = match self.target {
                 SyncTarget::Cloud { dry_run: true } => "checked",
                 SyncTarget::Cloud { dry_run: false } => "uploaded",
-                SyncTarget::Studio => "written to content folder",
-                SyncTarget::Debug => "written to debug folder",
+                SyncTarget::Studio | SyncTarget::Debug => "written",
             };
             parts.push(format!("{} {}", self.new, target_msg));
         }
@@ -160,7 +171,7 @@ impl Progress {
 
         let in_flight = self.in_flight.len();
         if in_flight > 0 {
-            parts.push(format!("{} in-flight", in_flight));
+            parts.push(format!("{} processing", in_flight));
         }
 
         let failed = self.failed;
@@ -168,21 +179,18 @@ impl Progress {
             parts.push(format!("{} failed", failed));
         }
 
-        if parts.is_empty() {
-            return str;
-        }
-
-        str.push_str(" (");
-        str.push_str(&parts.join(", "));
-        str.push(')');
-        str
+        parts.join(", ")
     }
 
-    fn update_msg(&self) {
-        self.spinner.set_message(self.get_msg());
+    fn update(&self) {
+        self.inner.set_position(self.synced + self.dupes);
+        self.inner.set_length(self.discovered);
+        self.inner.set_message(self.get_msg());
     }
 
     fn finish(&self) {
-        self.spinner.finish_with_message(self.get_msg());
+        self.inner.set_prefix("Synced");
+        self.inner.set_style(Progress::get_style(true));
+        self.inner.finish();
     }
 }
