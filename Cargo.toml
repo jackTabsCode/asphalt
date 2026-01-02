@@ -1,6 +1,6 @@
 [package]
 name = "asphalt"
-version = "1.2.0"
+version = "2.0.0-rc.1"
 edition = "2024"
 description = "Upload and reference Roblox assets in code"
 readme = "README.md"
