@@ -108,8 +108,8 @@ pub async fn sync(args: SyncArgs, mp: MultiProgress) -> anyhow::Result<()> {
     let results = collector_handle.await??;
 
     if matches!(target, SyncTarget::Cloud { dry_run: true }) {
-        if results.new_count > 0 {
-            bail!("Dry run: {} new assets would be synced", results.new_count)
+        if results.any_new {
+            bail!("Dry run: {} new assets would be synced", results.any_new)
         } else {
             info!("Dry run: No new assets would be synced");
             return Ok(());
@@ -143,6 +143,10 @@ pub async fn sync(args: SyncArgs, mp: MultiProgress) -> anyhow::Result<()> {
             fs::create_dir_all(&input.output_path).await?;
             fs::write(input.output_path.join(format!("{input_name}.{ext}")), code).await?;
         }
+    }
+
+    if results.any_failed {
+        bail!("Some assets failed to sync")
     }
 
     Ok(())
