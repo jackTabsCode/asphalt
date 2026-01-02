@@ -1,4 +1,4 @@
-use crate::config;
+use crate::{asset::AssetRef, config};
 use anyhow::bail;
 use relative_path::{RelativePath, RelativePathBuf};
 use std::{collections::BTreeMap, path::Path};
@@ -16,14 +16,16 @@ pub enum Language {
     Luau,
 }
 
-pub fn create_node(source: &BTreeMap<RelativePathBuf, String>, config: &config::Codegen) -> Node {
+pub type NodeSource = BTreeMap<RelativePathBuf, AssetRef>;
+
+pub fn create_node(source: &NodeSource, config: &config::Codegen) -> Node {
     let mut root = Node::Table(BTreeMap::new());
 
     for (path, value) in source {
         let value = if config.content {
-            Node::Content(value.into())
+            Node::Content(value.to_string())
         } else {
-            Node::String(value.into())
+            Node::String(value.to_string())
         };
 
         match config.style {

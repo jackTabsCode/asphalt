@@ -1,17 +1,20 @@
 use crate::{
     asset::{Asset, AssetType},
-    auth::Auth,
-    config::{Creator, CreatorType},
+    config,
 };
 use anyhow::{Context, bail};
 use log::{debug, warn};
-use reqwest::{
-    RequestBuilder, Response, StatusCode,
-    header::{self},
-    multipart,
-};
+use reqwest::{RequestBuilder, Response, StatusCode, multipart};
 use serde::{Deserialize, Serialize};
-use std::time::Duration;
+use std::{
+    env,
+    sync::atomic::{AtomicBool, Ordering},
+    time::Duration,
+};
+use tokio::sync::Mutex;
+use tokio::time::Instant;
+
+const RATELIMIT_RESET_HEADER: &str = "x-ratelimit-reset";
 
 const UPLOAD_URL: &str = "https://apis.roblox.com/assets/v1/assets";
 const OPERATION_URL: &str = "https://apis.roblox.com/assets/v1/operations";
@@ -20,35 +23,38 @@ const MAX_DISPLAY_NAME_LENGTH: usize = 50;
 
 pub struct WebApiClient {
     inner: reqwest::Client,
-    auth: Auth,
-    creator: Creator,
+    api_key: String,
+    creator: config::Creator,
     expected_price: Option<u32>,
+    fatally_failed: AtomicBool,
+    /// Shared rate limit state: when we can next make a request
+    rate_limit_reset: Mutex<Option<Instant>>,
 }
 
 impl WebApiClient {
-    pub fn new(auth: Auth, creator: Creator, expected_price: Option<u32>) -> Self {
+    pub fn new(api_key: String, creator: config::Creator, expected_price: Option<u32>) -> Self {
         WebApiClient {
             inner: reqwest::Client::new(),
-            auth,
+            api_key,
             creator,
             expected_price,
+            fatally_failed: AtomicBool::new(false),
+            rate_limit_reset: Mutex::new(None),
         }
     }
 
     pub async fn upload(&self, asset: &Asset) -> anyhow::Result<u64> {
-        let api_key = self
-            .auth
-            .api_key
-            .clone()
-            .context("An API key is necessary to upload")?;
+        if env::var("ASPHALT_TEST").is_ok() {
+            return Ok(1337);
+        }
 
         let file_name = asset.path.file_name().unwrap();
         let display_name = trim_display_name(file_name);
 
-        let req = WebAssetRequest {
+        let req = Request {
             display_name,
-            asset_type: asset.ty.clone(),
-            creation_context: WebAssetRequestCreationContext {
+            asset_type: asset.ty,
+            creation_context: CreationContext {
                 creator: self.creator.clone().into(),
                 expected_price: self.expected_price,
             },
@@ -61,7 +67,7 @@ impl WebApiClient {
         let name = file_name.to_owned();
 
         let res = self
-            .send_with_retry(|| {
+            .send_with_retry(|client| {
                 let file_part = multipart::Part::stream_with_length(
                     reqwest::Body::from(asset.data.clone()),
                     len,
@@ -74,56 +80,47 @@ impl WebApiClient {
                     .text("request", req_json.clone())
                     .part("fileContent", file_part);
 
-                self.inner
+                client
                     .post(UPLOAD_URL)
-                    .header("x-api-key", &api_key)
+                    .header("x-api-key", &self.api_key)
                     .multipart(form)
             })
             .await?;
 
-        let status = res.status();
         let body = res.text().await?;
 
-        if status.is_success() {
-            let operation: WebAssetOperation = serde_json::from_str(&body)?;
+        let operation: Operation = serde_json::from_str(&body)?;
 
-            match self.poll_operation(operation.operation_id, &api_key).await {
-                Ok(Some(id)) => Ok(id),
-                Ok(None) => bail!("Failed to get asset ID"),
-                Err(e) => Err(e),
-            }
-        } else {
-            bail!("Failed to upload asset: {} - {}", status, body)
-        }
+        let id = self
+            .poll_operation(operation.operation_id, &self.api_key)
+            .await
+            .context("Failed to poll operation")?;
+
+        Ok(id)
     }
 
-    async fn poll_operation(&self, id: String, api_key: &str) -> anyhow::Result<Option<u64>> {
+    async fn poll_operation(&self, id: String, api_key: &str) -> anyhow::Result<u64> {
         let mut delay = Duration::from_secs(1);
         const MAX_POLLS: u32 = 10;
 
         for attempt in 0..MAX_POLLS {
             let res = self
-                .send_with_retry(|| {
-                    self.inner
+                .send_with_retry(|client| {
+                    client
                         .get(format!("{OPERATION_URL}/{id}"))
                         .header("x-api-key", api_key)
                 })
                 .await?;
 
-            let status = res.status();
             let text = res.text().await?;
 
-            if !status.is_success() {
-                bail!("Failed to poll operation: {} - {}", status, text);
-            }
-
-            let operation: WebAssetOperation = serde_json::from_str(&text)?;
+            let operation: Operation = serde_json::from_str(&text)?;
 
             if operation.done {
                 if let Some(response) = operation.response {
-                    return Ok(Some(response.asset_id.parse()?));
+                    return Ok(response.asset_id.parse()?);
                 } else {
-                    bail!("Operation completed but no response provided")
+                    bail!("Operation completed but no response provided");
                 }
             }
 
@@ -140,35 +137,64 @@ impl WebApiClient {
 
     async fn send_with_retry<F>(&self, make_req: F) -> anyhow::Result<Response>
     where
-        F: Fn() -> RequestBuilder,
+        F: Fn(&reqwest::Client) -> RequestBuilder,
     {
+        if self.fatally_failed.load(Ordering::SeqCst) {
+            bail!("A previous request failed due to a fatal error");
+        }
+
         const MAX: u8 = 5;
         let mut attempt = 0;
 
         loop {
-            let res = make_req().send().await?;
+            {
+                let reset = self.rate_limit_reset.lock().await;
+                if let Some(reset_at) = *reset {
+                    let now = Instant::now();
+                    if reset_at > now {
+                        let wait = reset_at - now;
+                        drop(reset);
+                        debug!("Waiting {:.2}ms for rate limit reset", wait.as_secs_f64());
+                        tokio::time::sleep(wait).await;
+                    }
+                }
+            }
 
-            match res.status() {
+            let res = make_req(&self.inner).send().await?;
+            let status = res.status();
+
+            match status {
                 StatusCode::TOO_MANY_REQUESTS if attempt < MAX => {
                     let wait = res
                         .headers()
-                        .get(header::RETRY_AFTER)
+                        .get(RATELIMIT_RESET_HEADER)
                         .and_then(|h| h.to_str().ok())
                         .and_then(|s| s.parse::<u64>().ok())
                         .map(Duration::from_secs)
                         .unwrap_or_else(|| Duration::from_secs(1 << attempt));
 
+                    let reset_at = Instant::now() + wait;
+                    {
+                        let mut reset = self.rate_limit_reset.lock().await;
+                        *reset = Some(reset_at);
+                    }
+
+                    warn!(
+                        "Rate limited, retrying in {:.2} seconds",
+                        wait.as_secs_f64()
+                    );
+
                     tokio::time::sleep(wait).await;
                     attempt += 1;
 
-                    warn!(
-                        "Rate limited, retrying in {} seconds",
-                        wait.as_millis() / 1000
-                    );
-
                     continue;
                 }
-                _ => return Ok(res),
+                StatusCode::OK => return Ok(res),
+                _ => {
+                    let body = res.text().await?;
+                    self.fatally_failed.store(true, Ordering::SeqCst);
+                    bail!("Request failed with status {status}:\n{body}");
+                }
             }
         }
     }
@@ -176,34 +202,34 @@ impl WebApiClient {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct WebAssetRequest {
+struct Request {
     asset_type: AssetType,
     display_name: String,
     description: &'static str,
-    creation_context: WebAssetRequestCreationContext,
+    creation_context: CreationContext,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct WebAssetRequestCreationContext {
-    creator: WebAssetCreator,
+struct CreationContext {
+    creator: Creator,
     expected_price: Option<u32>,
 }
 
 #[derive(Serialize)]
 #[serde(untagged)]
-enum WebAssetCreator {
-    User(WebAssetUserCreator),
-    Group(WebAssetGroupCreator),
+enum Creator {
+    User(UserCreator),
+    Group(GroupCreator),
 }
 
-impl From<Creator> for WebAssetCreator {
-    fn from(value: Creator) -> Self {
+impl From<config::Creator> for Creator {
+    fn from(value: config::Creator) -> Self {
         match value.ty {
-            CreatorType::User => WebAssetCreator::User(WebAssetUserCreator {
+            config::CreatorType::User => Creator::User(UserCreator {
                 user_id: value.id.to_string(),
             }),
-            CreatorType::Group => WebAssetCreator::Group(WebAssetGroupCreator {
+            config::CreatorType::Group => Creator::Group(GroupCreator {
                 group_id: value.id.to_string(),
             }),
         }
@@ -212,27 +238,27 @@ impl From<Creator> for WebAssetCreator {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct WebAssetUserCreator {
+struct UserCreator {
     user_id: String,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct WebAssetGroupCreator {
+struct GroupCreator {
     group_id: String,
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct WebAssetOperation {
+struct Operation {
     done: bool,
     operation_id: String,
-    response: Option<WebAssetOperationResponse>,
+    response: Option<OperationResponse>,
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct WebAssetOperationResponse {
+struct OperationResponse {
     asset_id: String,
 }
 

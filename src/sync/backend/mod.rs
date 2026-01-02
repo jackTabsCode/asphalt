@@ -1,26 +1,32 @@
-use std::sync::Arc;
+use crate::{
+    asset::{Asset, AssetRef},
+    config,
+    lockfile::LockfileEntry,
+};
 
-use super::SyncState;
-use crate::asset::Asset;
+mod cloud;
+pub use cloud::Cloud;
 
-pub mod cloud;
-pub mod debug;
-pub mod studio;
+mod debug;
+pub use debug::Debug;
 
-pub enum BackendSyncResult {
-    Cloud(u64),
-    Studio(String),
-}
+mod studio;
+pub use studio::Studio;
 
-pub trait SyncBackend {
-    async fn new() -> anyhow::Result<Self>
+pub trait Backend {
+    async fn new(params: Params) -> anyhow::Result<Self>
     where
         Self: Sized;
 
     async fn sync(
         &self,
-        state: Arc<SyncState>,
-        input_name: String,
         asset: &Asset,
-    ) -> anyhow::Result<Option<BackendSyncResult>>;
+        lockfile_entry: Option<&LockfileEntry>,
+    ) -> anyhow::Result<Option<AssetRef>>;
+}
+
+pub struct Params {
+    pub api_key: Option<String>,
+    pub creator: config::Creator,
+    pub expected_price: Option<u32>,
 }

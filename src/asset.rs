@@ -1,103 +1,125 @@
-use crate::util::{alpha_bleed::alpha_bleed, svg::svg_to_png};
-use anyhow::{Context, bail};
+use crate::{
+    config::WebAsset,
+    lockfile::LockfileEntry,
+    util::{alpha_bleed::alpha_bleed, svg::svg_to_png},
+};
+use anyhow::Context;
 use blake3::Hasher;
 use bytes::Bytes;
 use image::DynamicImage;
 use relative_path::RelativePathBuf;
-use resvg::usvg::fontdb::Database;
+use resvg::usvg::fontdb::{self};
 use serde::Serialize;
-use std::{io::Cursor, sync::Arc};
+use std::{ffi::OsStr, fmt, io::Cursor, sync::Arc};
+use tokio::task::spawn_blocking;
+
+type AssetCtor = fn(&[u8]) -> anyhow::Result<AssetType>;
+
+const SUPPORTED_EXTENSIONS: &[(&str, AssetCtor)] = &[
+    ("mp3", |_| Ok(AssetType::Audio(AudioType::Mp3))),
+    ("ogg", |_| Ok(AssetType::Audio(AudioType::Ogg))),
+    ("flac", |_| Ok(AssetType::Audio(AudioType::Flac))),
+    ("wav", |_| Ok(AssetType::Audio(AudioType::Wav))),
+    ("png", |_| Ok(AssetType::Image(ImageType::Png))),
+    ("svg", |_| Ok(AssetType::Image(ImageType::Png))),
+    ("jpg", |_| Ok(AssetType::Image(ImageType::Jpg))),
+    ("jpeg", |_| Ok(AssetType::Image(ImageType::Jpg))),
+    ("bmp", |_| Ok(AssetType::Image(ImageType::Bmp))),
+    ("tga", |_| Ok(AssetType::Image(ImageType::Tga))),
+    ("fbx", |_| Ok(AssetType::Model(ModelType::Fbx))),
+    ("gltf", |_| Ok(AssetType::Model(ModelType::GltfJson))),
+    ("glb", |_| Ok(AssetType::Model(ModelType::GltfBinary))),
+    ("rbxm", |data| {
+        let format = RobloxModelFormat::Binary;
+        if is_animation(data, &format)? {
+            Ok(AssetType::Animation)
+        } else {
+            Ok(AssetType::Model(ModelType::Roblox))
+        }
+    }),
+    ("rbxmx", |data| {
+        let format = RobloxModelFormat::Xml;
+        if is_animation(data, &format)? {
+            Ok(AssetType::Animation)
+        } else {
+            Ok(AssetType::Model(ModelType::Roblox))
+        }
+    }),
+    ("mp4", |_| Ok(AssetType::Video(VideoType::Mp4))),
+    ("mov", |_| Ok(AssetType::Video(VideoType::Mov))),
+];
+
+pub fn is_supported_extension(ext: &OsStr) -> bool {
+    SUPPORTED_EXTENSIONS.iter().any(|(e, _)| *e == ext)
+}
 
 pub struct Asset {
     /// Relative to Input prefix
     pub path: RelativePathBuf,
     pub data: Bytes,
     pub ty: AssetType,
-    processed: bool,
     pub ext: String,
     /// The hash before processing
     pub hash: String,
 }
 
 impl Asset {
-    pub fn new(path: RelativePathBuf, data: Vec<u8>) -> anyhow::Result<Self> {
-        let ext = path
+    pub async fn new(
+        path: RelativePathBuf,
+        data: Vec<u8>,
+        font_db: Arc<fontdb::Database>,
+        bleed: bool,
+    ) -> anyhow::Result<Self> {
+        let mut ext = path
             .extension()
             .context("File has no extension")?
             .to_string();
 
-        let ty = match ext.as_str() {
-            "mp3" => AssetType::Audio(AudioType::Mp3),
-            "ogg" => AssetType::Audio(AudioType::Ogg),
-            "flac" => AssetType::Audio(AudioType::Flac),
-            "wav" => AssetType::Audio(AudioType::Wav),
-            "png" | "svg" => AssetType::Image(ImageType::Png),
-            "jpg" | "jpeg" => AssetType::Image(ImageType::Jpg),
-            "bmp" => AssetType::Image(ImageType::Bmp),
-            "tga" => AssetType::Image(ImageType::Tga),
-            "fbx" => AssetType::Model(ModelType::Fbx),
-            "gltf" => AssetType::Model(ModelType::GltfJson),
-            "glb" => AssetType::Model(ModelType::GltfBinary),
-            "rbxm" | "rbxmx" => {
-                let format = if ext == "rbxm" {
-                    RobloxModelFormat::Binary
-                } else {
-                    RobloxModelFormat::Xml
-                };
+        let ty = SUPPORTED_EXTENSIONS
+            .iter()
+            .find(|(e, _)| *e == ext)
+            .map(|(_, func)| func(&data))
+            .context("Unknown file type")??;
 
-                if is_animation(&data, &format)? {
-                    AssetType::Animation
-                } else {
-                    AssetType::Model(ModelType::Roblox)
+        let (data, hash, ext) = spawn_blocking({
+            let font_db = font_db.clone();
+            move || {
+                let mut data = Bytes::from(data);
+
+                let mut hasher = Hasher::new();
+                hasher.update(&data);
+                let hash = hasher.finalize().to_string();
+
+                if ext == "svg" {
+                    data = svg_to_png(&data, font_db)?.into();
+                    ext = "png".to_string();
                 }
+
+                if matches!(ty, AssetType::Image(ImageType::Png)) && bleed {
+                    let mut image: DynamicImage = image::load_from_memory(&data)?;
+                    alpha_bleed(&mut image);
+
+                    let mut writer = Cursor::new(Vec::new());
+                    image.write_to(&mut writer, image::ImageFormat::Png)?;
+                    data = Bytes::from(writer.into_inner());
+                }
+
+                anyhow::Ok((data, hash, ext))
             }
-            "mp4" => AssetType::Video(VideoType::Mp4),
-            "mov" => AssetType::Video(VideoType::Mov),
-            _ => bail!("Unknown extension .{ext}"),
-        };
-
-        let data = Bytes::from(data);
-
-        let mut hasher = Hasher::new();
-        hasher.update(&data);
-        let hash = hasher.finalize().to_string();
+        })
+        .await??;
 
         Ok(Self {
             path,
             data,
             ty,
-            processed: false,
             ext,
             hash,
         })
     }
-
-    pub async fn process(&mut self, font_db: Arc<Database>, bleed: bool) -> anyhow::Result<()> {
-        if self.processed {
-            bail!("Asset has already been processed");
-        }
-
-        if self.ext == "svg" {
-            self.data = svg_to_png(&self.data, font_db.clone()).await?.into();
-            self.ext = "png".to_string();
-        }
-
-        if matches!(self.ty, AssetType::Image(ImageType::Png)) && bleed {
-            let mut image: DynamicImage = image::load_from_memory(&self.data)?;
-            alpha_bleed(&mut image);
-
-            let mut writer = Cursor::new(Vec::new());
-            image.write_to(&mut writer, image::ImageFormat::Png)?;
-            self.data = Bytes::from(writer.into_inner());
-        }
-
-        self.processed = true;
-
-        Ok(())
-    }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum AssetType {
     Model(ModelType),
     Animation,
@@ -153,7 +175,7 @@ impl Serialize for AssetType {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum AudioType {
     Mp3,
     Ogg,
@@ -161,7 +183,7 @@ pub enum AudioType {
     Wav,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum ImageType {
     Png,
     Jpg,
@@ -169,7 +191,7 @@ pub enum ImageType {
     Tga,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum ModelType {
     Fbx,
     GltfJson,
@@ -177,7 +199,7 @@ pub enum ModelType {
     Roblox,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum VideoType {
     Mp4,
     Mov,
@@ -203,4 +225,31 @@ pub fn is_animation(data: &[u8], format: &RobloxModelFormat) -> anyhow::Result<b
 pub enum RobloxModelFormat {
     Binary,
     Xml,
+}
+
+#[derive(Debug, Clone)]
+pub enum AssetRef {
+    Cloud(u64),
+    Studio(String),
+}
+
+impl fmt::Display for AssetRef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            AssetRef::Cloud(id) => write!(f, "rbxassetid://{id}"),
+            AssetRef::Studio(name) => write!(f, "rbxasset://{name}"),
+        }
+    }
+}
+
+impl From<WebAsset> for AssetRef {
+    fn from(value: WebAsset) -> Self {
+        AssetRef::Cloud(value.id)
+    }
+}
+
+impl From<&LockfileEntry> for AssetRef {
+    fn from(value: &LockfileEntry) -> Self {
+        AssetRef::Cloud(value.asset_id)
+    }
 }

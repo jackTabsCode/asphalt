@@ -4,7 +4,7 @@ use resvg::{
 };
 use std::sync::Arc;
 
-pub async fn svg_to_png(data: &[u8], fontdb: Arc<Database>) -> anyhow::Result<Vec<u8>> {
+pub fn svg_to_png(data: &[u8], fontdb: Arc<Database>) -> anyhow::Result<Vec<u8>> {
     let opt = Options {
         fontdb,
         ..Default::default()

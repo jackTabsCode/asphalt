@@ -113,11 +113,6 @@
           "description": "A glob pattern to match files to upload",
           "type": "string"
         },
-        "warn_each_duplicate": {
-          "description": "Emit a warning each time a duplicate file is found",
-          "type": "boolean",
-          "default": true
-        },
         "web": {
           "description": "A map of paths relative to the input path to existing assets on Roblox",
           "type": "object",

@@ -1,16 +1,16 @@
-use super::{BackendSyncResult, SyncBackend};
-use crate::{asset::Asset, sync::SyncState};
+use super::{AssetRef, Backend};
+use crate::{asset::Asset, lockfile::LockfileEntry, sync::backend::Params};
 use anyhow::Context;
 use fs_err::tokio as fs;
 use log::info;
-use std::{env, path::PathBuf, sync::Arc};
+use std::{env, path::PathBuf};
 
-pub struct DebugBackend {
+pub struct Debug {
     sync_path: PathBuf,
 }
 
-impl SyncBackend for DebugBackend {
-    async fn new() -> anyhow::Result<Self>
+impl Backend for Debug {
+    async fn new(_: Params) -> anyhow::Result<Self>
     where
         Self: Sized,
     {
@@ -34,10 +34,9 @@ impl SyncBackend for DebugBackend {
 
     async fn sync(
         &self,
-        _state: Arc<SyncState>,
-        _input_name: String,
         asset: &Asset,
-    ) -> anyhow::Result<Option<BackendSyncResult>> {
+        lockfile_entry: Option<&LockfileEntry>,
+    ) -> anyhow::Result<Option<AssetRef>> {
         let target_path = asset.path.to_logical_path(&self.sync_path);
 
         if let Some(parent) = target_path.parent() {
@@ -50,6 +49,6 @@ impl SyncBackend for DebugBackend {
             .await
             .with_context(|| format!("Failed to write asset to {}", target_path.display()))?;
 
-        Ok(None)
+        Ok(lockfile_entry.map(Into::into))
     }
 }

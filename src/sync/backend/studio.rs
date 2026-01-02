@@ -1,22 +1,23 @@
-use super::{BackendSyncResult, SyncBackend};
+use super::{AssetRef, Backend};
 use crate::{
     asset::{Asset, AssetType},
-    sync::SyncState,
+    lockfile::LockfileEntry,
+    sync::backend::Params,
 };
 use anyhow::{Context, bail};
 use fs_err::tokio as fs;
 use log::{debug, info, warn};
 use relative_path::RelativePathBuf;
 use roblox_install::RobloxStudio;
-use std::{env, path::PathBuf, sync::Arc};
+use std::{env, path::PathBuf};
 
-pub struct StudioBackend {
+pub struct Studio {
     identifier: String,
     sync_path: PathBuf,
 }
 
-impl SyncBackend for StudioBackend {
-    async fn new() -> anyhow::Result<Self>
+impl Backend for Studio {
+    async fn new(_: Params) -> anyhow::Result<Self>
     where
         Self: Sized,
     {
@@ -51,13 +52,12 @@ impl SyncBackend for StudioBackend {
 
     async fn sync(
         &self,
-        state: Arc<SyncState>,
-        input_name: String,
         asset: &Asset,
-    ) -> anyhow::Result<Option<BackendSyncResult>> {
+        lockfile_entry: Option<&LockfileEntry>,
+    ) -> anyhow::Result<Option<AssetRef>> {
         if matches!(asset.ty, AssetType::Model(_) | AssetType::Animation) {
-            return match state.existing_lockfile.get(&input_name, &asset.hash) {
-                Some(entry) => Ok(Some(BackendSyncResult::Studio(format!(
+            return match lockfile_entry {
+                Some(entry) => Ok(Some(AssetRef::Studio(format!(
                     "rbxassetid://{}",
                     entry.asset_id
                 )))),
@@ -79,7 +79,7 @@ impl SyncBackend for StudioBackend {
 
         fs::write(&target_path, &asset.data).await?;
 
-        Ok(Some(BackendSyncResult::Studio(format!(
+        Ok(Some(AssetRef::Studio(format!(
             "rbxasset://{}/{}",
             self.identifier, rel_target_path
         ))))
@@ -91,7 +91,10 @@ fn get_content_path() -> anyhow::Result<PathBuf> {
         let path = PathBuf::from(var);
 
         if path.exists() {
-            debug!("Using environment variable content path: {path:?}");
+            debug!(
+                "Using environment variable content path: {}",
+                path.display()
+            );
             return Ok(path);
         } else {
             bail!("Content path `{}` does not exist", path.display());
@@ -101,7 +104,7 @@ fn get_content_path() -> anyhow::Result<PathBuf> {
     let studio = RobloxStudio::locate()?;
     let path = studio.content_path();
 
-    debug!("Using auto-detected content path: {path:?}");
+    debug!("Using auto-detected content path: {}", path.display());
 
     Ok(path.to_owned())
 }

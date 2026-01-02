@@ -18,6 +18,8 @@ pub struct Config {
     pub inputs: HashMap<String, Input>,
 }
 
+pub type InputMap = HashMap<String, Input>;
+
 pub const FILE_NAME: &str = "asphalt.toml";
 
 impl Config {
@@ -73,7 +75,8 @@ fn default_true() -> bool {
 pub struct Input {
     /// A glob pattern to match files to upload
     #[schemars(with = "String")]
-    pub path: Glob,
+    #[serde(rename = "path")]
+    pub include: Glob,
     /// The directory path to output the generated code
     pub output_path: PathBuf,
 
@@ -85,10 +88,6 @@ pub struct Input {
     #[serde(default)]
     #[schemars(with = "HashMap<PathBuf, WebAsset>")]
     pub web: HashMap<RelativePathBuf, WebAsset>,
-
-    /// Emit a warning each time a duplicate file is found
-    #[serde(default = "default_true")]
-    pub warn_each_duplicate: bool,
 }
 
 /// An asset that exists on Roblox
