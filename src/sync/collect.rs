@@ -1,5 +1,8 @@
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
-use std::collections::HashMap;
+use std::{
+    collections::{HashMap, HashSet},
+    path::PathBuf,
+};
 use tokio::sync::mpsc::Receiver;
 
 use crate::{
@@ -36,37 +39,56 @@ pub async fn collect_events(
 
     let mut progress = Progress::new(mp, target);
 
-    while let Some(super::Event {
-        ty,
-        input_name,
-        path,
-        hash,
-        asset_ref,
-    }) = rx.recv().await
-    {
-        if let Some(asset_ref) = asset_ref {
-            input_sources
-                .entry(input_name.clone())
-                .or_default()
-                .insert(path, asset_ref.clone());
+    let mut seen_paths = HashSet::new();
 
-            if let AssetRef::Cloud(id) = asset_ref {
-                new_lockfile.insert(&input_name, &hash, LockfileEntry { asset_id: id });
-            }
-        }
+    while let Some(event) = rx.recv().await {
+        match event {
+            super::Event::Finished {
+                state,
+                input_name,
+                path,
+                rel_path,
+                hash,
+                asset_ref,
+            } => {
+                seen_paths.insert(path.clone());
 
-        match ty {
-            super::EventType::Synced { new } => {
-                progress.synced += 1;
-                if new {
-                    progress.new += 1;
-                    if target.write_on_sync() {
-                        new_lockfile.write(None).await?;
+                if let Some(asset_ref) = asset_ref {
+                    input_sources
+                        .entry(input_name.clone())
+                        .or_default()
+                        .insert(rel_path.clone(), asset_ref.clone());
+
+                    if let AssetRef::Cloud(id) = asset_ref {
+                        new_lockfile.insert(&input_name, &hash, LockfileEntry { asset_id: id });
                     }
                 }
+
+                match state {
+                    super::EventState::Synced { new } => {
+                        progress.synced += 1;
+                        if new {
+                            progress.new += 1;
+                            if target.write_on_sync() {
+                                new_lockfile.write(None).await?;
+                            }
+                        }
+                    }
+                    super::EventState::Duplicate => {
+                        progress.dupes += 1;
+                    }
+                }
+
+                progress.in_flight.remove(&path);
             }
-            super::EventType::Duplicate => {
-                progress.dupes += 1;
+            super::Event::InFlight(path) => {
+                if !seen_paths.contains(&path) {
+                    progress.in_flight.insert(path.clone());
+                }
+            }
+            super::Event::Failed(path) => {
+                progress.failed += 1;
+                progress.in_flight.remove(&path);
             }
         }
 
@@ -85,9 +107,11 @@ pub async fn collect_events(
 struct Progress {
     spinner: ProgressBar,
     target: SyncTarget,
+    in_flight: HashSet<PathBuf>,
     synced: u32,
     new: u32,
     dupes: u32,
+    failed: u32,
 }
 
 impl Progress {
@@ -104,21 +128,23 @@ impl Progress {
         Self {
             spinner,
             target,
+            in_flight: HashSet::new(),
             synced: 0,
             new: 0,
             dupes: 0,
+            failed: 0,
         }
     }
 
     fn get_msg(&self) -> String {
-        let mut str = format!("Synced {} files", self.synced);
+        let mut str = format!("Synced {} files", self.synced + self.dupes);
 
         let mut parts = Vec::new();
 
         if self.new > 0 {
             let target_msg = match self.target {
-                SyncTarget::Cloud { dry_run: true } => "uploaded",
-                SyncTarget::Cloud { dry_run: false } => "checked",
+                SyncTarget::Cloud { dry_run: true } => "checked",
+                SyncTarget::Cloud { dry_run: false } => "uploaded",
                 SyncTarget::Studio => "written to content folder",
                 SyncTarget::Debug => "written to debug folder",
             };
@@ -130,6 +156,16 @@ impl Progress {
         }
         if self.dupes > 0 {
             parts.push(format!("{} duplicates", self.dupes));
+        }
+
+        let in_flight = self.in_flight.len();
+        if in_flight > 0 {
+            parts.push(format!("{} in-flight", in_flight));
+        }
+
+        let failed = self.failed;
+        if failed > 0 {
+            parts.push(format!("{} failed", failed));
         }
 
         if parts.is_empty() {

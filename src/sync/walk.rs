@@ -39,7 +39,7 @@ struct InputState {
     bleed: bool,
 }
 
-pub async fn walk(params: Params, config: &Config, event_tx: &Sender<super::Event>) {
+pub async fn walk(params: Params, config: &Config, tx: &Sender<super::Event>) {
     let params = Arc::new(params);
 
     for (input_name, input) in &config.inputs {
@@ -74,14 +74,18 @@ pub async fn walk(params: Params, config: &Config, event_tx: &Sender<super::Even
                 continue;
             }
 
-            let ctx = state.clone();
+            let state = state.clone();
             let semaphore = semaphore.clone();
-            let event_tx = event_tx.clone();
+            let tx = tx.clone();
 
             join_set.spawn(async move {
                 let _permit = semaphore.acquire_owned().await.unwrap();
-                if let Err(e) = process_entry(ctx.clone(), &path, &event_tx).await {
-                    warn!("Skipping file {}: {e:?}", path.display());
+
+                tx.send(super::Event::InFlight(path.clone())).await.unwrap();
+
+                if let Err(e) = process_entry(state.clone(), &path, &tx).await {
+                    warn!("Failed to process file {}: {e:?}", path.display());
+                    tx.send(super::Event::Failed(path.clone())).await.unwrap();
                 }
             });
         }
@@ -97,8 +101,9 @@ async fn process_entry(
 ) -> anyhow::Result<()> {
     debug!("Handling entry: {}", path.display());
 
-    let data = fs::read(path).await?;
     let rel_path = path.relative_to(&state.input_prefix)?;
+
+    let data = fs::read(path).await?;
 
     let asset = Asset::new(
         rel_path.clone(),
@@ -124,10 +129,11 @@ async fn process_entry(
 
                 debug!("Duplicate asset found: {} -> {}", rel_path, rel_seen_path);
 
-                let event = super::Event {
-                    ty: super::EventType::Duplicate,
+                let event = super::Event::Finished {
+                    state: super::EventState::Duplicate,
                     input_name: state.input_name.clone(),
-                    path: rel_path.clone(),
+                    path: path.into(),
+                    rel_path: rel_path.clone(),
                     asset_ref: lockfile_entry.map(Into::into),
                     hash: asset.hash.clone(),
                 };
@@ -149,10 +155,11 @@ async fn process_entry(
         None => lockfile_entry.map(Into::into),
     };
 
-    let event = super::Event {
-        ty: super::EventType::Synced { new: is_new },
+    let event = super::Event::Finished {
+        state: super::EventState::Synced { new: is_new },
         input_name: state.input_name.clone(),
-        path: asset.path.clone(),
+        path: path.into(),
+        rel_path: asset.path.clone(),
         hash: asset.hash.clone(),
         asset_ref,
     };

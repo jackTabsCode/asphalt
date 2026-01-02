@@ -11,7 +11,7 @@ use indicatif::MultiProgress;
 use log::info;
 use relative_path::RelativePathBuf;
 use resvg::usvg::fontdb;
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 use tokio::sync::mpsc::{self};
 
 mod backend;
@@ -40,16 +40,21 @@ impl TargetBackend {
 }
 
 #[derive(Debug)]
-struct Event {
-    ty: EventType,
-    input_name: String,
-    path: RelativePathBuf,
-    hash: String,
-    asset_ref: Option<AssetRef>,
+enum Event {
+    Finished {
+        state: EventState,
+        input_name: String,
+        path: PathBuf,
+        rel_path: RelativePathBuf,
+        hash: String,
+        asset_ref: Option<AssetRef>,
+    },
+    InFlight(PathBuf),
+    Failed(PathBuf),
 }
 
 #[derive(Debug)]
-enum EventType {
+enum EventState {
     Synced { new: bool },
     Duplicate,
 }

@@ -4,17 +4,17 @@ use crate::{
 };
 use anyhow::{Context, bail};
 use log::{debug, warn};
-use reqwest::{
-    RequestBuilder, Response, StatusCode,
-    header::{self},
-    multipart,
-};
+use reqwest::{RequestBuilder, Response, StatusCode, multipart};
 use serde::{Deserialize, Serialize};
 use std::{
     env,
     sync::atomic::{AtomicBool, Ordering},
     time::Duration,
 };
+use tokio::sync::Mutex;
+use tokio::time::Instant;
+
+const RATELIMIT_RESET_HEADER: &str = "x-ratelimit-reset";
 
 const UPLOAD_URL: &str = "https://apis.roblox.com/assets/v1/assets";
 const OPERATION_URL: &str = "https://apis.roblox.com/assets/v1/operations";
@@ -27,6 +27,8 @@ pub struct WebApiClient {
     creator: config::Creator,
     expected_price: Option<u32>,
     fatally_failed: AtomicBool,
+    /// Shared rate limit state: when we can next make a request
+    rate_limit_reset: Mutex<Option<Instant>>,
 }
 
 impl WebApiClient {
@@ -37,6 +39,7 @@ impl WebApiClient {
             creator,
             expected_price,
             fatally_failed: AtomicBool::new(false),
+            rate_limit_reset: Mutex::new(None),
         }
     }
 
@@ -144,6 +147,19 @@ impl WebApiClient {
         let mut attempt = 0;
 
         loop {
+            {
+                let reset = self.rate_limit_reset.lock().await;
+                if let Some(reset_at) = *reset {
+                    let now = Instant::now();
+                    if reset_at > now {
+                        let wait = reset_at - now;
+                        drop(reset);
+                        debug!("Waiting {:.2}ms for rate limit reset", wait.as_secs_f64());
+                        tokio::time::sleep(wait).await;
+                    }
+                }
+            }
+
             let res = make_req(&self.inner).send().await?;
             let status = res.status();
 
@@ -151,19 +167,25 @@ impl WebApiClient {
                 StatusCode::TOO_MANY_REQUESTS if attempt < MAX => {
                     let wait = res
                         .headers()
-                        .get(header::RETRY_AFTER)
+                        .get(RATELIMIT_RESET_HEADER)
                         .and_then(|h| h.to_str().ok())
                         .and_then(|s| s.parse::<u64>().ok())
                         .map(Duration::from_secs)
                         .unwrap_or_else(|| Duration::from_secs(1 << attempt));
 
-                    tokio::time::sleep(wait).await;
-                    attempt += 1;
+                    let reset_at = Instant::now() + wait;
+                    {
+                        let mut reset = self.rate_limit_reset.lock().await;
+                        *reset = Some(reset_at);
+                    }
 
                     warn!(
-                        "Rate limited, retrying in {} seconds",
-                        wait.as_millis() / 1000
+                        "Rate limited, retrying in {:.2} seconds",
+                        wait.as_secs_f64()
                     );
+
+                    tokio::time::sleep(wait).await;
+                    attempt += 1;
 
                     continue;
                 }
