@@ -11,6 +11,7 @@ use relative_path::RelativePathBuf;
 use resvg::usvg::fontdb::{self};
 use serde::Serialize;
 use std::{ffi::OsStr, fmt, io::Cursor, sync::Arc};
+use tokio::task::spawn_blocking;
 
 type AssetCtor = fn(&[u8]) -> anyhow::Result<AssetType>;
 
@@ -80,25 +81,33 @@ impl Asset {
             .map(|(_, func)| func(&data))
             .context("Unknown file type")??;
 
-        let mut data = Bytes::from(data);
+        let (data, hash, ext) = spawn_blocking({
+            let font_db = font_db.clone();
+            move || {
+                let mut data = Bytes::from(data);
 
-        let mut hasher = Hasher::new();
-        hasher.update(&data);
-        let hash = hasher.finalize().to_string();
+                let mut hasher = Hasher::new();
+                hasher.update(&data);
+                let hash = hasher.finalize().to_string();
 
-        if ext == "svg" {
-            data = svg_to_png(&data, font_db.clone()).await?.into();
-            ext = "png".to_string();
-        }
+                if ext == "svg" {
+                    data = svg_to_png(&data, font_db)?.into();
+                    ext = "png".to_string();
+                }
 
-        if matches!(ty, AssetType::Image(ImageType::Png)) && bleed {
-            let mut image: DynamicImage = image::load_from_memory(&data)?;
-            alpha_bleed(&mut image);
+                if matches!(ty, AssetType::Image(ImageType::Png)) && bleed {
+                    let mut image: DynamicImage = image::load_from_memory(&data)?;
+                    alpha_bleed(&mut image);
 
-            let mut writer = Cursor::new(Vec::new());
-            image.write_to(&mut writer, image::ImageFormat::Png)?;
-            data = Bytes::from(writer.into_inner());
-        }
+                    let mut writer = Cursor::new(Vec::new());
+                    image.write_to(&mut writer, image::ImageFormat::Png)?;
+                    data = Bytes::from(writer.into_inner());
+                }
+
+                anyhow::Ok((data, hash, ext))
+            }
+        })
+        .await??;
 
         Ok(Self {
             path,
@@ -110,7 +119,7 @@ impl Asset {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum AssetType {
     Model(ModelType),
     Animation,
@@ -166,7 +175,7 @@ impl Serialize for AssetType {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum AudioType {
     Mp3,
     Ogg,
@@ -174,7 +183,7 @@ pub enum AudioType {
     Wav,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum ImageType {
     Png,
     Jpg,
@@ -182,7 +191,7 @@ pub enum ImageType {
     Tga,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum ModelType {
     Fbx,
     GltfJson,
@@ -190,7 +199,7 @@ pub enum ModelType {
     Roblox,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum VideoType {
     Mp4,
     Mov,

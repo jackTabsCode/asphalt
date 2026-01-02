@@ -53,7 +53,7 @@ impl WebApiClient {
 
         let req = Request {
             display_name,
-            asset_type: asset.ty.clone(),
+            asset_type: asset.ty,
             creation_context: CreationContext {
                 creator: self.creator.clone().into(),
                 expected_price: self.expected_price,
