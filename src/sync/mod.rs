@@ -108,8 +108,8 @@ pub async fn sync(args: SyncArgs, mp: MultiProgress) -> anyhow::Result<()> {
     let results = collector_handle.await??;
 
     if matches!(target, SyncTarget::Cloud { dry_run: true }) {
-        if results.any_new {
-            bail!("Dry run: {} new assets would be synced", results.any_new)
+        if results.new_count > 0 {
+            bail!("Dry run: {} new assets would be synced", results.new_count)
         } else {
             info!("Dry run: No new assets would be synced");
             return Ok(());

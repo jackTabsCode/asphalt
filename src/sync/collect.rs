@@ -16,7 +16,7 @@ use crate::{
 pub struct CollectResults {
     pub new_lockfile: Lockfile,
     pub input_sources: HashMap<String, NodeSource>,
-    pub any_new: bool,
+    pub new_count: u64,
     pub any_failed: bool,
 }
 
@@ -106,7 +106,7 @@ pub async fn collect_events(
     Ok(CollectResults {
         new_lockfile,
         input_sources,
-        any_new: progress.new > 0,
+        new_count: progress.new,
         any_failed: progress.failed > 0,
     })
 }
