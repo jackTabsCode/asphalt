@@ -25,6 +25,7 @@ pub async fn collect_events(
     target: SyncTarget,
     inputs: InputMap,
     mp: MultiProgress,
+    discovered: u64,
 ) -> anyhow::Result<CollectResults> {
     let mut new_lockfile = Lockfile::default();
 
@@ -38,20 +39,15 @@ pub async fn collect_events(
         }
     }
 
-    let mut progress = Progress::new(mp, target);
+    let mut progress = Progress::new(mp, target, discovered);
 
     let mut seen_paths = HashSet::new();
 
     while let Some(event) = rx.recv().await {
         match event {
-            super::Event::Discovered(path) => {
+            super::Event::Processing(path) => {
                 if !seen_paths.contains(&path) {
-                    progress.discovered += 1;
-                }
-            }
-            super::Event::InFlight(path) => {
-                if !seen_paths.contains(&path) {
-                    progress.in_flight.insert(path.clone());
+                    progress.processing.insert(path.clone());
                 }
             }
             super::Event::Finished {
@@ -90,11 +86,11 @@ pub async fn collect_events(
                     }
                 }
 
-                progress.in_flight.remove(&path);
+                progress.processing.remove(&path);
             }
             super::Event::Failed(path) => {
                 progress.failed += 1;
-                progress.in_flight.remove(&path);
+                progress.processing.remove(&path);
             }
         }
 
@@ -114,8 +110,7 @@ pub async fn collect_events(
 struct Progress {
     inner: ProgressBar,
     target: SyncTarget,
-    in_flight: HashSet<PathBuf>,
-    discovered: u64,
+    processing: HashSet<PathBuf>,
     synced: u64,
     new: u64,
     dupes: u64,
@@ -134,17 +129,16 @@ impl Progress {
             .progress_chars("=> ")
     }
 
-    fn new(mp: MultiProgress, target: SyncTarget) -> Self {
-        let spinner = mp.add(ProgressBar::new_spinner());
+    fn new(mp: MultiProgress, target: SyncTarget, length: u64) -> Self {
+        let spinner = mp.add(ProgressBar::new(length));
         spinner.set_style(Progress::get_style(false));
-        spinner.set_prefix("Syncing");
         spinner.enable_steady_tick(std::time::Duration::from_millis(100));
+        spinner.set_prefix("Syncing");
 
         Self {
             inner: spinner,
             target,
-            in_flight: HashSet::new(),
-            discovered: 0,
+            processing: HashSet::new(),
             synced: 0,
             new: 0,
             dupes: 0,
@@ -171,7 +165,7 @@ impl Progress {
             parts.push(format!("{} duplicates", self.dupes));
         }
 
-        let in_flight = self.in_flight.len();
+        let in_flight = self.processing.len();
         if in_flight > 0 {
             parts.push(format!("{} processing", in_flight));
         }
@@ -186,7 +180,6 @@ impl Progress {
 
     fn update(&self) {
         self.inner.set_position(self.synced + self.dupes);
-        self.inner.set_length(self.discovered);
         self.inner.set_message(self.get_msg());
     }
 

@@ -17,6 +17,7 @@ use tokio::sync::mpsc::{self};
 mod backend;
 mod codegen;
 mod collect;
+mod process;
 mod walk;
 
 enum TargetBackend {
@@ -41,8 +42,7 @@ impl TargetBackend {
 
 #[derive(Debug)]
 enum Event {
-    Discovered(PathBuf),
-    InFlight(PathBuf),
+    Processing(PathBuf),
     Finished {
         state: EventState,
         input_name: String,
@@ -74,35 +74,54 @@ pub async fn sync(args: SyncArgs, mp: MultiProgress) -> anyhow::Result<()> {
 
     let (event_tx, event_rx) = mpsc::unbounded_channel::<Event>();
 
+    let mut inputs_to_process = Vec::new();
+    let mut discovered = 0;
+
+    for (name, input) in &config.inputs {
+        let paths = walk::walk_input(input, mp.clone());
+        discovered += paths.len() as u64;
+        inputs_to_process.push(process::WalkedInput {
+            name: name.to_string(),
+            input: input.clone(),
+            paths,
+        });
+    }
+
     let collector_handle = tokio::spawn({
         let inputs = config.inputs.clone();
-        async move { collect_events(event_rx, target, inputs, mp).await }
+        async move { collect_events(event_rx, target, inputs, mp, discovered).await }
     });
 
-    let params = walk::Params {
-        target,
-        existing_lockfile,
-        font_db,
-        backend: {
-            let params = backend::Params {
-                api_key: args.api_key,
-                creator: config.creator.clone(),
-                expected_price: args.expected_price,
-            };
-            match &target {
-                SyncTarget::Cloud { dry_run: false } => {
-                    Some(TargetBackend::Cloud(backend::Cloud::new(params).await?))
+    process::process_inputs(
+        process::State {
+            target,
+            existing_lockfile,
+            font_db,
+            backend: {
+                let params = backend::Params {
+                    api_key: args.api_key,
+                    creator: config.creator.clone(),
+                    expected_price: args.expected_price,
+                };
+                match &target {
+                    SyncTarget::Cloud { dry_run: false } => {
+                        Some(TargetBackend::Cloud(backend::Cloud::new(params).await?))
+                    }
+                    SyncTarget::Cloud { dry_run: true } => None,
+                    SyncTarget::Debug => {
+                        Some(TargetBackend::Debug(backend::Debug::new(params).await?))
+                    }
+                    SyncTarget::Studio => {
+                        Some(TargetBackend::Studio(backend::Studio::new(params).await?))
+                    }
                 }
-                SyncTarget::Cloud { dry_run: true } => None,
-                SyncTarget::Debug => Some(TargetBackend::Debug(backend::Debug::new(params).await?)),
-                SyncTarget::Studio => {
-                    Some(TargetBackend::Studio(backend::Studio::new(params).await?))
-                }
-            }
+            },
         },
-    };
+        inputs_to_process,
+        &event_tx,
+    )
+    .await;
 
-    walk::walk(params, &config, &event_tx).await;
     drop(event_tx);
 
     let results = collector_handle.await??;
