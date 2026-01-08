@@ -151,8 +151,6 @@ output_path = "src/shared"
 	-	A map of paths relative to the input path to existing assets on Roblox.
 - 	`bleed`: boolean (optional)
 	- 	Whether to alpha bleed images. Defaults to `true`. Keep in mind that changing this setting won't invalidate your lockfile or reupload your images.
-- 	`warn_each_duplicate`: boolean (optional)
-	- 	Whether to emit a warning each time a duplicate file is found. Defaults to `true`.
 
 #### WebAsset
 
