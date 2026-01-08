@@ -3,6 +3,7 @@ use crate::{
     config,
     lockfile::LockfileEntry,
 };
+use std::path::PathBuf;
 
 mod cloud;
 pub use cloud::Cloud;
@@ -29,4 +30,5 @@ pub struct Params {
     pub api_key: Option<String>,
     pub creator: config::Creator,
     pub expected_price: Option<u32>,
+    pub project_dir: PathBuf,
 }

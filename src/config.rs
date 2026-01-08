@@ -16,6 +16,9 @@ pub struct Config {
 
     /// A map of input names to input configurations
     pub inputs: HashMap<String, Input>,
+
+    #[serde(skip)]
+    pub project_dir: PathBuf,
 }
 
 pub type InputMap = HashMap<String, Input>;
@@ -23,11 +26,14 @@ pub type InputMap = HashMap<String, Input>;
 pub const FILE_NAME: &str = "asphalt.toml";
 
 impl Config {
-    pub async fn read() -> anyhow::Result<Config> {
-        let config = fs::read_to_string(FILE_NAME)
+    pub async fn read_from(project_dir: PathBuf) -> anyhow::Result<Config> {
+        let config_path = project_dir.join(FILE_NAME);
+        let config_str = fs::read_to_string(&config_path)
             .await
             .context("Failed to read config file")?;
-        let config: Config = toml::from_str(&config)?;
+
+        let mut config: Config = toml::from_str(&config_str)?;
+        config.project_dir = project_dir;
 
         Ok(config)
     }

@@ -1,6 +1,7 @@
 use crate::config::CreatorType;
 use clap::{Args, Parser, Subcommand};
 use clap_verbosity_flag::{InfoLevel, Verbosity};
+use std::path::PathBuf;
 
 #[derive(Parser)]
 #[command(version, about = "Upload and reference Roblox assets in code.")]
@@ -65,6 +66,10 @@ pub struct SyncArgs {
     /// Provides Roblox with the amount of Robux that you are willing to spend on each non-free asset upload.
     #[arg(long)]
     pub expected_price: Option<u32>,
+
+    /// Path to the project directory. Defaults to the current directory.
+    #[arg(short, long, default_value = ".")]
+    pub project: PathBuf,
 }
 
 impl SyncArgs {
@@ -108,4 +113,8 @@ pub struct UploadArgs {
 pub struct MigrateLockfileArgs {
     /// The default input name to use. Only applies when upgrading from V0 to V1.
     pub input_name: Option<String>,
+
+    /// Path to the project directory. Defaults to the current directory.
+    #[arg(short, long, default_value = ".")]
+    pub project: PathBuf,
 }
