@@ -43,10 +43,12 @@ pub async fn walk(params: Params, config: &Config, tx: &UnboundedSender<super::E
     let params = Arc::new(params);
 
     for (input_name, input) in &config.inputs {
+        let input_prefix = config.project_dir.join(input.include.get_prefix());
+
         let state = Arc::new(InputState {
             params: params.clone(),
             input_name: input_name.clone(),
-            input_prefix: input.include.get_prefix(),
+            input_prefix: input_prefix.clone(),
             seen_hashes: Arc::new(Mutex::new(HashMap::new())),
             bleed: input.bleed,
         });
@@ -54,11 +56,18 @@ pub async fn walk(params: Params, config: &Config, tx: &UnboundedSender<super::E
         let mut join_set = JoinSet::new();
         let semaphore = Arc::new(Semaphore::new(50));
 
-        for entry in WalkDir::new(input.include.get_prefix())
+        for entry in WalkDir::new(&input_prefix)
             .into_iter()
             .filter_entry(|entry| {
                 let path = entry.path();
-                path == input.include.get_prefix() || input.include.is_match(path)
+                if path == input_prefix {
+                    return true;
+                }
+                if let Ok(rel_path) = path.strip_prefix(&config.project_dir) {
+                    input.include.is_match(rel_path)
+                } else {
+                    false
+                }
             })
         {
             let Ok(entry) = entry else { continue };

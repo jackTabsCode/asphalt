@@ -61,10 +61,12 @@ enum EventState {
 }
 
 pub async fn sync(args: SyncArgs, mp: MultiProgress) -> anyhow::Result<()> {
-    let config = Config::read().await?;
+    let config = Config::read_from(args.project.clone()).await?;
     let target = args.target();
 
-    let existing_lockfile = RawLockfile::read().await?.into_lockfile()?;
+    let existing_lockfile = RawLockfile::read_from(&config.project_dir)
+        .await?
+        .into_lockfile()?;
 
     let font_db = Arc::new({
         let mut db = fontdb::Database::new();
@@ -76,7 +78,8 @@ pub async fn sync(args: SyncArgs, mp: MultiProgress) -> anyhow::Result<()> {
 
     let collector_handle = tokio::spawn({
         let inputs = config.inputs.clone();
-        async move { collect_events(event_rx, target, inputs, mp).await }
+        let project_dir = config.project_dir.clone();
+        async move { collect_events(event_rx, target, inputs, mp, &project_dir).await }
     });
 
     let params = walk::Params {
@@ -88,6 +91,7 @@ pub async fn sync(args: SyncArgs, mp: MultiProgress) -> anyhow::Result<()> {
                 api_key: args.api_key,
                 creator: config.creator.clone(),
                 expected_price: args.expected_price,
+                project_dir: config.project_dir.clone(),
             };
             match &target {
                 SyncTarget::Cloud { dry_run: false } => {
@@ -117,7 +121,7 @@ pub async fn sync(args: SyncArgs, mp: MultiProgress) -> anyhow::Result<()> {
     }
 
     if target.write_on_sync() {
-        results.new_lockfile.write(None).await?;
+        results.new_lockfile.write_to(&config.project_dir).await?;
     }
 
     for (input_name, source) in results.input_sources {
@@ -140,8 +144,9 @@ pub async fn sync(args: SyncArgs, mp: MultiProgress) -> anyhow::Result<()> {
             };
             let code = codegen::generate_code(lang, &input_name, &node)?;
 
-            fs::create_dir_all(&input.output_path).await?;
-            fs::write(input.output_path.join(format!("{input_name}.{ext}")), code).await?;
+            let output_path = config.project_dir.join(&input.output_path);
+            fs::create_dir_all(&output_path).await?;
+            fs::write(output_path.join(format!("{input_name}.{ext}")), code).await?;
         }
     }
 

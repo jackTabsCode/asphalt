@@ -3,18 +3,18 @@ use crate::{asset::Asset, lockfile::LockfileEntry, sync::backend::Params};
 use anyhow::Context;
 use fs_err::tokio as fs;
 use log::info;
-use std::{env, path::PathBuf};
+use std::path::PathBuf;
 
 pub struct Debug {
     sync_path: PathBuf,
 }
 
 impl Backend for Debug {
-    async fn new(_: Params) -> anyhow::Result<Self>
+    async fn new(params: Params) -> anyhow::Result<Self>
     where
         Self: Sized,
     {
-        let debug_path = env::current_dir()?.join(".asphalt-debug");
+        let debug_path = params.project_dir.join(".asphalt-debug");
         info!("Assets will be synced to: {}", debug_path.display());
 
         if debug_path.exists() {

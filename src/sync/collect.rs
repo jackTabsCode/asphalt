@@ -25,6 +25,7 @@ pub async fn collect_events(
     target: SyncTarget,
     inputs: InputMap,
     mp: MultiProgress,
+    base_dir: &std::path::Path,
 ) -> anyhow::Result<CollectResults> {
     let mut new_lockfile = Lockfile::default();
 
@@ -81,7 +82,7 @@ pub async fn collect_events(
                         if new {
                             progress.new += 1;
                             if target.write_on_sync() {
-                                new_lockfile.write(None).await?;
+                                new_lockfile.write_to(base_dir).await?;
                             }
                         }
                     }
