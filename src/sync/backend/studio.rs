@@ -4,9 +4,9 @@ use crate::{
     lockfile::LockfileEntry,
     sync::backend::Params,
 };
-use anyhow::{Context, bail};
+use anyhow::Context;
 use fs_err::tokio as fs;
-use log::{debug, info, warn};
+use log::{info, warn};
 use relative_path::RelativePathBuf;
 use roblox_install::RobloxStudio;
 use std::{env, path::PathBuf};
@@ -21,7 +21,8 @@ impl Backend for Studio {
     where
         Self: Sized,
     {
-        let content_path = get_content_path()?;
+        let studio = RobloxStudio::locate()?;
+        let content_path = studio.content_path();
 
         let cwd = env::current_dir()?;
         let cwd_name = cwd
@@ -84,27 +85,4 @@ impl Backend for Studio {
             self.identifier, rel_target_path
         ))))
     }
-}
-
-fn get_content_path() -> anyhow::Result<PathBuf> {
-    if let Ok(var) = env::var("ROBLOX_CONTENT_PATH") {
-        let path = PathBuf::from(var);
-
-        if path.exists() {
-            debug!(
-                "Using environment variable content path: {}",
-                path.display()
-            );
-            return Ok(path);
-        } else {
-            bail!("Content path `{}` does not exist", path.display());
-        }
-    }
-
-    let studio = RobloxStudio::locate()?;
-    let path = studio.content_path();
-
-    debug!("Using auto-detected content path: {}", path.display());
-
-    Ok(path.to_owned())
 }
