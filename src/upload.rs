@@ -12,7 +12,12 @@ pub async fn upload(args: UploadArgs) -> anyhow::Result<()> {
     let mut font_db = Database::new();
     font_db.load_system_fonts();
 
-    let asset = Asset::new(path.relative_to(".")?, data, Arc::new(font_db), args.bleed).await?;
+    let mut asset =
+        Asset::new(path.relative_to(".")?, data.into()).context("Failed to create asset")?;
+
+    asset
+        .process(Arc::new(font_db), args.bleed)
+        .context("Failed to process asset")?;
 
     let creator = Creator {
         ty: args.creator_type,

@@ -11,7 +11,6 @@ use relative_path::RelativePathBuf;
 use resvg::usvg::fontdb::{self};
 use serde::Serialize;
 use std::{ffi::OsStr, fmt, io::Cursor, sync::Arc};
-use tokio::task::spawn_blocking;
 
 type AssetCtor = fn(&[u8]) -> anyhow::Result<AssetType>;
 
@@ -61,15 +60,11 @@ pub struct Asset {
     pub ext: String,
     /// The hash before processing
     pub hash: String,
+    is_svg: bool,
 }
 
 impl Asset {
-    pub async fn new(
-        path: RelativePathBuf,
-        data: Vec<u8>,
-        font_db: Arc<fontdb::Database>,
-        bleed: bool,
-    ) -> anyhow::Result<Self> {
+    pub fn new(path: RelativePathBuf, data: Bytes) -> anyhow::Result<Self> {
         let mut ext = path
             .extension()
             .context("File has no extension")?
@@ -81,33 +76,15 @@ impl Asset {
             .map(|(_, func)| func(&data))
             .context("Unknown file type")??;
 
-        let (data, hash, ext) = spawn_blocking({
-            let font_db = font_db.clone();
-            move || {
-                let mut data = Bytes::from(data);
+        let mut is_svg = false;
+        if ext == "svg" {
+            ext = "png".to_string();
+            is_svg = true;
+        }
 
-                let mut hasher = Hasher::new();
-                hasher.update(&data);
-                let hash = hasher.finalize().to_string();
-
-                if ext == "svg" {
-                    data = svg_to_png(&data, font_db)?.into();
-                    ext = "png".to_string();
-                }
-
-                if matches!(ty, AssetType::Image(ImageType::Png)) && bleed {
-                    let mut image: DynamicImage = image::load_from_memory(&data)?;
-                    alpha_bleed(&mut image);
-
-                    let mut writer = Cursor::new(Vec::new());
-                    image.write_to(&mut writer, image::ImageFormat::Png)?;
-                    data = Bytes::from(writer.into_inner());
-                }
-
-                anyhow::Ok((data, hash, ext))
-            }
-        })
-        .await??;
+        let mut hasher = Hasher::new();
+        hasher.update(&data);
+        let hash = hasher.finalize().to_string();
 
         Ok(Self {
             path,
@@ -115,7 +92,27 @@ impl Asset {
             ty,
             ext,
             hash,
+            is_svg,
         })
+    }
+
+    pub fn process(&mut self, font_db: Arc<fontdb::Database>, bleed: bool) -> anyhow::Result<()> {
+        if self.is_svg {
+            self.data = svg_to_png(&self.data, font_db)
+                .context("Failed to convert to PNG")?
+                .into();
+        }
+
+        if bleed && let AssetType::Image(_) = self.ty {
+            let mut image: DynamicImage = image::load_from_memory(&self.data)?;
+            alpha_bleed(&mut image);
+
+            let mut writer = Cursor::new(Vec::new());
+            image.write_to(&mut writer, image::ImageFormat::Png)?;
+            self.data = writer.into_inner().into();
+        }
+
+        Ok(())
     }
 }
 

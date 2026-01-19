@@ -116,14 +116,7 @@ async fn process_entry(
 
     let data = fs::read(path).await?;
 
-    let asset = Asset::new(
-        rel_path.clone(),
-        data,
-        state.params.font_db.clone(),
-        state.bleed,
-    )
-    .await
-    .context("Failed to create asset")?;
+    let mut asset = Asset::new(rel_path.clone(), data.into()).context("Failed to create asset")?;
 
     let lockfile_entry = state
         .params
@@ -160,6 +153,19 @@ async fn process_entry(
 
     let always_target = matches!(state.params.target, SyncTarget::Studio | SyncTarget::Debug);
     let is_new = always_target || lockfile_entry.is_none();
+
+    if is_new {
+        let font_db = state.params.font_db.clone();
+        let bleed = state.bleed;
+
+        asset = tokio::task::spawn_blocking(move || -> anyhow::Result<Asset> {
+            let mut asset = asset;
+            asset.process(font_db, bleed)?;
+            Ok(asset)
+        })
+        .await?
+        .context("Failed to process asset")?;
+    }
 
     let asset_ref = match state.params.backend {
         Some(ref backend) => backend.sync(&asset, lockfile_entry).await?,
