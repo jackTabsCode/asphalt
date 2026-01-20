@@ -1,5 +1,5 @@
+use crate::hash::Hash;
 use anyhow::{Context, bail};
-use blake3::Hasher;
 use fs_err::tokio as fs;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -12,7 +12,7 @@ pub const FILE_NAME: &str = "asphalt.lock.toml";
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Lockfile {
     version: u32,
-    inputs: BTreeMap<String, BTreeMap<String, LockfileEntry>>,
+    inputs: BTreeMap<String, BTreeMap<Hash, LockfileEntry>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -30,11 +30,11 @@ impl Default for Lockfile {
 }
 
 impl Lockfile {
-    pub fn get(&self, input_name: &str, hash: &str) -> Option<&LockfileEntry> {
+    pub fn get(&self, input_name: &str, hash: &Hash) -> Option<&LockfileEntry> {
         self.inputs.get(input_name).and_then(|m| m.get(hash))
     }
 
-    pub fn insert(&mut self, input_name: &str, hash: &str, entry: LockfileEntry) {
+    pub fn insert(&mut self, input_name: &str, hash: &Hash, entry: LockfileEntry) {
         self.inputs
             .entry(input_name.to_string())
             .or_default()
@@ -53,7 +53,7 @@ impl Lockfile {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct OldLockfileEntry {
-    pub hash: String,
+    pub hash: Hash,
     pub asset_id: u64,
 }
 
@@ -143,7 +143,7 @@ async fn migrate_from_v0(lockfile: &LockfileV0, input_name: &str) -> anyhow::Res
     let mut new_lockfile = Lockfile::default();
 
     for (path, entry) in &lockfile.entries {
-        let new_hash = read_and_hash(path)
+        let new_hash = Hash::new_from_file(path)
             .await
             .context(format!("Failed to hash {}", path.display()))?;
 
@@ -157,11 +157,4 @@ async fn migrate_from_v0(lockfile: &LockfileV0, input_name: &str) -> anyhow::Res
     }
 
     Ok(new_lockfile)
-}
-
-async fn read_and_hash(path: &Path) -> anyhow::Result<String> {
-    let bytes = fs::read(path).await?;
-    let mut hasher = Hasher::new();
-    hasher.update(&bytes);
-    Ok(hasher.finalize().to_string())
 }

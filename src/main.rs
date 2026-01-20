@@ -15,6 +15,7 @@ mod asset;
 mod cli;
 mod config;
 mod glob;
+mod hash;
 mod lockfile;
 mod migrate_lockfile;
 mod sync;

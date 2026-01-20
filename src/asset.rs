@@ -1,10 +1,10 @@
 use crate::{
     config::WebAsset,
+    hash::Hash,
     lockfile::LockfileEntry,
     util::{alpha_bleed::alpha_bleed, svg::svg_to_png},
 };
 use anyhow::Context;
-use blake3::Hasher;
 use bytes::Bytes;
 use image::DynamicImage;
 use relative_path::RelativePathBuf;
@@ -59,7 +59,7 @@ pub struct Asset {
     pub ty: AssetType,
     pub ext: String,
     /// The hash before processing
-    pub hash: String,
+    pub hash: Hash,
     is_svg: bool,
 }
 
@@ -82,9 +82,7 @@ impl Asset {
             is_svg = true;
         }
 
-        let mut hasher = Hasher::new();
-        hasher.update(&data);
-        let hash = hasher.finalize().to_string();
+        let hash = Hash::new_from_bytes(&data);
 
         Ok(Self {
             path,

@@ -2,6 +2,7 @@ use crate::{
     asset::{Asset, AssetRef},
     cli::{SyncArgs, SyncTarget},
     config::Config,
+    hash::Hash,
     lockfile::{LockfileEntry, RawLockfile},
     sync::{backend::Backend, collect::collect_events},
 };
@@ -48,7 +49,7 @@ enum Event {
         input_name: String,
         path: PathBuf,
         rel_path: RelativePathBuf,
-        hash: String,
+        hash: Hash,
         asset_ref: Option<AssetRef>,
     },
     Failed(PathBuf),

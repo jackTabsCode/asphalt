@@ -2,6 +2,7 @@ use crate::{
     asset::{self, Asset},
     cli::SyncTarget,
     config::Config,
+    hash::Hash,
     lockfile::Lockfile,
     sync::TargetBackend,
 };
@@ -35,7 +36,7 @@ struct InputState {
     params: Arc<Params>,
     input_name: String,
     input_prefix: PathBuf,
-    seen_hashes: Arc<Mutex<HashMap<String, PathBuf>>>,
+    seen_hashes: Arc<Mutex<HashMap<Hash, PathBuf>>>,
     bleed: bool,
 }
 
@@ -126,7 +127,7 @@ async fn process_entry(
     {
         let mut seen_hashes = state.seen_hashes.lock().await;
 
-        match seen_hashes.entry(asset.hash.clone()) {
+        match seen_hashes.entry(asset.hash) {
             hash_map::Entry::Occupied(entry) => {
                 let seen_path = entry.get();
                 let rel_seen_path = seen_path.relative_to(&state.input_prefix)?;
@@ -139,14 +140,14 @@ async fn process_entry(
                     path: path.into(),
                     rel_path: rel_path.clone(),
                     asset_ref: lockfile_entry.map(Into::into),
-                    hash: asset.hash.clone(),
+                    hash: asset.hash,
                 };
                 tx.send(event).unwrap();
 
                 return Ok(());
             }
             hash_map::Entry::Vacant(_) => {
-                seen_hashes.insert(asset.hash.clone(), path.into());
+                seen_hashes.insert(asset.hash, path.into());
             }
         }
     }
@@ -177,7 +178,7 @@ async fn process_entry(
         input_name: state.input_name.clone(),
         path: path.into(),
         rel_path: asset.path.clone(),
-        hash: asset.hash.clone(),
+        hash: asset.hash,
         asset_ref,
     };
     tx.send(event).unwrap();

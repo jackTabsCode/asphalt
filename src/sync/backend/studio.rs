@@ -71,7 +71,8 @@ impl Backend for Studio {
             };
         }
 
-        let rel_target_path = RelativePathBuf::from(&asset.hash).with_extension(&asset.ext);
+        let rel_target_path =
+            RelativePathBuf::from(&asset.hash.to_string()).with_extension(&asset.ext);
         let target_path = rel_target_path.to_logical_path(&self.sync_path);
 
         if let Some(parent) = target_path.parent() {
