@@ -161,6 +161,7 @@ impl Progress {
                 SyncTarget::Cloud { dry_run: true } => "checked",
                 SyncTarget::Cloud { dry_run: false } => "uploaded",
                 SyncTarget::Studio | SyncTarget::Debug => "written",
+                SyncTarget::Existing => "resolved",
             };
             parts.push(format!("{} {}", self.new, target_msg));
         }
