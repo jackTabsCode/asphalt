@@ -125,7 +125,10 @@ async fn process_entry(
         .get(&state.input_name, &asset.hash);
 
     if matches!(state.params.target, SyncTarget::Existing) && lockfile_entry.is_none() {
-        bail!("Asset '{}' is not in the lockfile. Upload it first with 'asphalt sync'.", rel_path);
+        bail!(
+            "Asset '{}' is not in the lockfile. Upload it first with 'asphalt sync'.",
+            rel_path
+        );
     }
 
     {
