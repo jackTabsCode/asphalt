@@ -12,7 +12,7 @@ license = "MIT"
 anyhow = "1.0.100"
 bit-vec = "0.8"
 blake3 = "1.8.2"
-bytes = "1.11.0"
+bytes = "1.11.1"
 clap = { version = "4.5.53", features = ["derive", "env"] }
 clap-verbosity-flag = "3.0.4"
 dotenvy = "0.15.7"
