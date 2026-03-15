@@ -7,6 +7,7 @@ use std::sync::Arc;
 pub fn svg_to_png(data: &[u8], fontdb: Arc<Database>) -> anyhow::Result<Vec<u8>> {
     let opt = Options {
         fontdb,
+        style_sheet: Some("svg { color: white; }".to_owned()),
         ..Default::default()
     };
 
