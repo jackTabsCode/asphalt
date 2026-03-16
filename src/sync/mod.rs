@@ -103,6 +103,7 @@ pub async fn sync(args: SyncArgs, mp: MultiProgress) -> anyhow::Result<()> {
                 SyncTarget::Studio => {
                     Some(TargetBackend::Studio(backend::Studio::new(params).await?))
                 }
+                SyncTarget::Existing => None,
             }
         },
     };
