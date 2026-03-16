@@ -3,6 +3,8 @@
 Asphalt is a command line tool used to upload assets to Roblox and easily reference them in code.
 It's a modern alternative to [Tarmac](https://github.com/Roblox/Tarmac).
 
+The documentation below is associated with the current commit on main. To view documentation for a specific release, go to the Tags page and view the README for that tag.
+
 ## Features
 
 -   Syncs your images, sounds, videos, animations, and models to Roblox! See the [supported asset types](#supported-asset-types)
@@ -10,9 +12,6 @@ It's a modern alternative to [Tarmac](https://github.com/Roblox/Tarmac).
 -   Can target Roblox users or groups
 -   Processes SVGs into PNGs and alpha bleeds images for crisp edges
 -   Allows defining assets you already uploaded
-
-## Features Coming Soon
--  Capability to pack your images into spritesheets for lower client memory usage
 
 ## Installation
 
