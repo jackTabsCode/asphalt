@@ -171,7 +171,7 @@ Make sure that you select an appropriate IP and that your API key is under the C
 ## Supported Asset Types
 
 - Images (.png, .jpg, .bmp, .tga, .svg)
-	- SVGs are supported by Asphalt by converting them to PNGs.
+	- SVGs are supported by Asphalt by converting them to PNGs. If an SVG uses the `currentColor` fill, it will be converted to white so that it can be colored on Roblox.
 - Audio (.mp3, .ogg, .wav, .flac)
 - Videos (.mp4, .mov)
 	- When uploading videos, you must provide the `--expected-price` argument, which is the price you expect to be charged for the video. See the [Roblox documentation on Videos](https://create.roblox.com/docs/en-us/ui/video-frames#upload-videos) for more details.
