@@ -254,3 +254,80 @@ fn dry_run_2_old() {
         .success()
         .stderr(contains("No new assets"));
 }
+
+#[test]
+fn dry_run_brace_glob_matches_assets() {
+    let project = Project::new();
+    project.write_config(toml! {
+        [creator]
+        type = "user"
+        id = 12345
+
+        [inputs.assets]
+        path = "assets/{images,sounds}/**"
+        output_path = "output"
+    });
+
+    project.add_file_at("assets/images/test1.png", "test1.png");
+    project.add_file_at("assets/sounds/test2.jpg", "test2.jpg");
+
+    project
+        .run()
+        .args(["sync", "cloud", "--dry-run"])
+        .assert()
+        .failure()
+        .stderr(contains("2 new assets"));
+}
+
+#[test]
+fn brace_glob_sync_does_not_wipe_lockfile() {
+    let project = Project::new();
+    project.write_config(toml! {
+        [creator]
+        type = "user"
+        id = 12345
+
+        [inputs.assets]
+        path = "assets/{images,sounds}/**"
+        output_path = "output"
+        bleed = false
+    });
+
+    let image = project.add_file_at("assets/images/test1.png", "test1.png");
+    let sound = project.add_file_at("assets/sounds/test2.jpg", "test2.jpg");
+
+    let expected = {
+        let mut table = toml::Table::new();
+        table.insert("version".into(), 2.into());
+
+        table.insert("inputs".into(), {
+            let mut inputs = toml::Table::new();
+            inputs.insert("assets".into(), {
+                let mut assets = toml::Table::new();
+                assets.insert(hash(&image), {
+                    let mut entry = toml::Table::new();
+                    entry.insert("asset_id".into(), toml::Value::Integer(1));
+                    entry.into()
+                });
+                assets.insert(hash(&sound), {
+                    let mut entry = toml::Table::new();
+                    entry.insert("asset_id".into(), toml::Value::Integer(2));
+                    entry.into()
+                });
+                assets.into()
+            });
+            inputs.into()
+        });
+
+        table
+    };
+
+    project.write_lockfile(expected.clone());
+
+    project.run().args(["sync"]).assert().success();
+
+    project
+        .dir
+        .child("asphalt.lock.toml")
+        .assert(toml_eq(expected.into()));
+}

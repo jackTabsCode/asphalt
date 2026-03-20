@@ -38,6 +38,13 @@ impl Project {
         file
     }
 
+    pub fn add_file_at(&self, path: &str, fixture_name: &str) -> ChildPath {
+        let file = self.dir.child(path);
+        file.write_binary(&self.read_test_asset(fixture_name))
+            .unwrap();
+        file
+    }
+
     pub fn run(&self) -> assert_cmd::Command {
         let mut cmd = cargo_bin_cmd!();
         cmd.env("ASPHALT_TEST", "true");

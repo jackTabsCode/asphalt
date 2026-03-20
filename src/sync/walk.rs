@@ -64,6 +64,9 @@ pub async fn walk(params: Params, config: &Config, tx: &UnboundedSender<super::E
                 if path == input_prefix {
                     return true;
                 }
+                if entry.file_type().is_dir() {
+                    return true;
+                }
                 if let Ok(rel_path) = path.strip_prefix(&config.project_dir) {
                     input.include.is_match(rel_path)
                 } else {
