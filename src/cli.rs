@@ -42,7 +42,11 @@ pub enum SyncTarget {
         dry_run: bool,
     },
     /// Write assets to the Roblox Studio content folder.
-    Studio,
+    Studio {
+        /// Watch for file changes and re-sync.
+        #[arg(long)]
+        watch: bool,
+    },
     /// Write assets to the .asphalt-debug folder.
     Debug,
 }
@@ -50,6 +54,10 @@ pub enum SyncTarget {
 impl SyncTarget {
     pub fn write_on_sync(&self) -> bool {
         matches!(self, SyncTarget::Cloud { dry_run: false })
+    }
+
+    pub fn is_watch(&self) -> bool {
+        matches!(self, SyncTarget::Studio { watch: true })
     }
 }
 

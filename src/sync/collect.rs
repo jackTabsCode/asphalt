@@ -160,7 +160,7 @@ impl Progress {
             let target_msg = match self.target {
                 SyncTarget::Cloud { dry_run: true } => "checked",
                 SyncTarget::Cloud { dry_run: false } => "uploaded",
-                SyncTarget::Studio | SyncTarget::Debug => "written",
+                SyncTarget::Studio { .. } | SyncTarget::Debug => "written",
             };
             parts.push(format!("{} {}", self.new, target_msg));
         }

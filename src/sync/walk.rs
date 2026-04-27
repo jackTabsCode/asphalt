@@ -29,7 +29,7 @@ pub struct Params {
     pub target: SyncTarget,
     pub existing_lockfile: Lockfile,
     pub font_db: Arc<fontdb::Database>,
-    pub backend: Option<TargetBackend>,
+    pub backend: Arc<Option<TargetBackend>>,
 }
 
 struct InputState {
@@ -155,7 +155,10 @@ async fn process_entry(
         }
     }
 
-    let always_target = matches!(state.params.target, SyncTarget::Studio | SyncTarget::Debug);
+    let always_target = matches!(
+        state.params.target,
+        SyncTarget::Studio { .. } | SyncTarget::Debug
+    );
     let is_new = always_target || lockfile_entry.is_none();
 
     if is_new {
@@ -171,7 +174,7 @@ async fn process_entry(
         .context("Failed to process asset")?;
     }
 
-    let asset_ref = match state.params.backend {
+    let asset_ref = match *state.params.backend {
         Some(ref backend) => backend.sync(&asset, lockfile_entry).await?,
         None => lockfile_entry.map(Into::into),
     };

@@ -1,7 +1,11 @@
 use assert_fs::{fixture::ChildPath, prelude::*};
 use common::Project;
-use predicates::{Predicate, prelude::predicate, str::contains};
-use std::{fs, path::Path};
+use predicates::{
+    Predicate,
+    prelude::{PredicateBooleanExt, predicate},
+    str::contains,
+};
+use std::{fs, path::Path, time::Duration};
 use toml::toml;
 
 mod common;
@@ -330,4 +334,77 @@ fn brace_glob_sync_does_not_wipe_lockfile() {
         .dir
         .child("asphalt.lock.toml")
         .assert(toml_eq(expected.into()));
+}
+
+#[test]
+fn studio_sync_emits_single_rbxasset_prefix() {
+    // Regression test: AssetRef::Display already prepends "rbxasset://" for
+    // Studio refs. The studio backend used to embed the prefix inside the
+    // inner string, producing doubled URLs like "rbxasset://rbxasset://...".
+    let project = Project::new();
+    project.write_config(toml! {
+        [creator]
+        type = "user"
+        id = 1234
+
+        [inputs.assets]
+        path = "input/**/*"
+        output_path = "output"
+        bleed = false
+    });
+    project.add_file("test1.png");
+
+    project.run().args(["sync", "studio"]).assert().success();
+
+    let output_file = project.dir.child("output/assets.luau");
+    output_file
+        .assert(contains("rbxasset://.asphalt-test/"))
+        .assert(predicate::str::contains("rbxasset://rbxasset://").not())
+        .assert(predicate::str::contains("rbxasset://rbxassetid://").not());
+}
+
+#[test]
+fn studio_watch_detects_new_file() {
+    let project = Project::new();
+    project.write_config(toml! {
+        [creator]
+        type = "user"
+        id = 1234
+
+        [inputs.assets]
+        path = "input/**/*"
+        output_path = "output"
+        bleed = false
+    });
+    project.add_file("test1.png");
+
+    // Spawn watch process (runs forever until killed)
+    let bin = assert_cmd::cargo::cargo_bin!("asphalt");
+    let mut child = std::process::Command::new(bin)
+        .env("ASPHALT_TEST", "true")
+        .env("ASPHALT_API_KEY", "test")
+        .current_dir(project.dir.path())
+        .args(["sync", "studio", "--watch"])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .unwrap();
+
+    // Wait for initial sync to complete
+    std::thread::sleep(Duration::from_secs(2));
+
+    // Verify initial codegen output contains test1
+    let output_file = project.dir.child("output/assets.luau");
+    output_file.assert(contains("test1"));
+
+    // Add a second file while watching
+    project.add_file("test2.jpg");
+
+    // Wait for watch loop to pick it up (polls every 500ms)
+    std::thread::sleep(Duration::from_secs(2));
+
+    // Verify codegen was updated with the new file
+    output_file.assert(contains("test2"));
+
+    child.kill().unwrap();
 }
