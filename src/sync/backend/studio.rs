@@ -58,10 +58,7 @@ impl Backend for Studio {
     ) -> anyhow::Result<Option<AssetRef>> {
         if matches!(asset.ty, AssetType::Model(_) | AssetType::Animation) {
             return match lockfile_entry {
-                Some(entry) => Ok(Some(AssetRef::Studio(format!(
-                    "rbxassetid://{}",
-                    entry.asset_id
-                )))),
+                Some(entry) => Ok(Some(AssetRef::Cloud(entry.asset_id))),
                 None => {
                     warn!(
                         "Models and Animations cannot be synced to Studio without having been uploaded first"
@@ -82,7 +79,7 @@ impl Backend for Studio {
         fs::write(&target_path, &asset.data).await?;
 
         Ok(Some(AssetRef::Studio(format!(
-            "rbxasset://{}/{}",
+            "{}/{}",
             self.identifier, rel_target_path
         ))))
     }
