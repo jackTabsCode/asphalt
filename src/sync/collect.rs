@@ -1,4 +1,5 @@
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
+use relative_path::RelativePathBuf;
 use std::{
     collections::{HashMap, HashSet},
     path::PathBuf,
@@ -9,6 +10,7 @@ use crate::{
     asset::AssetRef,
     cli::SyncTarget,
     config::InputMap,
+    hash::Hash,
     lockfile::{Lockfile, LockfileEntry},
     sync::codegen::NodeSource,
 };
@@ -28,6 +30,8 @@ pub async fn collect_events(
     base_dir: &std::path::Path,
 ) -> anyhow::Result<CollectResults> {
     let mut new_lockfile = Lockfile::default();
+    let mut hash_refs = HashMap::<(String, Hash), AssetRef>::new();
+    let mut pending_duplicates = HashMap::<(String, Hash), Vec<RelativePathBuf>>::new();
 
     let mut input_sources: HashMap<String, NodeSource> = HashMap::new();
     for (input_name, input) in inputs {
@@ -65,29 +69,54 @@ pub async fn collect_events(
             } => {
                 seen_paths.insert(path.clone());
 
-                if let Some(asset_ref) = asset_ref {
-                    input_sources
-                        .entry(input_name.clone())
-                        .or_default()
-                        .insert(rel_path.clone(), asset_ref.clone());
-
-                    if let AssetRef::Cloud(id) = asset_ref {
-                        new_lockfile.insert(&input_name, &hash, LockfileEntry { asset_id: id });
-                    }
-                }
-
                 match state {
+                    super::EventState::Duplicate => {
+                        let key = (input_name.clone(), hash);
+
+                        if let Some(asset_ref) = hash_refs.get(&key) {
+                            input_sources
+                                .entry(input_name.clone())
+                                .or_default()
+                                .insert(rel_path.clone(), asset_ref.clone());
+                        } else {
+                            pending_duplicates
+                                .entry(key)
+                                .or_default()
+                                .push(rel_path.clone());
+                        }
+
+                        progress.dupes += 1;
+                    }
                     super::EventState::Synced { new } => {
+                        if let Some(asset_ref) = asset_ref {
+                            let key = (input_name.clone(), hash);
+                            hash_refs.insert(key.clone(), asset_ref.clone());
+
+                            let source = input_sources.entry(input_name.clone()).or_default();
+                            source.insert(rel_path.clone(), asset_ref.clone());
+
+                            if let Some(rel_paths) = pending_duplicates.remove(&key) {
+                                for rel_path in rel_paths {
+                                    source.insert(rel_path, asset_ref.clone());
+                                }
+                            }
+
+                            if let AssetRef::Cloud(id) = asset_ref {
+                                new_lockfile.insert(
+                                    &input_name,
+                                    &hash,
+                                    LockfileEntry { asset_id: id },
+                                );
+                            }
+                        }
                         progress.synced += 1;
+
                         if new {
                             progress.new += 1;
                             if target.write_on_sync() {
                                 new_lockfile.write_to(base_dir).await?;
                             }
                         }
-                    }
-                    super::EventState::Duplicate => {
-                        progress.dupes += 1;
                     }
                 }
 

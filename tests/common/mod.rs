@@ -32,9 +32,10 @@ impl Project {
         fs::read(&path).unwrap()
     }
 
-    pub fn add_file(&self, file_name: &str) -> ChildPath {
-        let file = self.dir.child("input").child(file_name);
-        file.write_binary(&self.read_test_asset(file_name)).unwrap();
+    pub fn add_file(&self, fixture_name: &str) -> ChildPath {
+        let file = self.dir.child("input").child(fixture_name);
+        file.write_binary(&self.read_test_asset(fixture_name))
+            .unwrap();
         file
     }
 

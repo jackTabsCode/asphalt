@@ -128,6 +128,46 @@ fn cloud_output_and_lockfile() {
 }
 
 #[test]
+fn cloud_first_run_codegen_includes_dupes() {
+    let project = Project::new();
+    project.write_config(toml! {
+        [creator]
+        type = "user"
+        id = 12345
+
+        [inputs.assets]
+        path = "input/**/*"
+        output_path = "output"
+    });
+
+    let unique = project.add_file_at("input/unique.png", "test1.png");
+    let duped = project.add_file_at("input/dupe1.jpg", "test2.jpg");
+    project.add_file_at("input/dupe2.jpg", "test2.jpg");
+
+    project
+        .run()
+        .args(["sync", "--api-key", "test"])
+        .assert()
+        .success();
+
+    project
+        .dir
+        .child("output/assets.luau")
+        .assert(contains(format!(
+            "[\"unique.png\"] = \"rbxassetid://{}\"",
+            hash_as_asset_id(&unique)
+        )))
+        .assert(contains(format!(
+            "[\"dupe1.jpg\"] = \"rbxassetid://{}\"",
+            hash_as_asset_id(&duped)
+        )))
+        .assert(contains(format!(
+            "[\"dupe2.jpg\"] = \"rbxassetid://{}\"",
+            hash_as_asset_id(&duped)
+        )));
+}
+
+#[test]
 fn dry_run_none() {
     let project = Project::new();
     project.write_config(toml! {
