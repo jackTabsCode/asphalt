@@ -3,6 +3,7 @@ use crate::{
     cli::{SyncArgs, SyncTarget},
     config::Config,
     hash::Hash,
+    input_name::InputName,
     lockfile::{LockfileEntry, RawLockfile},
     sync::{backend::Backend, collect::collect_events},
 };
@@ -46,7 +47,7 @@ enum Event {
     InFlight(PathBuf),
     Finished {
         state: EventState,
-        input_name: String,
+        input_name: InputName,
         path: PathBuf,
         rel_path: RelativePathBuf,
         hash: Hash,

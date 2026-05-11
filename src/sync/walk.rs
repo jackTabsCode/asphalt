@@ -3,6 +3,7 @@ use crate::{
     cli::SyncTarget,
     config::Config,
     hash::Hash,
+    input_name::InputName,
     lockfile::Lockfile,
     sync::TargetBackend,
 };
@@ -34,7 +35,7 @@ pub struct Params {
 
 struct InputState {
     params: Arc<Params>,
-    input_name: String,
+    input_name: InputName,
     input_prefix: PathBuf,
     seen_hashes: Arc<Mutex<HashMap<Hash, PathBuf>>>,
     bleed: bool,

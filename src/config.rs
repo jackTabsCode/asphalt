@@ -1,4 +1,4 @@
-use crate::glob::Glob;
+use crate::{glob::Glob, input_name::InputName};
 use anyhow::Context;
 use clap::ValueEnum;
 use fs_err::tokio as fs;
@@ -15,13 +15,13 @@ pub struct Config {
     pub codegen: Codegen,
 
     /// A map of input names to input configurations
-    pub inputs: HashMap<String, Input>,
+    pub inputs: InputMap,
 
     #[serde(skip)]
     pub project_dir: PathBuf,
 }
 
-pub type InputMap = HashMap<String, Input>;
+pub type InputMap = HashMap<InputName, Input>;
 
 pub const FILE_NAME: &str = "asphalt.toml";
 

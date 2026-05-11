@@ -1,4 +1,4 @@
-use crate::{asset::AssetRef, config};
+use crate::{asset::AssetRef, config, identifier};
 use anyhow::bail;
 use relative_path::{RelativePath, RelativePathBuf};
 use std::{collections::BTreeMap, path::Path};
@@ -141,7 +141,7 @@ fn generate_ts_node(node: &Node, indent: usize) -> String {
             let mut result = String::from("{\n");
             for (k, v) in map {
                 result.push_str(&"\t".repeat(indent + 1));
-                let k = if is_valid_identifier(k) {
+                let k = if identifier::is_valid(k) {
                     k.clone()
                 } else {
                     format!("\"{k}\"")
@@ -174,7 +174,7 @@ fn generate_luau_node(node: &Node, indent: usize) -> String {
             let mut result = String::from("{\n");
             for (k, v) in map {
                 result.push_str(&"\t".repeat(indent + 1));
-                let k = if is_valid_identifier(k) {
+                let k = if identifier::is_valid(k) {
                     k.clone()
                 } else {
                     format!("[\"{k}\"]")
@@ -192,29 +192,6 @@ fn generate_luau_node(node: &Node, indent: usize) -> String {
         Node::Content(s) => format!("Content.fromUri(\"{s}\")"),
         Node::Number(n) => format!("{n}"),
     }
-}
-
-fn is_valid_ident_char_start(value: char) -> bool {
-    value.is_ascii_alphabetic() || value == '_'
-}
-
-fn is_valid_ident_char(value: char) -> bool {
-    value.is_ascii_alphanumeric() || value == '_'
-}
-
-fn is_valid_identifier(value: &str) -> bool {
-    let mut chars = value.chars();
-
-    match chars.next() {
-        Some(first) => {
-            if !is_valid_ident_char_start(first) {
-                return false;
-            }
-        }
-        None => return false,
-    }
-
-    chars.all(is_valid_ident_char)
 }
 
 #[cfg(test)]

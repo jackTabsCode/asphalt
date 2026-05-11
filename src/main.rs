@@ -16,6 +16,8 @@ mod cli;
 mod config;
 mod glob;
 mod hash;
+mod identifier;
+mod input_name;
 mod lockfile;
 mod migrate_lockfile;
 mod sync;

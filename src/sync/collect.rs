@@ -11,13 +11,14 @@ use crate::{
     cli::SyncTarget,
     config::InputMap,
     hash::Hash,
+    input_name::InputName,
     lockfile::{Lockfile, LockfileEntry},
     sync::codegen::NodeSource,
 };
 
 pub struct CollectResults {
     pub new_lockfile: Lockfile,
-    pub input_sources: HashMap<String, NodeSource>,
+    pub input_sources: HashMap<InputName, NodeSource>,
     pub new_count: u64,
     pub any_failed: bool,
 }
@@ -30,10 +31,10 @@ pub async fn collect_events(
     base_dir: &std::path::Path,
 ) -> anyhow::Result<CollectResults> {
     let mut new_lockfile = Lockfile::default();
-    let mut hash_refs = HashMap::<(String, Hash), AssetRef>::new();
-    let mut pending_duplicates = HashMap::<(String, Hash), Vec<RelativePathBuf>>::new();
+    let mut hash_refs = HashMap::<(InputName, Hash), AssetRef>::new();
+    let mut pending_duplicates = HashMap::<(InputName, Hash), Vec<RelativePathBuf>>::new();
 
-    let mut input_sources: HashMap<String, NodeSource> = HashMap::new();
+    let mut input_sources: HashMap<InputName, NodeSource> = HashMap::new();
     for (input_name, input) in inputs {
         for (rel_path, web_asset) in &input.web {
             input_sources

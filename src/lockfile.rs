@@ -1,4 +1,4 @@
-use crate::hash::Hash;
+use crate::{hash::Hash, input_name::InputName};
 use anyhow::{Context, bail};
 use fs_err::tokio as fs;
 use serde::{Deserialize, Serialize};
@@ -12,7 +12,7 @@ pub const FILE_NAME: &str = "asphalt.lock.toml";
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Lockfile {
     version: u32,
-    inputs: BTreeMap<String, BTreeMap<Hash, LockfileEntry>>,
+    inputs: BTreeMap<InputName, BTreeMap<Hash, LockfileEntry>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -30,13 +30,13 @@ impl Default for Lockfile {
 }
 
 impl Lockfile {
-    pub fn get(&self, input_name: &str, hash: &Hash) -> Option<&LockfileEntry> {
+    pub fn get(&self, input_name: &InputName, hash: &Hash) -> Option<&LockfileEntry> {
         self.inputs.get(input_name).and_then(|m| m.get(hash))
     }
 
-    pub fn insert(&mut self, input_name: &str, hash: &Hash, entry: LockfileEntry) {
+    pub fn insert(&mut self, input_name: &InputName, hash: &Hash, entry: LockfileEntry) {
         self.inputs
-            .entry(input_name.to_string())
+            .entry(input_name.clone())
             .or_default()
             .insert(hash.to_owned(), entry);
     }
@@ -65,7 +65,7 @@ pub struct LockfileV0 {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LockfileV1 {
     version: u32,
-    inputs: BTreeMap<String, BTreeMap<PathBuf, OldLockfileEntry>>,
+    inputs: BTreeMap<InputName, BTreeMap<PathBuf, OldLockfileEntry>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -109,7 +109,7 @@ impl RawLockfile {
         }
     }
 
-    pub async fn migrate(self, input_name: Option<&str>) -> anyhow::Result<Lockfile> {
+    pub async fn migrate(self, input_name: Option<&InputName>) -> anyhow::Result<Lockfile> {
         match (self, input_name) {
             (Self::V2(_), _) => bail!("Your lockfile is already up to date"),
             (Self::V1(v1), _) => Ok(migrate_from_v1(&v1)),
@@ -139,7 +139,10 @@ fn migrate_from_v1(lockfile: &LockfileV1) -> Lockfile {
     new_lockfile
 }
 
-async fn migrate_from_v0(lockfile: &LockfileV0, input_name: &str) -> anyhow::Result<Lockfile> {
+async fn migrate_from_v0(
+    lockfile: &LockfileV0,
+    input_name: &InputName,
+) -> anyhow::Result<Lockfile> {
     let mut new_lockfile = Lockfile::default();
 
     for (path, entry) in &lockfile.entries {
