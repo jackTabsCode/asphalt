@@ -12,6 +12,14 @@ fn hash(path: &ChildPath) -> String {
     hasher.finalize().to_string()
 }
 
+fn hash_as_asset_id(path: &ChildPath) -> i64 {
+    let hash = blake3::hash(&fs::read(path).unwrap());
+    let mut bytes = [0; 8];
+    bytes.copy_from_slice(&hash.as_bytes()[..8]);
+    bytes[0] &= 0x7f;
+    u64::from_be_bytes(bytes) as i64
+}
+
 fn toml_eq(expected: toml::Value) -> impl Predicate<Path> {
     predicate::function(move |path: &Path| {
         let contents = fs::read_to_string(path).unwrap();
@@ -107,7 +115,7 @@ fn cloud_output_and_lockfile() {
                 let mut assets = toml::Table::new();
                 assets.insert(hash(&test_file), {
                     let mut entry = toml::Table::new();
-                    entry.insert("asset_id".into(), 1337.into());
+                    entry.insert("asset_id".into(), hash_as_asset_id(&test_file).into());
                     entry.into()
                 });
                 assets.into()

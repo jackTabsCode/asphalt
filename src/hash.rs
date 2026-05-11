@@ -11,6 +11,13 @@ impl Hash {
         Hash(hash)
     }
 
+    pub fn as_u64(&self) -> u64 {
+        let mut bytes = [0; 8];
+        bytes.copy_from_slice(&self.0.as_bytes()[..8]);
+        bytes[0] &= 0x7f;
+        u64::from_be_bytes(bytes)
+    }
+
     pub async fn new_from_file(path: &Path) -> Result<Self, std::io::Error> {
         let bytes = fs::read(path).await?;
         Ok(Self::new_from_bytes(&bytes))

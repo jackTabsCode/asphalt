@@ -45,7 +45,7 @@ impl WebApiClient {
 
     pub async fn upload(&self, asset: &Asset) -> anyhow::Result<u64> {
         if env::var("ASPHALT_TEST").is_ok() {
-            return Ok(1337);
+            return Ok(asset.hash.as_u64());
         }
 
         let file_name = asset.path.file_name().unwrap();
