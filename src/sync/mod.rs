@@ -147,7 +147,10 @@ pub async fn sync(args: SyncArgs, mp: MultiProgress) -> anyhow::Result<()> {
 
             let output_path = config.project_dir.join(&input.output_path);
             fs::create_dir_all(&output_path).await?;
-            fs::write(output_path.join(format!("{input_name}.{ext}")), code).await?;
+
+            let base_name = &input.output_basename.as_deref().unwrap_or(&input_name);
+
+            fs::write(output_path.join(format!("{base_name}.{ext}")), code).await?;
         }
     }
 

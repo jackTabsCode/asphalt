@@ -86,6 +86,9 @@ pub struct Input {
     /// The directory path to output the generated code
     pub output_path: PathBuf,
 
+    /// The basename of the file to output the generated code
+    pub output_basename: Option<String>,
+
     /// Enable alpha bleeding images. Keep in mind that changing this setting won't invalidate your lockfile or reupload your images
     #[serde(default = "default_true")]
     pub bleed: bool,
