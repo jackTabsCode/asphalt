@@ -1,78 +1,12 @@
 {
-	"agent": {
-		"always_allow_tool_actions": true,
-		"button": true,
-		"commit_message_model": {
-			"model": "gpt-5-mini",
-			"provider": "copilot_chat"
-		},
-		"default_model": {
-			"model": "gpt-5-mini",
-			"provider": "copilot_chat"
-		},
-		"default_profile": "ask",
-		"dock": "right",
-		"enable_feedback": true,
-		"inline_assistant_model": {
-			"model": "gpt-4.1",
-			"provider": "copilot_chat"
-		}
-	},
-	"audio": {
-		"experimental.rodio_audio": true
-	},
-	"auto_indent": true,
-	"autosave": {
-		"after_delay": {
-			"milliseconds": 1000
-		}
-	},
-	"base_keymap": "SublimeText",
-	"buffer_font_family": "Monaspace Neon Var",
-	"buffer_font_features": {
-		"calt": true,
-		"liga": true,
-		"ss01": true,
-		"ss02": true,
-		"ss03": true,
-		"ss04": true,
-		"ss05": true,
-		"ss06": true,
-		"ss07": true,
-		"ss08": true,
-		"ss09": true
-	},
-	"buffer_font_size": 16,
-	"centered_layout": {
-		"left_padding": 0.0,
-		"right_padding": 0.0
-	},
+	"always_treat_brackets_as_autoclosed": true,
+	"auto_indent": "syntax_aware",
 	"code_actions_on_format": {
 		"source.fixAll": true,
-		"source.organizeImports": true
+		"source.organizeImports": false
 	},
-	"diagnostics": {
-		"button": true,
-		"include_warnings": true,
-		"inline": {
-			"enabled": true,
-			"max_severity": null,
-			"min_column": 0,
-			"padding": 4,
-			"update_debounce_ms": 150
-		},
-		"lsp_pull_diagnostics": {
-			"debounce_ms": 50,
-			"enabled": true
-		}
-	},
+	"colorize_brackets": true,
 	"disable_ai": false,
-	"edit_predictions": {
-		"codestral": {},
-		"copilot": {},
-		"enabled_in_text_threads": false,
-		"mode": "eager"
-	},
 	"ensure_final_newline_on_save": true,
 	"file_types": {
 		"JSONC": [
@@ -85,34 +19,10 @@
 			"tsconfig*.json",
 			"*.code-snippets"
 		],
-		"Shell Script": [
-			"zsh",
-			"zshrc",
-			"zprofile",
-			"zshenv",
-			"bashrc",
-			"bash_profile"
-		],
-		"TOML": ["toml"],
-		"YAML": [
-			"*.yml",
-			"*.yaml",
-			".github/workflows/*.yml",
-			".github/workflows/*.yaml"
-		]
+		"Shell Script": ["zsh", "zshrc", "zprofile", "zshenv", "bashrc", "bash_profile"]
 	},
 	"format_on_save": "on",
-	"git": {
-		"git_gutter": "tracked_files",
-		"hunk_style": null,
-		"inline_blame": {
-			"delay_ms": 600,
-			"enabled": true,
-			"show_commit_summary": true
-		}
-	},
 	"hard_tabs": true,
-	"icon_theme": "Material Icon Theme",
 	"indent_guides": {
 		"active_line_width": 1,
 		"background_coloring": "disabled",
@@ -128,18 +38,36 @@
 		"show_parameter_hints": true,
 		"show_type_hints": true
 	},
+	"jsx_tag_auto_close": { "enabled": true },
 	"languages": {
+		"JavaScript": { "language_servers": [] },
 		"JSON": {
 			"code_actions_on_format": {
 				"source.fixAll.biome": true,
 				"source.organizeImports.biome": true
 			},
 			"format_on_save": "on",
-			"formatter": {
-				"language_server": { "name": "biome" }
-			},
+			"formatter": [
+				{
+					"language_server": { "name": "biome" }
+				},
+				{
+					"language_server": { "name": "oxfmt" }
+				}
+			],
 			"hard_tabs": true,
-			"language_servers": ["biome", "..."],
+			"language_servers": [
+				"dependi",
+				"deputy",
+				"biome",
+				"codebook",
+				"harper-ls",
+				"json-language-server",
+				"oxfmt",
+				"package-version-server",
+				"wakatime"
+			],
+			"prettier": { "allowed": false },
 			"tab_size": 4
 		},
 		"JSONC": {
@@ -148,34 +76,149 @@
 				"source.organizeImports.biome": true
 			},
 			"format_on_save": "on",
-			"formatter": {
-				"language_server": { "name": "biome" }
-			},
+			"formatter": [
+				{
+					"language_server": { "name": "biome" }
+				},
+				{
+					"language_server": { "name": "oxfmt" }
+				}
+			],
 			"hard_tabs": true,
-			"language_servers": ["biome", "..."],
+			"language_servers": [
+				"dependi",
+				"deputy",
+				"biome",
+				"codebook",
+				"harper-ls",
+				"json-language-server",
+				"oxfmt",
+				"package-version-server",
+				"wakatime"
+			],
+			"prettier": { "allowed": false },
 			"tab_size": 4
 		},
 		"Markdown": {
 			"format_on_save": "on",
-			"formatter": [{ "language_server": { "name": "rumdl" } }],
+			"formatter": {
+				"language_server": { "name": "rumdl" }
+			},
 			"hard_tabs": true,
-			"language_servers": ["!marksman", "!markdownlint", "rumdl", "..."],
+			"language_servers": ["codebook", "harper-ls", "rumdl", "wakatime"],
+			"prettier": { "allowed": false },
 			"show_whitespaces": "none",
-			"soft_wrap": "editor_width",
+			"tab_size": 4
+		},
+		"MDX": {
+			"format_on_save": "on",
+			"formatter": {
+				"language_server": { "name": "oxfmt" }
+			},
+			"language_servers": ["codebook", "harper-ls", "oxfmt", "rumdl", "wakatime"],
+			"prettier": { "allowed": false }
+		},
+		"Plain Text": {
+			"language_servers": ["codebook", "dependi", "harper-ls", "wakatime"]
+		},
+		"Rust": {
+			"language_servers": ["codebook", "harper-ls", "rust-analyzer", "wakatime"],
+			"prettier": { "allowed": false }
+		},
+		"Shell Script": {
+			"format_on_save": "on",
+			"formatter": {
+				"external": {
+					"arguments": ["-i", "4", "-bn", "-ci", "-sr"],
+					"command": "shfmt"
+				}
+			},
+			"hard_tabs": true,
+			"language_servers": ["bash-language-server", "wakatime", "harper-ls", "codebook"],
 			"tab_size": 4
 		},
 		"TOML": {
 			"format_on_save": "on",
 			"formatter": "language_server",
 			"hard_tabs": true,
+			"language_servers": ["dependi", "deputy", "tombi", "wakatime", "harper-ls", "codebook"],
 			"tab_size": 4
+		},
+		"TSX": {
+			"code_actions_on_format": {
+				"source.fixAll.biome": true,
+				"source.fixAll.oxc": true,
+				"source.organizeImports.biome": false
+			},
+			"format_on_save": "on",
+			"formatter": [
+				{
+					"language_server": { "name": "biome" }
+				},
+				{
+					"language_server": { "name": "oxfmt" }
+				}
+			],
+			"hard_tabs": true,
+			"language_servers": ["!vtsls", "biome", "oxlint", "oxfmt", "tsgo", "wakatime", "harper-ls", "codebook"],
+			"prettier": { "allowed": false },
+			"tab_size": 4
+		},
+		"TypeScript": {
+			"code_actions_on_format": {
+				"source.fixAll": true,
+				"source.fixAll.oxc": true,
+				"source.fixAllDangerous.oxc": false,
+				"source.format.oxc": true,
+				"source.organizeImports": true,
+				"source.sort.json": true
+			},
+			"format_on_save": "on",
+			"formatter": [
+				{
+					"language_server": { "name": "biome" }
+				},
+				{
+					"language_server": { "name": "oxfmt" }
+				}
+			],
+			"hard_tabs": true,
+			"language_servers": ["!vtsls", "biome", "oxlint", "oxfmt", "tsgo", "wakatime", "harper-ls", "codebook"],
+			"prettier": { "allowed": false },
+			"tab_size": 4
+		},
+		"YAML": {
+			"format_on_save": "on",
+			"formatter": {
+				"language_server": { "name": "oxfmt" }
+			},
+			"hard_tabs": false,
+			"language_servers": ["dependi", "yaml-language-server", "wakatime", "harper-ls", "codebook"],
+			"prettier": { "allowed": false },
+			"tab_size": 2
 		}
 	},
 	"lsp": {
-		"biome": {
-			"binary": {
-				"arguments": ["x", "--bun", "biome", "lsp-proxy"],
-				"path": "bun"
+		"bash-language-server": {
+			"settings": {
+				"bashIde": {
+					"globPattern": "**/*@(.sh|.inc|.bash|.command|.zsh)"
+				}
+			}
+		},
+		"oxfmt": {
+			"initialization_options": {
+				"settings": {
+					"configPath": ".oxfmtrc.json",
+					"run": "onSave"
+				}
+			}
+		},
+		"oxlint": {
+			"initialization_options": {
+				"settings": {
+					"fixKind": "safe_fix"
+				}
 			}
 		},
 		"rust-analyzer": {
@@ -183,9 +226,7 @@
 			"initialization_options": {
 				"cargo": {
 					"allTargets": true,
-					"buildScripts": {
-						"enable": true
-					},
+					"buildScripts": { "enable": true },
 					"features": "all",
 					"targetDir": true
 				},
@@ -197,36 +238,18 @@
 				},
 				"checkOnSave": true,
 				"diagnostics": {
-					"experimental": {
-						"enable": true
-					},
-					"styleLints": {
-						"enable": true
-					}
+					"experimental": { "enable": true },
+					"styleLints": { "enable": true }
 				},
 				"inlayHints": {
-					"bindingModeHints": {
-						"enable": true
-					},
-					"chainingHints": {
-						"enable": true
-					},
-					"closureCaptureHints": {
-						"enable": true
-					},
-					"closureReturnTypeHints": {
-						"enable": "always"
-					},
+					"bindingModeHints": { "enable": true },
+					"chainingHints": { "enable": true },
+					"closureCaptureHints": { "enable": true },
+					"closureReturnTypeHints": { "enable": "always" },
 					"genericParameterHints": {
-						"const": {
-							"enable": true
-						},
-						"lifetime": {
-							"enable": true
-						},
-						"type": {
-							"enable": true
-						}
+						"const": { "enable": true },
+						"lifetime": { "enable": true },
+						"type": { "enable": true }
 					},
 					"lifetimeElisionHints": {
 						"enable": "skip_trivial",
@@ -235,85 +258,44 @@
 					"maxLength": null,
 					"parameterHints": {
 						"enable": true,
-						"missingArguments": {
-							"enable": true
-						}
+						"missingArguments": { "enable": true }
 					},
-					"typeHints": {
-						"enable": true
-					}
+					"typeHints": { "enable": true }
 				},
-				"procMacro": {
-					"enable": true
+				"procMacro": { "enable": true }
+			}
+		},
+		"yaml-language-server": {
+			"settings": {
+				"yaml": {
+					"format": { "singleQuote": true },
+					"keyOrdering": false,
+					"schemas": {
+						"https://json.schemastore.org/github-workflow.json": ".github/workflows/*",
+						"https://raw.githubusercontent.com/evilmartians/lefthook/master/schema.json": [
+							"lefthook.yml",
+							".lefthook.yml",
+							"lefthook.yaml",
+							".lefthook.yaml"
+						],
+						"https://www.schemastore.org/dependabot-2.0.json": ".github/dependabot.*"
+					}
 				}
 			}
 		}
 	},
-	"project_panel": {
-		"button": true,
-		"default_width": 240,
-		"dock": "left",
-		"file_icons": true,
-		"folder_icons": true,
-		"git_status": true,
-		"indent_size": 20
-	},
-	"redact_private_values": false,
+	"prettier": { "allowed": false },
 	"remove_trailing_whitespace_on_save": true,
-	"scrollbar": {
-		"cursors": true,
-		"diagnostics": "all",
-		"git_diff": true,
-		"search_results": true,
-		"selected_symbol": true,
-		"show": "auto"
-	},
+	"show_completion_documentation": true,
 	"show_completions_on_input": true,
 	"show_edit_predictions": true,
+	"soft_wrap": "prefer_line",
 	"tab_size": 4,
-	"tabs": {
-		"close_position": "right",
-		"file_icons": true,
-		"git_status": true
-	},
 	"terminal": {
-		"button": true,
-		"default_height": 320,
-		"default_width": 640,
-		"dock": "bottom",
-		"font_family": "Monaspace Neon",
-		"font_features": {
-			"calt": true,
-			"liga": true,
-			"ss01": true,
-			"ss02": true,
-			"ss03": true,
-			"ss04": true,
-			"ss05": true,
-			"ss06": true,
-			"ss07": true,
-			"ss08": true,
-			"ss09": true
-		},
-		"max_scroll_history_lines": 100000,
-		"toolbar": {
-			"breadcrumbs": true
-		},
+		"shell": "system",
 		"working_directory": "current_project_directory"
 	},
-	"theme": {
-		"dark": "Zedokai (Filter Spectrum)",
-		"light": "One Light",
-		"mode": "system"
-	},
-	"toolbar": {
-		"breadcrumbs": true,
-		"quick_actions": true
-	},
-	"ui_font_features": {
-		"calt": true
-	},
-	"ui_font_size": 16,
-	"use_on_type_format": true,
-	"vim_mode": false
+	"use_auto_surround": true,
+	"use_autoclose": true,
+	"use_on_type_format": true
 }

@@ -1,0 +1,145 @@
+{
+	"arrowParens": "always",
+	"bracketSameLine": true,
+	"bracketSpacing": true,
+	"embeddedLanguageFormatting": "auto",
+	"endOfLine": "lf",
+	"htmlWhitespaceSensitivity": "css",
+	"ignorePatterns": [
+		"**/*.{md,toml}",
+		"**/do-not-sync-ever/**",
+		".github/workflows/release.yml",
+		"**/aube-lock.yaml",
+		"skills-lock.json",
+		".vscode/*.json",
+		"tests/fixtures/**"
+	],
+	"insertFinalNewline": true,
+	"jsdoc": {
+		"addDefaultToDescription": true,
+		"bracketSpacing": false,
+		"capitalizeDescriptions": true,
+		"commentLineStrategy": "singleLine",
+		"descriptionTag": false,
+		"descriptionWithDot": true,
+		"keepUnparsableExampleIndent": false,
+		"lineWrappingStyle": "greedy",
+		"preferCodeFences": true,
+		"separateReturnsFromParam": false,
+		"separateTagGroups": false
+	},
+	"jsxSingleQuote": false,
+	"objectWrap": "preserve",
+	"overrides": [
+		{
+			"files": ["**/*.{yaml,yml}"],
+			"options": {
+				"tabWidth": 2,
+				"useTabs": false
+			}
+		},
+		{
+			"files": ["**/*.jsonc"],
+			"options": {
+				"trailingComma": "all"
+			}
+		},
+		{
+			"files": [".oxfmtrc.json", "biome.jsonc"],
+			"options": {
+				"trailingComma": "none"
+			}
+		}
+	],
+	"printWidth": 120,
+	"proseWrap": "preserve",
+	"quoteProps": "as-needed",
+	"semi": true,
+	"singleAttributePerLine": false,
+	"singleQuote": false,
+	"sortImports": {
+		"customGroups": [
+			{
+				"elementNamePattern": [
+					"react",
+					"react-dom",
+					"react-**",
+					"next",
+					"next/**",
+					"vue",
+					"vue-**",
+					"@vue/**",
+					"svelte",
+					"svelte/**",
+					"@sveltejs/**",
+					"solid-js",
+					"@solidjs/**"
+				],
+				"groupName": "framework",
+				"modifiers": ["value"],
+				"selector": "external"
+			},
+			{
+				"elementNamePattern": [
+					"vitest",
+					"@vitest/**",
+					"jest",
+					"@jest/**",
+					"@testing-library/**",
+					"msw",
+					"msw/**",
+					"playwright",
+					"@playwright/**",
+					"cypress",
+					"@cypress/**"
+				],
+				"groupName": "testing",
+				"modifiers": ["value"],
+				"selector": "external"
+			}
+		],
+		"groups": [
+			"side_effect",
+			"side_effect_style",
+			{ "newlinesBetween": true },
+
+			"value-builtin",
+			"framework",
+			"testing",
+			"value-external",
+			{ "newlinesBetween": true },
+
+			["value-internal", "value-subpath"],
+			{ "newlinesBetween": true },
+
+			["value-parent", "value-sibling", "value-index"],
+			{ "newlinesBetween": true },
+
+			"style",
+			{ "newlinesBetween": true },
+
+			["type-builtin", "type-external"],
+			{ "newlinesBetween": true },
+
+			["type-internal", "type-subpath"],
+			{ "newlinesBetween": true },
+
+			["type-parent", "type-sibling", "type-index"],
+			"type-import",
+			{ "newlinesBetween": true },
+
+			"unknown"
+		],
+		"ignoreCase": true,
+		"internalPattern": ["@/", "~/"],
+		"newlinesBetween": false,
+		"order": "asc",
+		"partitionByComment": false,
+		"partitionByNewline": false,
+		"sortSideEffects": false
+	},
+	"sortPackageJson": true,
+	"tabWidth": 4,
+	"trailingComma": "all",
+	"useTabs": true
+}

@@ -1,0 +1,19 @@
+min_version = "2024.11.0"
+
+[tools]
+aube = "latest"
+node = "26"
+rumdl = "latest"
+rust = "latest"
+tombi = "latest"
+
+[env]
+PROJECT_NAME = "{{ config_root | basename }}"
+_.file = { path = ".env" }
+_.path = ["{{config_root}}/node_modules/.bin", "{{cwd}}/node_modules/.bin"]
+
+[settings]
+auto_install = false
+lockfile = true
+
+[tasks]

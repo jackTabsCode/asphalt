@@ -10,3 +10,4 @@ asphalt.toml
 .schemas/
 test-images/
 test-output/
+node_modules/

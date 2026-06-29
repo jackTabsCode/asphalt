@@ -1,0 +1,12 @@
+{
+	"private": true,
+	"scripts": {
+		"biome": "biome",
+		"oxfmt": "oxfmt"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "2.5.1",
+		"oxfmt": "0.56.0"
+	},
+	"packageManager": "aube@1.25.1"
+}

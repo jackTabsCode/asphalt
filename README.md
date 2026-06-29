@@ -7,11 +7,11 @@ The documentation below is associated with the current commit on main. To view d
 
 ## Features
 
--   Syncs your images, sounds, videos, animations, and models to Roblox! See the [supported asset types](#supported-asset-types)
--   Generates Luau or TypeScript code so you can use them in your game
--   Can target Roblox users or groups
--   Processes SVGs into PNGs and alpha bleeds images for crisp edges
--   Allows defining assets you already uploaded
+- Syncs your images, sounds, videos, animations, and models to Roblox! See the [supported asset types](#supported-asset-types)
+- Generates Luau or TypeScript code so you can use them in your game
+- Can target Roblox users or groups
+- Processes SVGs into PNGs and alpha bleeds images for crisp edges
+- Allows defining assets you already uploaded
 
 ## Installation
 
@@ -61,11 +61,11 @@ Syncs all of your assets defined in your inputs.
 
 There are three targets you can use to sync assets:
 
--   `cloud`: Uploads your assets to Roblox. This will generate a `asphalt.lock.toml` file which you should commit to source control. This is the default target.
+- `cloud`: Uploads your assets to Roblox. This will generate a `asphalt.lock.toml` file which you should commit to source control. This is the default target.
 
--   `studio`: Syncs assets locally to Roblox Studio. This is useful for testing assets in Studio before uploading them to Roblox.
+- `studio`: Syncs assets locally to Roblox Studio. This is useful for testing assets in Studio before uploading them to Roblox.
 
--   `debug`: Syncs assets to an `.asphalt-debug` folder in the current directory. You can use this option see how Asphalt will process your files.
+- `debug`: Syncs assets to an `.asphalt-debug` folder in the current directory. You can use this option see how Asphalt will process your files.
 
 ```bash
 asphalt sync # Equivalent to --target cloud
@@ -118,12 +118,12 @@ output_path = "src/shared"
 
 ### Format
 
--   `creator`: [Creator](#creator)
-	-   The Roblox creator to upload the assets under.
--   `codegen`: [Codegen](#codegen) (optional)
-	-   Code generation options.
+- `creator`: [Creator](#creator)
+	- The Roblox creator to upload the assets under.
+- `codegen`: [Codegen](#codegen) (optional)
+	- Code generation options.
 -	`inputs`: map<string, [Input](#input)>
-	-   A map of input names to input configurations.
+	- A map of input names to input configurations.
 
 #### Creator
 
@@ -132,28 +132,29 @@ output_path = "src/shared"
 
 #### Codegen
 
--   `typescript`: boolean (optional)
-    -   Generate a TypeScript definition file.
--   `style`: "flat" | "nested" (optional)
-    -   The code generation style to use. Defaults to `flat`, which lets you index assets as if they were paths. You may consider using `nested` if you are not a TypeScript user as Luau does not support template literal types.
--   `strip_extensions`: boolean (optional)
-    -   Whether to strip the file extension. Defaults to `false` for the same reason described above.
--   `content`: boolean (optional)
-    -   Whether to output `Content` instead of `string`s. Defaults to `false`.
+- `typescript`: boolean (optional)
+    - Generate a TypeScript definition file.
+- `style`: "flat" | "nested" (optional)
+    - The code generation style to use. Defaults to `flat`, which lets you index assets as if they were paths. You may consider using `nested` if you are not a TypeScript user as Luau does not support template literal types.
+- `strip_extensions`: boolean (optional)
+    - Whether to strip the file extension. Defaults to `false` for the same reason described above.
+- `content`: boolean (optional)
+    - Whether to output `Content` instead of `string`s. Defaults to `false`.
 
 #### Input
+
 -	`path`: glob
 	-	A glob pattern to match files to upload.
 -	`output_path`: string
 	-	The directory path to output the generated code.
 -	`web`: map<string, [WebAsset](#webasset)>
 	-	A map of paths relative to the input path to existing assets on Roblox.
-- 	`bleed`: boolean (optional)
-	- 	Whether to alpha bleed images. Defaults to `true`. Keep in mind that changing this setting won't invalidate your lockfile or reupload your images.
+- `bleed`: boolean (optional)
+	- Whether to alpha bleed images. Defaults to `true`. Keep in mind that changing this setting won't invalidate your lockfile or reupload your images.
 
 #### WebAsset
 
--   `id`: number
+- `id`: number
 
 ## Authentication
 
@@ -162,6 +163,7 @@ You can specify your API key this using the `--api-key` argument, or the `ASPHAL
 You can get one from the [Creator Dashboard](https://create.roblox.com/dashboard/credentials).
 
 The following permissions are required:
+
 - `asset:read`
 - `asset:write`
 
