@@ -3,6 +3,8 @@
 Asphalt is a command line tool used to upload assets to Roblox and easily reference them in code.
 It's a modern alternative to [Tarmac](https://github.com/Roblox/Tarmac).
 
+The documentation below is associated with the current commit on main. To view documentation for a specific release, go to the Tags page and view the README for that tag.
+
 ## Features
 
 -   Syncs your images, sounds, videos, animations, and models to Roblox! See the [supported asset types](#supported-asset-types)
@@ -10,9 +12,6 @@ It's a modern alternative to [Tarmac](https://github.com/Roblox/Tarmac).
 -   Can target Roblox users or groups
 -   Processes SVGs into PNGs and alpha bleeds images for crisp edges
 -   Allows defining assets you already uploaded
-
-## Features Coming Soon
--  Capability to pack your images into spritesheets for lower client memory usage
 
 ## Installation
 
@@ -151,8 +150,6 @@ output_path = "src/shared"
 	-	A map of paths relative to the input path to existing assets on Roblox.
 - 	`bleed`: boolean (optional)
 	- 	Whether to alpha bleed images. Defaults to `true`. Keep in mind that changing this setting won't invalidate your lockfile or reupload your images.
-- 	`warn_each_duplicate`: boolean (optional)
-	- 	Whether to emit a warning each time a duplicate file is found. Defaults to `true`.
 
 #### WebAsset
 
@@ -173,7 +170,7 @@ Make sure that you select an appropriate IP and that your API key is under the C
 ## Supported Asset Types
 
 - Images (.png, .jpg, .bmp, .tga, .svg)
-	- SVGs are supported by Asphalt by converting them to PNGs.
+	- SVGs are supported by Asphalt by converting them to PNGs. If an SVG uses the `currentColor` fill, it will be converted to white so that it can be colored on Roblox.
 - Audio (.mp3, .ogg, .wav, .flac)
 - Videos (.mp4, .mov)
 	- When uploading videos, you must provide the `--expected-price` argument, which is the price you expect to be charged for the video. See the [Roblox documentation on Videos](https://create.roblox.com/docs/en-us/ui/video-frames#upload-videos) for more details.

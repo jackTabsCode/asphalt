@@ -1,26 +1,28 @@
-use super::{BackendSyncResult, SyncBackend};
+use super::{AssetRef, Backend};
 use crate::{
     asset::{Asset, AssetType},
-    sync::SyncState,
+    lockfile::LockfileEntry,
+    sync::backend::Params,
 };
-use anyhow::{Context, bail};
+use anyhow::Context;
 use fs_err::tokio as fs;
-use log::{debug, info, warn};
+use log::{info, warn};
 use relative_path::RelativePathBuf;
 use roblox_install::RobloxStudio;
-use std::{env, path::PathBuf, sync::Arc};
+use std::{env, path::PathBuf};
 
-pub struct StudioBackend {
+pub struct Studio {
     identifier: String,
     sync_path: PathBuf,
 }
 
-impl SyncBackend for StudioBackend {
-    async fn new() -> anyhow::Result<Self>
+impl Backend for Studio {
+    async fn new(_: Params) -> anyhow::Result<Self>
     where
         Self: Sized,
     {
-        let content_path = get_content_path()?;
+        let studio = RobloxStudio::locate()?;
+        let content_path = studio.content_path();
 
         let cwd = env::current_dir()?;
         let cwd_name = cwd
@@ -56,16 +58,12 @@ impl SyncBackend for StudioBackend {
 
     async fn sync(
         &self,
-        state: Arc<SyncState>,
-        input_name: String,
         asset: &Asset,
-    ) -> anyhow::Result<Option<BackendSyncResult>> {
+        lockfile_entry: Option<&LockfileEntry>,
+    ) -> anyhow::Result<Option<AssetRef>> {
         if matches!(asset.ty, AssetType::Model(_) | AssetType::Animation) {
-            return match state.existing_lockfile.get(&input_name, &asset.hash) {
-                Some(entry) => Ok(Some(BackendSyncResult::Studio(format!(
-                    "rbxassetid://{}",
-                    entry.asset_id
-                )))),
+            return match lockfile_entry {
+                Some(entry) => Ok(Some(AssetRef::Cloud(entry.asset_id))),
                 None => {
                     warn!(
                         "Models and Animations cannot be synced to Studio without having been uploaded first"
@@ -75,7 +73,8 @@ impl SyncBackend for StudioBackend {
             };
         }
 
-        let rel_target_path = RelativePathBuf::from(&asset.hash).with_extension(&asset.ext);
+        let rel_target_path =
+            RelativePathBuf::from(&asset.hash.to_string()).with_extension(&asset.ext);
         let target_path = rel_target_path.to_logical_path(&self.sync_path);
 
         if let Some(parent) = target_path.parent() {
@@ -88,29 +87,9 @@ impl SyncBackend for StudioBackend {
             .await
             .with_context(|| format!("Failed to write asset to: {}", target_path.display()))?;
 
-        Ok(Some(BackendSyncResult::Studio(format!(
-            "rbxasset://{}/{}",
+        Ok(Some(AssetRef::Studio(format!(
+            "{}/{}",
             self.identifier, rel_target_path
         ))))
     }
-}
-
-fn get_content_path() -> anyhow::Result<PathBuf> {
-    if let Ok(var) = env::var("ROBLOX_CONTENT_PATH") {
-        let path = PathBuf::from(var);
-
-        if path.exists() {
-            debug!("Using environment variable content path: {path:?}");
-            return Ok(path);
-        } else {
-            bail!("Content path `{}` does not exist", path.display());
-        }
-    }
-
-    let studio = RobloxStudio::locate()?;
-    let path = studio.content_path();
-
-    debug!("Using auto-detected content path: {path:?}");
-
-    Ok(path.to_owned())
 }

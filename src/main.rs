@@ -12,14 +12,13 @@ use sync::sync;
 use upload::upload;
 
 mod asset;
-mod auth;
 mod cli;
 mod config;
 mod glob;
+mod hash;
 mod lockfile;
 mod migrate_lockfile;
 mod pack;
-mod progress_bar;
 mod sync;
 mod upload;
 mod util;
@@ -50,23 +49,19 @@ async fn main() -> miette::Result<()> {
     log::set_max_level(level);
 
     match args.command {
-        Commands::Sync(args) => sync(multi_progress, args)
-            .await
-            .map_err(|e| miette::miette!(e)),
-        Commands::Upload(args) => upload(args).await.map_err(|e| miette::miette!(e)),
-        Commands::MigrateLockfile(args) => {
-            migrate_lockfile(args).await.map_err(|e| miette::miette!(e))
-        }
-        Commands::GenerateSchema(args) => {
-            generate_schema(args).await.map_err(|e| miette::miette!(e))
-        }
+        Commands::Sync(args) => sync(args, multi_progress).await,
+        Commands::Upload(args) => upload(args).await,
+        Commands::MigrateLockfile(args) => migrate_lockfile(args).await,
+        Commands::GenerateSchema(args) => generate_schema(args).await,
         Commands::Completions(args) => {
             generate_completions(args);
             Ok(())
         }
-        Commands::Check => check_config().await.map_err(|e| miette::miette!(e)),
-        Commands::List => list_assets().await.map_err(|e| miette::miette!(e)),
+        Commands::Check(args) => check_config(args).await,
+        Commands::List(args) => list_assets(args).await,
+        Commands::GenerateConfigSchema => generate_config_schema().await,
     }
+    .map_err(|e| miette::miette!(e))
 }
 
 async fn generate_schema(args: cli::GenerateSchemaArgs) -> anyhow::Result<()> {
@@ -74,14 +69,12 @@ async fn generate_schema(args: cli::GenerateSchemaArgs) -> anyhow::Result<()> {
     use fs_err::tokio as fs;
     use std::path::Path;
 
-    // Generate the JSON schema for the Config struct using Draft-07 format
     let settings = SchemaSettings::draft07();
     let generator = settings.into_generator();
     let schema = generator.into_root_schema_for::<Config>();
     let schema_json =
         serde_json::to_string_pretty(&schema).context("Failed to serialize JSON schema")?;
 
-    // Create output directory if it doesn't exist
     let output_path = Path::new(&args.output);
     if let Some(parent_dir) = output_path.parent() {
         fs::create_dir_all(parent_dir)
@@ -89,7 +82,6 @@ async fn generate_schema(args: cli::GenerateSchemaArgs) -> anyhow::Result<()> {
             .with_context(|| format!("Failed to create directory: {}", parent_dir.display()))?;
     }
 
-    // Write the schema to the output file
     fs::write(output_path, schema_json)
         .await
         .with_context(|| format!("Failed to write schema to: {}", output_path.display()))?;
@@ -98,59 +90,71 @@ async fn generate_schema(args: cli::GenerateSchemaArgs) -> anyhow::Result<()> {
     Ok(())
 }
 
+async fn generate_config_schema() -> anyhow::Result<()> {
+    let settings = SchemaSettings::draft07();
+    let generator = settings.into_generator();
+    let schema = generator.into_root_schema_for::<Config>();
+    println!("{}", serde_json::to_string_pretty(&schema)?);
+    Ok(())
+}
+
 fn generate_completions(args: cli::CompletionsArgs) {
     let mut cmd = Cli::command();
     generate(args.shell, &mut cmd, "asphalt", &mut std::io::stdout());
 }
 
-async fn check_config() -> anyhow::Result<()> {
+async fn check_config(args: cli::ProjectArgs) -> anyhow::Result<()> {
     use anyhow::Context;
 
-    let config = Config::read()
+    let config = Config::read_from(args.project)
         .await
         .context("Failed to read configuration file")?;
 
-    println!("✓ Configuration is valid");
+    println!("Configuration is valid");
     println!("  Creator: {:?} #{}", config.creator.ty, config.creator.id);
     println!("  Inputs: {}", config.inputs.len());
 
     for (name, input) in &config.inputs {
-        println!("    - {}: {}", name, input.path.get_prefix().display());
+        println!("    - {}: {}", name, input.include.get_prefix().display());
     }
 
     Ok(())
 }
 
-async fn list_assets() -> anyhow::Result<()> {
+async fn list_assets(args: cli::ProjectArgs) -> anyhow::Result<()> {
     use anyhow::Context;
     use walkdir::WalkDir;
 
-    let config = Config::read()
+    let config = Config::read_from(args.project)
         .await
         .context("Failed to read configuration file")?;
 
     println!("Assets that would be synced:\n");
 
     for (input_name, input) in &config.inputs {
-        println!("Input: {}", input_name);
+        println!("Input: {input_name}");
 
         let mut count = 0;
-        for entry in WalkDir::new(input.path.get_prefix())
+        let input_prefix = config.project_dir.join(input.include.get_prefix());
+        for entry in WalkDir::new(&input_prefix)
             .follow_links(true)
             .into_iter()
-            .filter_map(|e| e.ok())
+            .filter_map(Result::ok)
         {
-            if entry.file_type().is_file() {
-                if let Some(path) = entry.path().to_str() {
-                    if input.path.is_match(path) {
-                        println!("  - {}", entry.path().display());
-                        count += 1;
-                    }
-                }
+            if !entry.file_type().is_file() {
+                continue;
+            }
+
+            let Ok(rel_path) = entry.path().strip_prefix(&config.project_dir) else {
+                continue;
+            };
+            if input.include.is_match(rel_path) {
+                println!("  - {}", entry.path().display());
+                count += 1;
             }
         }
 
-        println!("  Total: {} files\n", count);
+        println!("  Total: {count} files\n");
     }
 
     Ok(())

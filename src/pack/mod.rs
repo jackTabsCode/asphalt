@@ -1,6 +1,7 @@
 use crate::{
     asset::Asset,
     config::{PackOptions, PackSort},
+    hash::Hash,
 };
 use anyhow::{Context, Result, bail};
 use image::RgbaImage;
@@ -20,7 +21,7 @@ pub struct Sprite {
     pub data: Vec<u8>,
     pub size: Size,
     #[allow(dead_code)]
-    pub hash: String,
+    pub hash: Hash,
 }
 
 /// Result of packing sprites into atlases
@@ -133,14 +134,14 @@ impl Packer {
                     );
                     continue;
                 }
-                seen_hashes.insert(asset.hash.clone(), name.clone());
+                seen_hashes.insert(asset.hash, name.clone());
             }
 
             sprites.push(Sprite {
                 name,
                 data: asset.data.to_vec(),
                 size,
-                hash: asset.hash.clone(),
+                hash: asset.hash,
             });
         }
 
@@ -208,8 +209,6 @@ impl Packer {
         sprites: Vec<Sprite>,
         page_index: usize,
     ) -> Result<(Atlas, Vec<Sprite>)> {
-        use algorithm::MaxRectsPacker;
-
         let atlas_size = if self.options.power_of_two {
             // Find the next power of two that fits our max size
             let width = self.options.max_size.0.next_power_of_two();
@@ -222,13 +221,17 @@ impl Packer {
             }
         };
 
-        let mut packer = MaxRectsPacker::new(atlas_size);
+        let mut packer = algorithm::MaxRectsPacker::new(atlas_size);
         let mut packed_sprites = Vec::new();
         let mut unpacked_sprites = Vec::new();
 
         for mut sprite in sprites {
             // Trim sprite to remove transparent borders
-            let original_rect = self.trim_sprite(&mut sprite);
+            let original_rect = if self.options.allow_trim {
+                self.trim_sprite(&mut sprite)
+            } else {
+                None
+            };
 
             // Account for padding in placement
             let required_size = Size {

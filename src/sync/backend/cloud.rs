@@ -1,31 +1,44 @@
-use super::{BackendSyncResult, SyncBackend};
-use crate::{asset::Asset, sync::SyncState};
-use std::sync::Arc;
-use tokio::time;
+use super::Backend;
+use crate::{
+    asset::{Asset, AssetRef},
+    lockfile::LockfileEntry,
+    sync::backend::Params,
+    web_api::WebApiClient,
+};
+use anyhow::{Context, bail};
 
-pub struct CloudBackend;
+pub struct Cloud {
+    client: WebApiClient,
+}
 
-impl SyncBackend for CloudBackend {
-    async fn new() -> anyhow::Result<Self>
+impl Backend for Cloud {
+    async fn new(params: Params) -> anyhow::Result<Self>
     where
         Self: Sized,
     {
-        Ok(Self)
+        Ok(Self {
+            client: WebApiClient::new(
+                params
+                    .api_key
+                    .context("An API key is required to use the Cloud backend")?,
+                params.creator,
+                params.expected_price,
+            ),
+        })
     }
 
     async fn sync(
         &self,
-        state: Arc<SyncState>,
-        _input_name: String,
         asset: &Asset,
-    ) -> anyhow::Result<Option<BackendSyncResult>> {
-        if cfg!(feature = "mock_cloud") {
-            time::sleep(time::Duration::from_secs(1)).await;
-            return Ok(Some(BackendSyncResult::Cloud(1337)));
+        lockfile_entry: Option<&LockfileEntry>,
+    ) -> anyhow::Result<Option<AssetRef>> {
+        if let Some(lockfile_entry) = lockfile_entry {
+            return Ok(Some(lockfile_entry.into()));
         }
 
-        let asset_id = state.client.upload(asset).await?;
-
-        Ok(Some(BackendSyncResult::Cloud(asset_id)))
+        match self.client.upload(asset).await {
+            Ok(id) => Ok(Some(AssetRef::Cloud(id))),
+            Err(err) => bail!("Failed to upload asset: {err:?}"),
+        }
     }
 }

@@ -1,7 +1,8 @@
 use crate::config::{CreatorType, PackAlgorithm, PackSort};
-use clap::{Args, Parser, Subcommand, ValueEnum};
+use clap::{Args, Parser, Subcommand};
 use clap_complete::Shell;
 use clap_verbosity_flag::{InfoLevel, Verbosity};
+use std::path::PathBuf;
 
 #[derive(Parser)]
 #[command(version, about = "Upload and reference Roblox assets in code.")]
@@ -36,39 +37,53 @@ pub enum Commands {
     Completions(CompletionsArgs),
 
     /// Check configuration file for errors without syncing.
-    Check,
+    Check(ProjectArgs),
 
     /// List assets that would be synced without actually syncing them.
-    List,
+    List(ProjectArgs),
+
+    #[command(hide = true)]
+    GenerateConfigSchema,
 }
 
-#[derive(ValueEnum, Clone, Copy)]
+#[derive(Subcommand, Clone, Copy)]
 pub enum SyncTarget {
-    Cloud,
+    /// Upload assets to Roblox cloud.
+    Cloud {
+        /// Error if assets would be uploaded.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Write assets to the Roblox Studio content folder.
     Studio,
+    /// Write assets to the .asphalt-debug folder.
     Debug,
+}
+
+impl SyncTarget {
+    pub fn write_on_sync(&self) -> bool {
+        matches!(self, SyncTarget::Cloud { dry_run: false })
+    }
 }
 
 #[derive(Args, Clone)]
 pub struct SyncArgs {
     /// Your Open Cloud API key.
-    /// Can also be set with the ASPHALT_API_KEY environment variable.
-    #[arg(short, long)]
+    #[arg(short, long, env = "ASPHALT_API_KEY")]
     pub api_key: Option<String>,
 
     /// Where Asphalt should sync assets to.
-    #[arg(short, long, default_value = "cloud")]
-    pub target: SyncTarget,
-
-    /// Skip asset syncing and only display what assets will be synced.
-    #[arg(long)]
-    pub dry_run: bool,
+    #[command(subcommand)]
+    target: Option<SyncTarget>,
 
     /// Provides Roblox with the amount of Robux that you are willing to spend on each non-free asset upload.
     #[arg(long)]
     pub expected_price: Option<u32>,
 
-    // Pack-related arguments
+    /// Path to the project directory. Defaults to the current directory.
+    #[arg(short, long, default_value = ".")]
+    pub project: PathBuf,
+
     /// Enable packing for all inputs that support it.
     #[arg(long)]
     pub pack: bool,
@@ -118,20 +133,25 @@ pub struct SyncArgs {
     pub optimize: bool,
 }
 
-fn parse_size(s: &str) -> Result<(u32, u32), String> {
-    let parts: Vec<&str> = s.split('x').collect();
-    if parts.len() != 2 {
-        return Err("Size must be in format WxH (e.g., 2048x2048)".to_string());
+impl SyncArgs {
+    pub fn target(&self) -> SyncTarget {
+        self.target.unwrap_or(SyncTarget::Cloud { dry_run: false })
     }
+}
 
-    let width = parts[0]
-        .parse::<u32>()
-        .map_err(|_| "Width must be a valid number")?;
-    let height = parts[1]
-        .parse::<u32>()
-        .map_err(|_| "Height must be a valid number")?;
+fn parse_size(s: &str) -> Result<(u32, u32), String> {
+    let (width, height) = s
+        .split_once('x')
+        .ok_or_else(|| "Size must be in format WxH (e.g., 2048x2048)".to_string())?;
 
-    Ok((width, height))
+    Ok((
+        width
+            .parse::<u32>()
+            .map_err(|_| "Width must be a valid number")?,
+        height
+            .parse::<u32>()
+            .map_err(|_| "Height must be a valid number")?,
+    ))
 }
 
 #[derive(Args)]
@@ -149,7 +169,7 @@ pub struct UploadArgs {
 
     /// Your Open Cloud API key.
     /// Can also be set with the ASPHALT_API_KEY environment variable.
-    #[arg(short, long)]
+    #[arg(short, long, env = "ASPHALT_API_KEY")]
     pub api_key: Option<String>,
 
     /// Whether to alpha bleed if it's an image.
@@ -169,6 +189,10 @@ pub struct UploadArgs {
 pub struct MigrateLockfileArgs {
     /// The default input name to use. Only applies when upgrading from V0 to V1.
     pub input_name: Option<String>,
+
+    /// Path to the project directory. Defaults to the current directory.
+    #[arg(short, long, default_value = ".")]
+    pub project: PathBuf,
 }
 
 #[derive(Args)]
@@ -182,4 +206,11 @@ pub struct GenerateSchemaArgs {
 pub struct CompletionsArgs {
     /// The shell to generate completions for.
     pub shell: Shell,
+}
+
+#[derive(Args)]
+pub struct ProjectArgs {
+    /// Path to the project directory. Defaults to the current directory.
+    #[arg(short, long, default_value = ".")]
+    pub project: PathBuf,
 }

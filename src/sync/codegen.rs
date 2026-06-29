@@ -1,4 +1,5 @@
 use crate::{
+    asset::AssetRef,
     config,
     pack::rect::{Rect, Size},
 };
@@ -6,7 +7,7 @@ use anyhow::bail;
 use relative_path::{RelativePath, RelativePathBuf};
 use std::{collections::BTreeMap, path::Path};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Node {
     Table(BTreeMap<String, Node>),
     String(String),
@@ -16,7 +17,7 @@ pub enum Node {
     AtlasSprite(AtlasSpriteData),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct AtlasSpriteData {
     pub image: String,
     pub rect: Rect,
@@ -30,7 +31,9 @@ pub enum Language {
     Luau,
 }
 
-pub fn create_node(source: &BTreeMap<RelativePathBuf, Node>, config: &config::Codegen) -> Node {
+pub type NodeSource = BTreeMap<RelativePathBuf, Node>;
+
+pub fn create_node(source: &NodeSource, config: &config::Codegen) -> Node {
     let mut root = Node::Table(BTreeMap::new());
 
     for (path, node) in source {
@@ -60,6 +63,10 @@ pub fn create_node(source: &BTreeMap<RelativePathBuf, Node>, config: &config::Co
     }
 
     root
+}
+
+pub fn asset_ref_node(asset_ref: &AssetRef) -> Node {
+    Node::String(asset_ref.to_string())
 }
 
 fn normalize_path_components(

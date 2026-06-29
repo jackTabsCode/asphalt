@@ -1,60 +1,76 @@
 use crate::{
-    asset::Asset,
-    auth::Auth,
+    asset::{Asset, AssetRef},
     cli::{SyncArgs, SyncTarget},
     config::{Config, Input, PackOptions},
-    lockfile::{Lockfile, LockfileEntry, RawLockfile},
+    hash::Hash,
+    lockfile::{LockfileEntry, RawLockfile, SpriteInfo},
     pack::{self, Packer},
-    web_api::WebApiClient,
+    sync::{backend::Backend, collect::collect_events},
 };
-use anyhow::{Context, Result, bail};
-use backend::BackendSyncResult;
+use anyhow::{Context, bail};
+use fs_err::tokio as fs;
 use indicatif::MultiProgress;
-use log::{info, warn};
-use owo_colors::OwoColorize;
+use log::info;
 use relative_path::RelativePathBuf;
 use resvg::usvg::fontdb;
-use std::{
-    collections::{BTreeMap, HashMap},
-    sync::Arc,
-};
-use tokio::{
-    fs,
-    sync::mpsc::{self, Receiver, Sender},
-};
-use walk::{DuplicateFile, WalkedFile};
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
+use tokio::sync::mpsc;
 
 mod backend;
 mod codegen;
-mod perform;
-mod process;
+mod collect;
 mod walk;
 
-pub struct SyncState {
-    args: SyncArgs,
-
-    existing_lockfile: Lockfile,
-    result_tx: mpsc::Sender<SyncResult>,
-
-    multi_progress: MultiProgress,
-
-    font_db: Arc<fontdb::Database>,
-
-    client: WebApiClient,
+enum TargetBackend {
+    Cloud(backend::Cloud),
+    Debug(backend::Debug),
+    Studio(backend::Studio),
 }
 
-pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
-    if args.dry_run && !matches!(args.target, SyncTarget::Cloud) {
-        bail!("A dry run doesn't make sense in this context");
+impl TargetBackend {
+    pub async fn sync(
+        &self,
+        asset: &Asset,
+        lockfile_entry: Option<&LockfileEntry>,
+    ) -> anyhow::Result<Option<AssetRef>> {
+        match self {
+            Self::Cloud(cloud_backend) => cloud_backend.sync(asset, lockfile_entry).await,
+            Self::Debug(debug_backend) => debug_backend.sync(asset, lockfile_entry).await,
+            Self::Studio(studio_backend) => studio_backend.sync(asset, lockfile_entry).await,
+        }
     }
+}
 
-    let config = Config::read().await?;
-    let codegen_config = config.codegen.clone();
+#[derive(Debug)]
+enum Event {
+    Discovered(PathBuf),
+    InFlight(PathBuf),
+    Finished {
+        state: EventState,
+        input_name: String,
+        path: PathBuf,
+        rel_path: RelativePathBuf,
+        hash: Hash,
+        asset_ref: Option<AssetRef>,
+        node: Option<Box<codegen::Node>>,
+        sprite_info: Option<SpriteInfo>,
+    },
+    Failed(PathBuf),
+}
 
-    let lockfile = RawLockfile::read().await?.into_lockfile()?;
+#[derive(Debug)]
+enum EventState {
+    Synced { new: bool },
+    Duplicate,
+}
 
-    let key_required = matches!(args.target, SyncTarget::Cloud) && !args.dry_run;
-    let auth = Auth::new(args.api_key.clone(), key_required)?;
+pub async fn sync(args: SyncArgs, mp: MultiProgress) -> anyhow::Result<()> {
+    let config = Config::read_from(args.project.clone()).await?;
+    let target = args.target();
+
+    let existing_lockfile = RawLockfile::read_from(&config.project_dir)
+        .await?
+        .into_lockfile()?;
 
     let font_db = Arc::new({
         let mut db = fontdb::Database::new();
@@ -62,225 +78,73 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
         db
     });
 
-    let (codegen_tx, codegen_rx) = mpsc::channel::<CodegenInsertion>(100);
+    let (event_tx, event_rx) = mpsc::unbounded_channel::<Event>();
 
-    let codegen_handle = {
+    let collector_handle = tokio::spawn({
         let inputs = config.inputs.clone();
-        tokio::spawn(async move { collect_codegen_insertions(codegen_rx, inputs).await })
-    };
-
-    let (lockfile_tx, lockfile_rx) = mpsc::channel::<LockfileInsertion>(100);
-
-    let lockfile_handle =
-        tokio::spawn(async move { collect_lockfile_insertions(lockfile_rx).await });
-
-    let (result_tx, result_rx) = mpsc::channel::<SyncResult>(100);
-
-    let packing_metadata = Arc::new(tokio::sync::Mutex::new(
-        HashMap::<String, PackingMetadata>::new(),
-    ));
-
-    let result_handle = {
-        let codegen_tx = codegen_tx.clone();
-        let lockfile_tx = lockfile_tx.clone();
-        let packing_metadata = packing_metadata.clone();
-
-        tokio::spawn(async move {
-            handle_sync_results(result_rx, codegen_tx, lockfile_tx, packing_metadata).await
-        })
-    };
-
-    let state = Arc::new(SyncState {
-        args: args.clone(),
-
-        existing_lockfile: lockfile,
-        result_tx,
-
-        multi_progress,
-
-        font_db,
-
-        client: WebApiClient::new(auth, config.creator, args.expected_price),
+        async move { collect_events(event_rx, target, inputs, mp).await }
     });
 
-    let mut duplicate_assets = HashMap::<String, Vec<DuplicateFile>>::new();
-
-    for (input_name, input) in &config.inputs {
-        let walk_results = walk::walk(state.clone(), input_name.clone(), input).await?;
-
-        let mut new_assets = Vec::with_capacity(walk_results.len());
-        let mut dupe_count = 0;
-
-        for result in walk_results {
-            match result {
-                WalkedFile::New(asset) => {
-                    new_assets.push(asset);
+    let params = walk::Params {
+        args: args.clone(),
+        target,
+        existing_lockfile,
+        font_db,
+        backend: {
+            let params = backend::Params {
+                api_key: args.api_key.clone(),
+                creator: config.creator.clone(),
+                expected_price: args.expected_price,
+                project_dir: config.project_dir.clone(),
+            };
+            match &target {
+                SyncTarget::Cloud { dry_run: false } => {
+                    Some(TargetBackend::Cloud(backend::Cloud::new(params).await?))
                 }
-                WalkedFile::Existing(existing) => {
-                    if args.dry_run {
-                        continue;
-                    }
-
-                    if matches!(args.target, SyncTarget::Cloud) {
-                        lockfile_tx
-                            .send(LockfileInsertion {
-                                input_name: input_name.clone(),
-                                hash: existing.hash,
-                                entry: existing.entry.clone(),
-                                // This takes too long, and we're not really losing anything here.
-                                write: false,
-                            })
-                            .await?;
-                    }
-
-                    let node = if let Some(ref sprite_info) = existing.entry.sprite_info {
-                        codegen::Node::AtlasSprite(codegen::AtlasSpriteData {
-                            image: format!("rbxassetid://{}", existing.entry.asset_id),
-                            rect: sprite_info.rect,
-                            size: sprite_info.source_size,
-                            trimmed: sprite_info.trimmed,
-                            sprite_source_size: sprite_info.sprite_source_size,
-                        })
-                    } else {
-                        codegen::Node::String(format!("rbxassetid://{}", existing.entry.asset_id))
-                    };
-
-                    codegen_tx
-                        .send(CodegenInsertion {
-                            input_name: input_name.clone(),
-                            asset_path: existing.path.clone(),
-                            node,
-                        })
-                        .await?;
-                }
-                WalkedFile::Duplicate(dupe) => {
-                    if input.warn_each_duplicate {
-                        warn!(
-                            "Duplicate file found: {} (original at {})",
-                            dupe.path, dupe.original_path
-                        );
-                    }
-
-                    if args.dry_run {
-                        continue;
-                    }
-
-                    dupe_count += 1;
-
-                    duplicate_assets
-                        .entry(input_name.clone())
-                        .or_default()
-                        .push(DuplicateFile {
-                            original_path: dupe.original_path,
-                            path: dupe.path,
-                        });
+                SyncTarget::Cloud { dry_run: true } => None,
+                SyncTarget::Debug => Some(TargetBackend::Debug(backend::Debug::new(params).await?)),
+                SyncTarget::Studio => {
+                    Some(TargetBackend::Studio(backend::Studio::new(params).await?))
                 }
             }
-        }
+        },
+    };
 
-        if dupe_count > 0 {
-            warn!("{dupe_count} duplicate files found.");
-        }
+    walk::walk(params, &config, &event_tx).await;
+    drop(event_tx);
 
-        if args.dry_run {
-            let new_len = new_assets.len();
+    let results = collector_handle.await??;
 
-            if new_len > 0 {
-                println!("\n{} New assets to sync:", "●".green());
-                for asset in &new_assets {
-                    let size_kb = asset.data.len() as f64 / 1024.0;
-                    println!(
-                        "  {} {} {}",
-                        "+".green(),
-                        asset.path,
-                        format!("({:.1} KB)", size_kb).dimmed()
-                    );
-                }
-                println!(
-                    "\n{} {} new asset(s) would be synced",
-                    "Summary:".bold(),
-                    new_len.to_string().green()
-                );
-                bail!("Dry run completed - {} new asset(s) found", new_len)
-            }
-
-            println!("{} No new assets to sync", "✓".green());
+    if matches!(target, SyncTarget::Cloud { dry_run: true }) {
+        if results.new_count > 0 {
+            bail!("Dry run: {} new assets would be synced", results.new_count)
+        } else {
+            info!("Dry run: No new assets would be synced");
             return Ok(());
         }
-
-        let processed_assets = process::process(
-            new_assets,
-            state.clone(),
-            input_name.clone(),
-            input.bleed,
-            args.optimize,
-        )
-        .await?;
-
-        // Handle packing if enabled
-        let final_assets = if should_pack(input, &args) {
-            let (assets, metadata) = handle_packing(
-                processed_assets,
-                state.clone(),
-                input_name.clone(),
-                input,
-                &args,
-            )
-            .await?;
-
-            if let Some(metadata) = metadata {
-                packing_metadata
-                    .lock()
-                    .await
-                    .insert(input_name.clone(), metadata);
-            }
-
-            assets
-        } else {
-            processed_assets
-        };
-
-        perform::perform(&final_assets, state.clone(), input_name.clone()).await?;
     }
 
-    drop(state);
-
-    result_handle.await??;
-
-    drop(codegen_tx);
-    drop(lockfile_tx);
-
-    let new_lockfile = lockfile_handle.await??;
-    if matches!(args.target, SyncTarget::Cloud) {
-        new_lockfile.write(None).await?;
+    if target.write_on_sync() {
+        results.new_lockfile.write_to(&config.project_dir).await?;
     }
 
-    let mut inputs_to_sources = codegen_handle.await??;
-
-    for (input_name, dupes) in duplicate_assets {
-        let source = inputs_to_sources.get_mut(&input_name).unwrap();
-
-        for dupe in dupes {
-            let original = source.get(&dupe.original_path).unwrap();
-            source.insert(dupe.path, original.clone());
-        }
-    }
-
-    let mut total_web_assets = 0;
     let mut total_codegen_files = 0;
+    let mut total_assets = 0;
+    let mut total_web_assets = 0;
 
-    for (input_name, source) in inputs_to_sources {
+    for (input_name, source) in results.input_sources {
         let input = config
             .inputs
             .get(&input_name)
             .context("Failed to find input for codegen input")?;
 
         let asset_count = source.len();
+        total_assets += asset_count;
         total_web_assets += input.web.len();
 
         let mut langs_to_generate = vec![codegen::Language::Luau];
 
-        if codegen_config.typescript {
+        if config.codegen.typescript {
             langs_to_generate.push(codegen::Language::TypeScript);
         }
 
@@ -297,19 +161,10 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
                 &config.codegen.input_naming_convention,
             )?;
 
-            fs::create_dir_all(&input.output_path)
-                .await
-                .with_context(|| {
-                    format!(
-                        "Failed to create output directory: {}",
-                        input.output_path.display()
-                    )
-                })?;
-            let output_file = input.output_path.join(format!("{input_name}.{ext}"));
-            fs::write(&output_file, code).await.with_context(|| {
-                format!("Failed to write codegen file: {}", output_file.display())
-            })?;
-
+            let output_path = config.project_dir.join(&input.output_path);
+            fs::create_dir_all(&output_path).await?;
+            let output_file = output_path.join(format!("{input_name}.{ext}"));
+            fs::write(&output_file, code).await?;
             total_codegen_files += 1;
             info!(
                 "Generated {} with {} asset(s)",
@@ -319,239 +174,22 @@ pub async fn sync(multi_progress: MultiProgress, args: SyncArgs) -> Result<()> {
         }
     }
 
-    let new_uploads = new_lockfile.count_entries();
     info!(
-        "Sync complete: {} codegen file(s) generated, {} new upload(s), {} web asset(s) from configuration",
-        total_codegen_files, new_uploads, total_web_assets
+        "Sync complete: {} codegen file(s) generated, {} asset reference(s), {} lockfile entries, {} web asset(s) from configuration",
+        total_codegen_files,
+        total_assets,
+        results.new_lockfile.count_entries(),
+        total_web_assets
     );
 
-    Ok(())
-}
-
-pub struct SyncResult {
-    hash: String,
-    path: RelativePathBuf,
-    input_name: String,
-    backend: BackendSyncResult,
-}
-
-async fn handle_sync_results(
-    mut rx: Receiver<SyncResult>,
-    codegen_tx: Sender<CodegenInsertion>,
-    lockfile_tx: Sender<LockfileInsertion>,
-    packing_metadata: Arc<tokio::sync::Mutex<HashMap<String, PackingMetadata>>>,
-) -> anyhow::Result<()> {
-    while let Some(result) = rx.recv().await {
-        // Check if this is an atlas upload
-        let is_atlas = result.path.extension().is_some_and(|ext| ext == "png")
-            && result
-                .path
-                .file_name()
-                .is_some_and(|name| name.contains("-sheet-"));
-
-        if let BackendSyncResult::Cloud(asset_id) = result.backend {
-            if is_atlas {
-                // Handle atlas upload - create AtlasSprite codegen entries
-                handle_atlas_upload(
-                    &result,
-                    format!("rbxassetid://{asset_id}"),
-                    &codegen_tx,
-                    &lockfile_tx,
-                    &packing_metadata,
-                )
-                .await?;
-            } else {
-                // Regular asset upload
-                lockfile_tx
-                    .send(LockfileInsertion {
-                        input_name: result.input_name.clone(),
-                        hash: result.hash,
-                        entry: LockfileEntry {
-                            asset_id,
-                            sprite_info: None,
-                        },
-                        write: true,
-                    })
-                    .await?;
-
-                codegen_tx
-                    .send(CodegenInsertion {
-                        input_name: result.input_name,
-                        asset_path: result.path,
-                        node: codegen::Node::String(format!("rbxassetid://{asset_id}")),
-                    })
-                    .await?;
-            }
-        } else if let BackendSyncResult::Studio(ref asset_id) = result.backend {
-            if is_atlas {
-                // Handle atlas upload for studio
-                handle_atlas_upload(
-                    &result,
-                    asset_id.clone(),
-                    &codegen_tx,
-                    &lockfile_tx,
-                    &packing_metadata,
-                )
-                .await?;
-            } else {
-                codegen_tx
-                    .send(CodegenInsertion {
-                        input_name: result.input_name,
-                        asset_path: result.path.clone(),
-                        node: codegen::Node::String(asset_id.clone()),
-                    })
-                    .await?;
-            }
-        }
+    if results.any_failed {
+        bail!("Some assets failed to sync")
     }
 
     Ok(())
 }
 
-async fn handle_atlas_upload(
-    result: &SyncResult,
-    atlas_asset_url: String,
-    codegen_tx: &Sender<CodegenInsertion>,
-    lockfile_tx: &Sender<LockfileInsertion>,
-    packing_metadata: &Arc<tokio::sync::Mutex<HashMap<String, PackingMetadata>>>,
-) -> anyhow::Result<()> {
-    let metadata_guard = packing_metadata.lock().await;
-    let Some(metadata) = metadata_guard.get(&result.input_name) else {
-        let input = &result.input_name;
-        log::warn!("No packing metadata found for input '{input}'");
-        return Ok(());
-    };
-
-    // Extract page index from filename (format: "{input}-sheet-{N}.png")
-    let filename = result.path.file_name().context("Invalid atlas filename")?;
-
-    let page_index = filename
-        .strip_suffix(".png")
-        .and_then(|s| s.rsplit_once("-sheet-"))
-        .and_then(|(_, idx)| idx.parse::<usize>().ok())
-        .context("Failed to extract page index from atlas filename")?;
-
-    // Find all sprites on this page and create AtlasSprite codegen entries
-    for (sprite_name, sprite_info) in &metadata.manifest.sprites {
-        if sprite_info.page_index != page_index {
-            continue;
-        }
-
-        let Some(original_path) = metadata.sprite_to_path.get(sprite_name).cloned() else {
-            log::warn!("No original path found for sprite '{sprite_name}'");
-            continue;
-        };
-
-        codegen_tx
-            .send(CodegenInsertion {
-                input_name: result.input_name.clone(),
-                asset_path: original_path,
-                node: codegen::Node::AtlasSprite(codegen::AtlasSpriteData {
-                    image: atlas_asset_url.clone(),
-                    rect: sprite_info.rect,
-                    size: sprite_info.source_size,
-                    trimmed: sprite_info.trimmed,
-                    sprite_source_size: sprite_info.sprite_source_size,
-                }),
-            })
-            .await?;
-
-        // Create lockfile entry for Cloud backend only
-        if let BackendSyncResult::Cloud(asset_id) = result.backend {
-            let Some(sprite_hash) = metadata.sprite_to_hash.get(sprite_name).cloned() else {
-                log::warn!("No hash found for sprite '{sprite_name}'");
-                continue;
-            };
-
-            let lockfile_sprite_info = crate::lockfile::SpriteInfo {
-                rect: sprite_info.rect,
-                source_size: sprite_info.source_size,
-                trimmed: sprite_info.trimmed,
-                sprite_source_size: sprite_info.sprite_source_size,
-            };
-
-            lockfile_tx
-                .send(LockfileInsertion {
-                    input_name: result.input_name.clone(),
-                    hash: sprite_hash,
-                    entry: LockfileEntry {
-                        asset_id,
-                        sprite_info: Some(lockfile_sprite_info),
-                    },
-                    write: true,
-                })
-                .await?;
-        }
-    }
-
-    Ok(())
-}
-
-struct CodegenInsertion {
-    input_name: String,
-    asset_path: RelativePathBuf,
-    node: codegen::Node,
-}
-
-async fn collect_codegen_insertions(
-    mut rx: Receiver<CodegenInsertion>,
-    inputs: HashMap<String, Input>,
-) -> anyhow::Result<HashMap<String, BTreeMap<RelativePathBuf, codegen::Node>>> {
-    let mut inputs_to_sources: HashMap<String, BTreeMap<RelativePathBuf, codegen::Node>> =
-        HashMap::new();
-
-    for (input_name, input) in &inputs {
-        let web_count = input.web.len();
-        if web_count > 0 {
-            info!("Including {web_count} web asset(s) from configuration for input '{input_name}'");
-        }
-
-        for (rel_path, asset) in &input.web {
-            let entry = inputs_to_sources.entry(input_name.clone()).or_default();
-
-            entry.insert(
-                rel_path.clone(),
-                codegen::Node::String(format!("rbxassetid://{}", asset.id)),
-            );
-        }
-    }
-
-    while let Some(insertion) = rx.recv().await {
-        let source = inputs_to_sources
-            .entry(insertion.input_name.clone())
-            .or_default();
-
-        source.insert(insertion.asset_path, insertion.node);
-    }
-
-    Ok(inputs_to_sources)
-}
-
-struct LockfileInsertion {
-    input_name: String,
-    hash: String,
-    entry: LockfileEntry,
-    write: bool,
-}
-
-async fn collect_lockfile_insertions(
-    mut rx: Receiver<LockfileInsertion>,
-) -> anyhow::Result<Lockfile> {
-    let mut new_lockfile = Lockfile::default();
-
-    while let Some(insertion) = rx.recv().await {
-        new_lockfile.insert(&insertion.input_name, &insertion.hash, insertion.entry);
-        if insertion.write {
-            new_lockfile.write(None).await?;
-        }
-    }
-
-    Ok(new_lockfile)
-}
-
-/// Check if packing should be enabled for this input
 fn should_pack(input: &Input, args: &SyncArgs) -> bool {
-    // CLI overrides
     if args.pack {
         return true;
     }
@@ -559,15 +197,12 @@ fn should_pack(input: &Input, args: &SyncArgs) -> bool {
         return false;
     }
 
-    // Check input configuration
     input.pack.as_ref().is_some_and(|pack| pack.enabled)
 }
 
-/// Apply CLI argument overrides to pack options
 fn apply_pack_overrides(base_options: Option<&PackOptions>, args: &SyncArgs) -> PackOptions {
     let mut options = base_options.cloned().unwrap_or_default();
 
-    // Apply CLI overrides
     if args.pack {
         options.enabled = true;
     }
@@ -608,73 +243,63 @@ fn apply_pack_overrides(base_options: Option<&PackOptions>, args: &SyncArgs) -> 
 struct PackingMetadata {
     manifest: pack::manifest::AtlasManifest,
     sprite_to_path: HashMap<String, RelativePathBuf>,
-    sprite_to_hash: HashMap<String, String>,
+    sprite_to_hash: HashMap<String, Hash>,
 }
 
-/// Handle packing of assets into atlases
-async fn handle_packing(
+fn pack_assets(
     assets: Vec<Asset>,
-    _state: Arc<SyncState>,
-    input_name: String,
+    input_name: &str,
     input: &Input,
     args: &SyncArgs,
 ) -> anyhow::Result<(Vec<Asset>, Option<PackingMetadata>)> {
     let pack_options = apply_pack_overrides(input.pack.as_ref(), args);
     let packer = Packer::new(pack_options);
 
-    // Filter only image assets for packing
-    let (packable_assets, non_packable_assets): (Vec<_>, Vec<_>) = assets
+    let (packable_assets, mut result_assets): (Vec<_>, Vec<_>) = assets
         .into_iter()
         .partition(|asset| matches!(asset.ty, crate::asset::AssetType::Image(_)));
 
     if packable_assets.is_empty() {
-        info!(
-            "No image files to pack for input '{input_name}' (web assets will still be included in codegen if configured)"
-        );
-        return Ok((non_packable_assets, None));
+        return Ok((result_assets, None));
     }
 
-    info!(
-        "Packing {} images for input '{}'",
-        packable_assets.len(),
-        input_name
-    );
-
-    // Build sprite name to original path and hash mapping
     let mut sprite_to_path = HashMap::new();
     let mut sprite_to_hash = HashMap::new();
     for asset in &packable_assets {
         if let Some(name) = asset.path.file_stem() {
             sprite_to_path.insert(name.to_string(), asset.path.clone());
-            sprite_to_hash.insert(name.to_string(), asset.hash.clone());
+            sprite_to_hash.insert(name.to_string(), asset.hash);
         }
     }
 
-    let pack_result = packer.pack_assets(&packable_assets, &input_name)?;
-
+    let pack_result = packer.pack_assets(&packable_assets, input_name)?;
     if pack_result.atlases.is_empty() {
-        warn!("No atlases were generated for input '{input_name}'");
-        return Ok((non_packable_assets, None));
+        return Ok((result_assets, None));
     }
 
-    let mut result_assets = non_packable_assets;
-    let atlas_count = pack_result.atlases.len();
-
-    // Convert atlases to assets (keep in memory, will be uploaded by backend)
     for atlas in &pack_result.atlases {
         let filename = format!("{}-sheet-{}.png", input_name, atlas.page_index);
         let sync_path = RelativePathBuf::from(filename);
-        let atlas_asset = Asset::new(sync_path, atlas.image_data.clone())?;
+        let atlas_asset = Asset::new(sync_path, atlas.image_data.clone().into())?;
         result_assets.push(atlas_asset);
     }
 
-    info!("Generated {atlas_count} atlas pages for input '{input_name}'");
+    Ok((
+        result_assets,
+        Some(PackingMetadata {
+            manifest: pack_result.manifest,
+            sprite_to_path,
+            sprite_to_hash,
+        }),
+    ))
+}
 
-    let metadata = PackingMetadata {
-        manifest: pack_result.manifest,
-        sprite_to_path,
-        sprite_to_hash,
-    };
-
-    Ok((result_assets, Some(metadata)))
+fn atlas_node(image: String, sprite_info: &pack::manifest::SpriteInfo) -> codegen::Node {
+    codegen::Node::AtlasSprite(codegen::AtlasSpriteData {
+        image,
+        rect: sprite_info.rect,
+        size: sprite_info.source_size,
+        trimmed: sprite_info.trimmed,
+        sprite_source_size: sprite_info.sprite_source_size,
+    })
 }
