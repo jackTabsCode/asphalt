@@ -11,3 +11,4 @@ asphalt.toml
 test-images/
 test-output/
 node_modules/
+proptest-regressions/

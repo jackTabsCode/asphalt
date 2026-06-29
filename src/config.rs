@@ -27,9 +27,9 @@ pub struct Config {
 pub type InputMap = HashMap<String, Input>;
 
 pub const CONFIG_FILES: &[&str] = &[
+    "asphalt.jsonc",
     "asphalt.json",
     "asphalt.json5",
-    "asphalt.jsonc",
     "asphalt.toml",
 ];
 
@@ -317,4 +317,203 @@ pub enum AssetNamingConvention {
     KebabCase,
     #[default]
     Preserve,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::path::PathBuf;
+
+    fn minimal_config_toml() -> &'static str {
+        r#"[creator]
+type = "user"
+id = 12345
+
+[inputs.icons]
+path = "icons/**/*.png"
+output_path = "out/icons.luau"
+"#
+    }
+
+    fn minimal_config_json() -> &'static str {
+        r#"{"creator":{"type":"user","id":12345},"inputs":{"icons":{"path":"icons/**/*.png","output_path":"out/icons.luau"}}}"#
+    }
+
+    fn minimal_config_json5() -> &'static str {
+        r#"{"creator":{"type":"user","id":12345},"inputs":{"icons":{"path":"icons/**/*.png","output_path":"out/icons.luau"}}}"#
+    }
+
+    fn minimal_config_jsonc() -> &'static str {
+        r#"{
+  "creator": {"type": "user", "id": 12345},
+  "inputs": {
+    "icons": {"path": "icons/**/*.png", "output_path": "out/icons.luau"}
+  }
+}"#
+    }
+
+    fn setup_temp_config(dir: &PathBuf, file_name: &str, content: &str) {
+        fs::create_dir_all(dir).unwrap();
+        let path = dir.join(file_name);
+        fs::write(&path, content).unwrap();
+    }
+
+    fn assert_valid_config(config: &Config) {
+        assert!(
+            matches!(config.creator.ty, CreatorType::User),
+            "Creator type should be User, got {:?}",
+            config.creator.ty
+        );
+        assert_eq!(config.creator.id, 12345);
+        assert_eq!(config.inputs.len(), 1);
+        let icons = config.inputs.get("icons").unwrap();
+        assert_eq!(icons.include.to_string(), "icons/**/*.png");
+        assert_eq!(icons.output_path.to_string_lossy(), "out/icons.luau");
+    }
+
+    fn run_async_test<F, T>(f: F) -> T
+    where
+        F: std::future::Future<Output = T>,
+    {
+        tokio::runtime::Runtime::new().unwrap().block_on(f)
+    }
+
+    #[test]
+    fn test_config_toml_parsing() {
+        let dir = std::env::temp_dir().join("asphalt-test-config-toml");
+        setup_temp_config(&dir, "asphalt.toml", minimal_config_toml());
+
+        let config = run_async_test(Config::read_from(dir.clone())).unwrap();
+        assert_valid_config(&config);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_config_json_parsing() {
+        let dir = std::env::temp_dir().join("asphalt-test-config-json");
+        setup_temp_config(&dir, "asphalt.json", minimal_config_json());
+
+        let config = run_async_test(Config::read_from(dir.clone())).unwrap();
+        assert_valid_config(&config);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_config_json5_parsing() {
+        let dir = std::env::temp_dir().join("asphalt-test-config-json5");
+        setup_temp_config(&dir, "asphalt.json5", minimal_config_json5());
+
+        let config = run_async_test(Config::read_from(dir.clone())).unwrap();
+        assert_valid_config(&config);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_config_jsonc_parsing() {
+        let dir = std::env::temp_dir().join("asphalt-test-config-jsonc");
+        setup_temp_config(&dir, "asphalt.jsonc", minimal_config_jsonc());
+
+        let config = run_async_test(Config::read_from(dir.clone())).unwrap();
+        assert_valid_config(&config);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_config_discovery_priority() {
+        // Config discovery iterates CONFIG_FILES in order: jsonc, json, json5, toml
+        // First file found wins. jsonc is first, so it should take priority over json and toml.
+        let dir = std::env::temp_dir().join("asphalt-test-priority");
+        setup_temp_config(
+            &dir,
+            "asphalt.json",
+            r#"{"creator":{"type":"user","id":99999},"inputs":{"a":{"path":"*.png","output_path":"out/a.luau"}}}"#,
+        );
+        setup_temp_config(
+            &dir,
+            "asphalt.jsonc",
+            r#"{"creator":{"type":"user","id":11111},"inputs":{"a":{"path":"*.png","output_path":"out/a.luau"}}}"#,
+        );
+        setup_temp_config(&dir, "asphalt.toml", minimal_config_toml());
+
+        // jsonc is checked before json and toml, so jsonc config should be loaded
+        let config = run_async_test(Config::read_from(dir.clone())).unwrap();
+        assert_eq!(config.creator.id, 11111, "JSONC (first in CONFIG_FILES) should be loaded over JSON/TOML");
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_config_missing_file_returns_error() {
+        let dir = std::env::temp_dir().join("asphalt-test-missing");
+        fs::create_dir_all(&dir).unwrap();
+
+        let result = run_async_test(Config::read_from(dir.clone()));
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("No configuration file found"), "Error should mention missing config: {err}");
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_config_defaults() {
+        let dir = std::env::temp_dir().join("asphalt-test-defaults");
+        setup_temp_config(
+            &dir,
+            "asphalt.toml",
+            r#"[creator]
+type = "user"
+id = 1
+
+[inputs.x]
+path = "*.png"
+output_path = "out/x.luau"
+"#,
+        );
+
+        let config = run_async_test(Config::read_from(dir.clone())).unwrap();
+        // Default codegen values
+        assert!(
+            matches!(config.codegen.style, CodegenStyle::Flat),
+            "Default codegen style should be Flat, got {:?}",
+            config.codegen.style
+        );
+        assert!(!config.codegen.typescript, "Default typescript should be false");
+        assert!(!config.codegen.strip_extensions, "Default strip_extensions should be false");
+        assert!(!config.codegen.content, "Default content should be false");
+        assert!(
+            matches!(config.codegen.asset_naming_convention, AssetNamingConvention::Preserve),
+            "Default asset naming convention should be Preserve"
+        );
+        // Input defaults
+        let input = config.inputs.get("x").unwrap();
+        assert!(input.bleed, "Default bleed should be true");
+        assert!(input.warn_each_duplicate, "Default warn_each_duplicate should be true");
+        assert!(input.pack.is_none(), "Default pack should be None");
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_config_invalid_toml_returns_error() {
+        let dir = std::env::temp_dir().join("asphalt-test-invalid");
+        setup_temp_config(
+            &dir,
+            "asphalt.toml",
+            r#"[creator]
+type = "user"
+id = "not-a-number"  # invalid type for id
+"#,
+        );
+
+        let result = run_async_test(Config::read_from(dir.clone()));
+        assert!(result.is_err(), "Invalid config should fail to parse");
+
+        let _ = fs::remove_dir_all(&dir);
+    }
 }

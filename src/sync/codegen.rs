@@ -358,11 +358,6 @@ fn to_snake_case(value: &str) -> String {
 }
 
 fn to_camel_case(value: &str) -> String {
-    let starts_with_invalid = value
-        .chars()
-        .next()
-        .is_none_or(|c| !is_valid_ident_char_start(c));
-
     let words = split_into_words(value);
     let mut result = String::new();
 
@@ -378,6 +373,11 @@ fn to_camel_case(value: &str) -> String {
         }
     }
 
+    let starts_with_invalid = result
+        .chars()
+        .next()
+        .is_none_or(|c| !is_valid_ident_char_start(c));
+
     if result.is_empty() || starts_with_invalid {
         result.insert(0, '_');
     }
@@ -386,11 +386,6 @@ fn to_camel_case(value: &str) -> String {
 }
 
 fn to_pascal_case(value: &str) -> String {
-    let starts_with_invalid = value
-        .chars()
-        .next()
-        .is_none_or(|c| !is_valid_ident_char_start(c));
-
     let words = split_into_words(value);
     let mut result = String::new();
 
@@ -401,6 +396,11 @@ fn to_pascal_case(value: &str) -> String {
             result.push_str(&chars.as_str().to_ascii_lowercase());
         }
     }
+
+    let starts_with_invalid = result
+        .chars()
+        .next()
+        .is_none_or(|c| !is_valid_ident_char_start(c));
 
     if result.is_empty() || starts_with_invalid {
         result.insert(0, '_');
@@ -433,6 +433,27 @@ fn to_preserve(value: &str) -> String {
 mod tests {
     use super::*;
     use crate::pack::rect::{Rect, Size};
+    use proptest::prelude::*;
+
+    fn contains_only_ident_chars(s: &str) -> bool {
+        s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+    }
+
+    fn starts_with_ident_char(s: &str) -> bool {
+        s.chars().next().is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+    }
+
+    fn is_valid_ident(s: &str) -> bool {
+        starts_with_ident_char(s) && contains_only_ident_chars(s)
+    }
+
+    fn word_like_input() -> impl Strategy<Value = String> {
+        proptest::string::string_regex(r#"[a-zA-Z0-9_-]+[a-zA-Z0-9 _/-]*"#).unwrap()
+    }
+
+    fn ascii_input() -> impl Strategy<Value = String> {
+        proptest::string::string_regex(r#"[!-~]{0,40}"#).unwrap()
+    }
 
     fn make_test_node() -> Node {
         let mut inner_map = BTreeMap::new();
@@ -673,7 +694,7 @@ mod tests {
                 "-starts-with-hyphen",
                 &config::InputNamingConvention::CamelCase
             ),
-            "_startsWithHyphen"
+            "startsWithHyphen"
         );
         assert_eq!(
             convert_input_name("has spaces", &config::InputNamingConvention::PascalCase),
@@ -727,5 +748,105 @@ mod tests {
         .unwrap();
         assert!(ts_code.contains("declare const imageIds:"));
         assert!(ts_code.contains("export = imageIds"));
+    }
+
+    // --- Property-based tests for naming conventions ---
+
+    proptest! {
+        #[test]
+        fn to_snake_case_produces_valid_identifier(
+            input in ascii_input(),
+        ) {
+            let result = to_snake_case(&input);
+            assert!(is_valid_ident(&result),
+                "snake_case '{}' produced invalid identifier '{}'", input, result);
+        }
+
+        #[test]
+        fn to_camel_case_produces_valid_identifier(
+            input in ascii_input(),
+        ) {
+            let result = to_camel_case(&input);
+            assert!(is_valid_ident(&result),
+                "camelCase '{}' produced invalid identifier '{}'", input, result);
+        }
+
+        #[test]
+        fn to_pascal_case_produces_valid_identifier(
+            input in ascii_input(),
+        ) {
+            let result = to_pascal_case(&input);
+            assert!(is_valid_ident(&result),
+                "PascalCase '{}' produced invalid identifier '{}'", input, result);
+        }
+
+        #[test]
+        fn to_screaming_snake_case_produces_valid_identifier(
+            input in ascii_input(),
+        ) {
+            let result = to_screaming_snake_case(&input);
+            assert!(is_valid_ident(&result),
+                "SCREAMING_SNAKE_CASE '{}' produced invalid identifier '{}'", input, result);
+        }
+
+        #[test]
+        fn word_separation_preserves_alphanumeric_content(
+            input in word_like_input(),
+        ) {
+            let words = split_into_words(&input);
+            let reconstructed: String = words.join("");
+            let input_alpha: String = input.chars()
+                .filter(|c| c.is_ascii_alphanumeric())
+                .collect();
+            assert_eq!(reconstructed, input_alpha,
+                "split_into_words lost or corrupted characters in '{}'", input);
+        }
+
+        #[test]
+        fn to_kebab_case_preserves_input_content(
+            input in word_like_input(),
+        ) {
+            let result = to_kebab_case(&input);
+            let result_alpha: String = result.chars()
+                .filter(|c| c.is_ascii_alphanumeric())
+                .collect();
+            let input_alpha: String = input.chars()
+                .filter(|c| c.is_ascii_alphanumeric())
+                .collect();
+            assert_eq!(result_alpha.to_ascii_lowercase(), input_alpha.to_ascii_lowercase(),
+                "kebab-case '{}' lost content vs input '{}'", result, input);
+        }
+
+        #[test]
+        fn snake_case_is_idempotent(
+            input in ascii_input(),
+        ) {
+            let once = to_snake_case(&input);
+            let twice = to_snake_case(&once);
+            assert_eq!(once, twice,
+                "snake_case is not idempotent: once='{}' twice='{}'", once, twice);
+        }
+
+        #[test]
+        fn preserve_is_identity(
+            input in ascii_input(),
+        ) {
+            let result = to_preserve(&input);
+            assert_eq!(input, result);
+        }
+
+        #[test]
+        fn snake_to_pascal_roundtrip(
+            input in ascii_input(),
+        ) {
+            // Converting to snake_case then to PascalCase should be
+            // equivalent to converting directly to PascalCase.
+            let snake = to_snake_case(&input);
+            let pascal_from_snake = to_pascal_case(&snake);
+            let pascal_direct = to_pascal_case(&input);
+            assert_eq!(pascal_from_snake, pascal_direct,
+                "snake_case '{}' -> PascalCase '{}' != PascalCase direct '{}'",
+                snake, pascal_from_snake, pascal_direct);
+        }
     }
 }

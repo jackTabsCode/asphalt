@@ -118,4 +118,46 @@ mod tests {
         let path = Path::new("image.png");
         assert!(!should_optimize(path, false));
     }
+
+    #[test]
+    fn test_optimize_png_strictly_smaller_for_larger_image() {
+        // Create a 50x50 RGBA image with varied pixel data.
+        // The image crate's default PNG encoder doesn't maximize compression,
+        // so oxipng should be able to produce a strictly smaller output.
+        let mut img = image::RgbaImage::new(50, 50);
+        for y in 0..50 {
+            for x in 0..50 {
+                img.put_pixel(x, y, image::Rgba([x as u8, y as u8, 128, 255]));
+            }
+        }
+
+        let mut buf = Vec::new();
+        img.write_to(&mut Cursor::new(&mut buf), image::ImageFormat::Png)
+            .unwrap();
+
+        let original_size = buf.len();
+
+        let result = optimize_png(&buf).unwrap();
+
+        // Output should be valid PNG
+        assert!(result.starts_with(b"\x89PNG"));
+
+        // Output should be strictly smaller than the original
+        assert!(
+            result.len() < original_size,
+            "Optimized size {} should be strictly smaller than original size {} (ratio: {:.2}%)",
+            result.len(),
+            original_size,
+            100.0 * result.len() as f64 / original_size as f64
+        );
+
+        // Output should decode to the same pixel content
+        let original_decoded = image::load_from_memory(&buf).unwrap();
+        let optimized_img = image::load_from_memory(&result).unwrap();
+        assert_eq!(original_decoded.dimensions(), optimized_img.dimensions());
+        // Spot-check a few pixels
+        assert_eq!(original_decoded.get_pixel(0, 0), optimized_img.get_pixel(0, 0));
+        assert_eq!(original_decoded.get_pixel(25, 25), optimized_img.get_pixel(25, 25));
+        assert_eq!(original_decoded.get_pixel(49, 49), optimized_img.get_pixel(49, 49));
+    }
 }

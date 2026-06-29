@@ -262,6 +262,7 @@ impl From<&LockfileEntry> for AssetRef {
 mod tests {
     use super::*;
     use bytes::Bytes;
+    use image::GenericImageView;
 
     #[test]
     fn test_is_supported_extension() {
@@ -410,5 +411,48 @@ mod tests {
         assert_eq!(json, "\"Image\"");
         let json = serde_json::to_string(&AssetType::Animation).unwrap();
         assert_eq!(json, "\"Animation\"");
+    }
+
+    #[test]
+    fn test_svg_processing_end_to_end() {
+        // A tiny valid SVG: red circle on transparent background
+        // Using br## to avoid collision between raw string delimiter and fill="#
+        let svg_data = br##"<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <circle cx="8" cy="8" r="6" fill="#FF0000"/>
+</svg>"##;
+
+        let path = RelativePathBuf::from("icon.svg");
+        let mut asset = Asset::new(path, Bytes::from_static(svg_data)).unwrap();
+        assert_eq!(asset.ext, "png", "SVG extension should be renamed to png");
+        assert!(asset.is_svg, "Asset should be marked as SVG");
+
+        let font_db = Arc::new(fontdb::Database::new());
+
+        asset.process(font_db, false, false).unwrap();
+
+        // After processing, data should be a valid PNG
+        assert!(
+            asset.data.starts_with(b"\x89PNG"),
+            "Processed SVG data should be a PNG, got: {:?}",
+            &asset.data[..4.min(asset.data.len())]
+        );
+        assert!(asset.data.len() > 100, "PNG data should be non-trivial in size");
+
+        let img = image::load_from_memory(&asset.data).unwrap();
+        assert_eq!(img.dimensions(), (16, 16), "Output should be 16x16");
+        // Center pixel should be red-ish (SVG render may anti-alias)
+        let center = img.get_pixel(8, 8);
+        assert!(
+            center[0] > 200,
+            "Center pixel should be predominantly red, got: {:?}",
+            center
+        );
+
+        // Hash is computed during Asset::new from the SVG content and is NOT
+        // re-computed during process(). This is by design — the hash represents
+        // the source content identity, not the processed output.
+        // is_svg also remains true after processing — it records the original source format.
+        assert!(asset.is_svg, "is_svg should remain true after processing (records source format)");
     }
 }

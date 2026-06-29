@@ -313,4 +313,173 @@ mod tests {
 
         assert!(merged.is_none());
     }
+
+    // --- Property-based tests ---
+
+    use proptest::prelude::*;
+
+    fn rect_value(width_strat: impl Strategy<Value = u32>, height_strat: impl Strategy<Value = u32>) -> impl Strategy<Value = Rect> {
+        (0u32..1000, 0u32..1000, width_strat, height_strat)
+            .prop_map(|(x, y, w, h)| Rect::new(x, y, w.max(1), h.max(1)))
+    }
+
+    fn small_rect() -> impl Strategy<Value = Rect> {
+        rect_value(1u32..200, 1u32..200)
+    }
+
+    fn medium_rect() -> impl Strategy<Value = Rect> {
+        rect_value(1u32..500, 1u32..500)
+    }
+
+    proptest! {
+        #[test]
+        fn split_by_preserves_total_area(
+            rect in medium_rect(),
+            split_x in 0u32..1000u32,
+            split_y in 0u32..1000u32,
+            split_w in 1u32..200u32,
+            split_h in 1u32..200u32,
+        ) {
+            let splitter = Rect::new(split_x, split_y, split_w, split_h);
+            let splits = rect.split_by(&splitter);
+
+            // If the splitter doesn't intersect, should return self
+            if !rect.intersects(&splitter) {
+                assert_eq!(splits.len(), 1);
+                assert_eq!(splits[0], rect);
+                return Ok(());
+            }
+
+            // Splits should not overlap with each other
+            for i in 0..splits.len() {
+                for j in (i + 1)..splits.len() {
+                    assert!(!splits[i].intersects(&splits[j]),
+                        "Split {} ({:?}) and {} ({:?}) overlap", i, splits[i], j, splits[j]);
+                }
+            }
+
+            // Each split should be contained within the original rect
+            for split in &splits {
+                assert!(rect.contains_rect(split),
+                    "Split {:?} not contained in original {:?}", split, rect);
+            }
+
+            // The splitter should not overlap with any split
+            for split in &splits {
+                assert!(!splitter.contains_rect(split),
+                    "Split {:?} is inside splitter {:?}", split, splitter);
+            }
+        }
+
+        #[test]
+        fn merge_is_commutative(
+            a in small_rect(),
+            b in small_rect(),
+        ) {
+            let ab = a.try_merge_with(&b);
+            let ba = b.try_merge_with(&a);
+            assert_eq!(ab, ba, "Merge should be commutative");
+        }
+
+        #[test]
+        fn merge_adjacent_horizontal_preserves_area(
+            x in 0u32..500u32,
+            y in 0u32..500u32,
+            w1 in 1u32..200u32,
+            w2 in 1u32..200u32,
+            h in 1u32..200u32,
+        ) {
+            let a = Rect::new(x, y, w1, h);
+            let b = Rect::new(x + w1, y, w2, h);
+            if let Some(merged) = a.try_merge_with(&b) {
+                assert_eq!(merged.area(), a.area() + b.area());
+                assert_eq!(merged.width, w1 + w2);
+                assert_eq!(merged.height, h);
+            }
+        }
+
+        #[test]
+        fn merge_adjacent_vertical_preserves_area(
+            x in 0u32..500u32,
+            y in 0u32..500u32,
+            w in 1u32..200u32,
+            h1 in 1u32..200u32,
+            h2 in 1u32..200u32,
+        ) {
+            let a = Rect::new(x, y, w, h1);
+            let b = Rect::new(x, y + h1, w, h2);
+            if let Some(merged) = a.try_merge_with(&b) {
+                assert_eq!(merged.area(), a.area() + b.area());
+                assert_eq!(merged.width, w);
+                assert_eq!(merged.height, h1 + h2);
+            }
+        }
+
+        #[test]
+        fn sizes_fits_in_is_transitive(
+            a_w in 1u32..500u32, a_h in 1u32..500u32,
+            b_w in 1u32..500u32, b_h in 1u32..500u32,
+            c_w in 1u32..500u32, c_h in 1u32..500u32,
+        ) {
+            let a = Size::new(a_w, a_h);
+            let b = Size::new(b_w, b_h);
+            let c = Size::new(c_w, c_h);
+
+            if a.fits_in(b) && b.fits_in(c) {
+                assert!(a.fits_in(c), "fits_in should be transitive");
+            }
+        }
+
+        #[test]
+        fn size_fits_in_reflexive(
+            w in 1u32..500u32, h in 1u32..500u32,
+        ) {
+            let size = Size::new(w, h);
+            assert!(size.fits_in(size), "fits_in should be reflexive");
+        }
+
+        #[test]
+        fn intersects_is_symmetric(
+            a in medium_rect(),
+            b in medium_rect(),
+        ) {
+            assert_eq!(a.intersects(&b), b.intersects(&a),
+                "intersects should be symmetric");
+        }
+
+        #[test]
+        fn contains_rect_implies_contains_point_center(
+            rect in small_rect(),
+        ) {
+            let center_x = rect.x + rect.width / 2;
+            let center_y = rect.y + rect.height / 2;
+            assert!(rect.contains_point(center_x, center_y),
+                "Rect {:?} should contain its center ({}, {})", rect, center_x, center_y);
+        }
+
+        #[test]
+        fn split_by_produces_non_overlapping_rects(
+            outer in medium_rect(),
+            split_w in 1u32..200u32, split_h in 1u32..200u32,
+        ) {
+            // Pick a splitter position that's guaranteed to be within bounds
+            let max_x = outer.x + outer.width.saturating_sub(split_w);
+            let max_y = outer.y + outer.height.saturating_sub(split_h);
+            let splitter = Rect::new(
+                outer.x + (outer.width / 4).min(max_x.saturating_sub(outer.x)),
+                outer.y + (outer.height / 4).min(max_y.saturating_sub(outer.y)),
+                split_w.min(outer.width / 2).max(1),
+                split_h.min(outer.height / 2).max(1),
+            );
+
+            prop_assume!(outer.contains_rect(&splitter));
+            let splits = outer.split_by(&splitter);
+
+            for i in 0..splits.len() {
+                for j in (i + 1)..splits.len() {
+                    assert!(!splits[i].intersects(&splits[j]));
+                }
+            }
+        }
+    }
 }
