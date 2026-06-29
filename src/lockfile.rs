@@ -436,4 +436,212 @@ mod tests {
         assert_eq!(sprite.rect.x, 0);
         assert_eq!(sprite.rect.y, 0);
     }
+
+    // --- Migration tests ---
+
+    #[test]
+    fn test_migrate_from_v2_basic() {
+        let hash_str = "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2";
+        let mut inputs = BTreeMap::new();
+        let mut entries = BTreeMap::new();
+        entries.insert(
+            hash_str.to_string(),
+            LockfileV2Entry { asset_id: 42 },
+        );
+        inputs.insert("images".to_string(), entries);
+
+        let v2 = LockfileV2 {
+            version: 2,
+            inputs,
+        };
+
+        let lockfile = migrate_from_v2(&v2).unwrap();
+        assert_eq!(lockfile.count_entries(), 1);
+
+        let hash = Hash::from_hex(hash_str).unwrap();
+        let entry = lockfile.get("images", &hash).unwrap();
+        assert_eq!(entry.asset_id, 42);
+        assert!(entry.sprite_info.is_none());
+    }
+
+    #[test]
+    fn test_migrate_from_v2_invalid_hash() {
+        let mut inputs = BTreeMap::new();
+        let mut entries = BTreeMap::new();
+        entries.insert(
+            "not-a-valid-hash".to_string(),
+            LockfileV2Entry { asset_id: 1 },
+        );
+        inputs.insert("test".to_string(), entries);
+
+        let v2 = LockfileV2 {
+            version: 2,
+            inputs,
+        };
+
+        let result = migrate_from_v2(&v2);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_migrate_from_v2_multiple_inputs() {
+        let mut inputs = BTreeMap::new();
+
+        let hash_a = "0000000000000000000000000000000000000000000000000000000000000000";
+        let hash_b = "1111111111111111111111111111111111111111111111111111111111111111";
+
+        let mut entries_a = BTreeMap::new();
+        entries_a.insert(hash_a.to_string(), LockfileV2Entry { asset_id: 10 });
+        inputs.insert("icons".to_string(), entries_a);
+
+        let mut entries_b = BTreeMap::new();
+        entries_b.insert(hash_b.to_string(), LockfileV2Entry { asset_id: 20 });
+        inputs.insert("sounds".to_string(), entries_b);
+
+        let v2 = LockfileV2 {
+            version: 2,
+            inputs,
+        };
+
+        let lockfile = migrate_from_v2(&v2).unwrap();
+        assert_eq!(lockfile.count_entries(), 2);
+
+        let ha = Hash::from_hex(hash_a).unwrap();
+        let hb = Hash::from_hex(hash_b).unwrap();
+        assert_eq!(lockfile.get("icons", &ha).unwrap().asset_id, 10);
+        assert_eq!(lockfile.get("sounds", &hb).unwrap().asset_id, 20);
+        assert!(lockfile.get("icons", &hb).is_none());
+    }
+
+    #[test]
+    fn test_migrate_from_v1_basic() {
+        let hash = Hash::new_from_bytes(b"v1-data");
+        let mut inputs = BTreeMap::new();
+        let mut entries = BTreeMap::new();
+        entries.insert(
+            PathBuf::from("old/path.png"),
+            OldLockfileEntry {
+                hash,
+                asset_id: 77,
+            },
+        );
+        inputs.insert("sprites".to_string(), entries);
+
+        let v1 = LockfileV1 {
+            version: 1,
+            inputs,
+        };
+
+        let lockfile = migrate_from_v1(&v1);
+        assert_eq!(lockfile.count_entries(), 1);
+        let entry = lockfile.get("sprites", &hash).unwrap();
+        assert_eq!(entry.asset_id, 77);
+        assert!(entry.sprite_info.is_none());
+    }
+
+    #[test]
+    fn test_migrate_from_v1_multiple_entries() {
+        let hash1 = Hash::new_from_bytes(b"entry-1");
+        let hash2 = Hash::new_from_bytes(b"entry-2");
+
+        let mut inputs = BTreeMap::new();
+        let mut entries = BTreeMap::new();
+        entries.insert(
+            PathBuf::from("path1.png"),
+            OldLockfileEntry {
+                hash: hash1,
+                asset_id: 1,
+            },
+        );
+        entries.insert(
+            PathBuf::from("path2.png"),
+            OldLockfileEntry {
+                hash: hash2,
+                asset_id: 2,
+            },
+        );
+        inputs.insert("assets".to_string(), entries);
+
+        let v1 = LockfileV1 {
+            version: 1,
+            inputs,
+        };
+
+        let lockfile = migrate_from_v1(&v1);
+        assert_eq!(lockfile.count_entries(), 2);
+        assert_eq!(lockfile.get("assets", &hash1).unwrap().asset_id, 1);
+        assert_eq!(lockfile.get("assets", &hash2).unwrap().asset_id, 2);
+    }
+
+    #[tokio::test]
+    async fn test_raw_lockfile_migrate_v2() {
+        let hash_str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let mut inputs = BTreeMap::new();
+        let mut entries = BTreeMap::new();
+        entries.insert(hash_str.to_string(), LockfileV2Entry { asset_id: 99 });
+        inputs.insert("test".to_string(), entries);
+
+        let raw = RawLockfile::V2(LockfileV2 {
+            version: 2,
+            inputs,
+        });
+
+        let lockfile = raw.migrate(None).await.unwrap();
+        assert_eq!(lockfile.count_entries(), 1);
+        let hash = Hash::from_hex(hash_str).unwrap();
+        assert_eq!(lockfile.get("test", &hash).unwrap().asset_id, 99);
+    }
+
+    #[tokio::test]
+    async fn test_raw_lockfile_migrate_v3_already_up_to_date() {
+        let raw = RawLockfile::V3(Lockfile::default());
+        let result = raw.migrate(None).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("already up to date"));
+    }
+
+    #[tokio::test]
+    async fn test_raw_lockfile_migrate_v0_requires_input_name() {
+        let v0 = LockfileV0 {
+            entries: BTreeMap::new(),
+        };
+        let raw = RawLockfile::V0(v0);
+        let result = raw.migrate(None).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("input name"));
+    }
+
+    #[tokio::test]
+    async fn test_raw_lockfile_read_from_missing_file() {
+        let raw = RawLockfile::read_from(Path::new("/nonexistent/path")).await;
+        assert!(matches!(raw, Ok(RawLockfile::V3(_))));
+        if let Ok(RawLockfile::V3(lockfile)) = raw {
+            assert_eq!(lockfile.count_entries(), 0);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_lockfile_count_entries() {
+        let mut lockfile = Lockfile::default();
+        assert_eq!(lockfile.count_entries(), 0);
+
+        let h1 = Hash::new_from_bytes(b"one");
+        let h2 = Hash::new_from_bytes(b"two");
+
+        lockfile.insert("a", &h1, LockfileEntry {
+            asset_id: 1,
+            sprite_info: None,
+        });
+        lockfile.insert("a", &h2, LockfileEntry {
+            asset_id: 2,
+            sprite_info: None,
+        });
+        assert_eq!(lockfile.count_entries(), 2);
+
+        lockfile.insert("b", &h1, LockfileEntry {
+            asset_id: 3,
+            sprite_info: None,
+        });
+        assert_eq!(lockfile.count_entries(), 3);
+    }
 }
