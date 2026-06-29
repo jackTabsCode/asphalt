@@ -19,7 +19,17 @@ checksum = "sha256:c50e5d283170b7ffb62beb229f97ebd42481dc8380f24d8123b472d87328e
 url = "https://github.com/jdx/aube/releases/download/v1.24.0/aube-v1.24.0-x86_64-unknown-linux-gnu.tar.gz"
 provenance = "github-attestations"
 
+[tools.aube."platforms.linux-x64-baseline"]
+checksum = "sha256:c50e5d283170b7ffb62beb229f97ebd42481dc8380f24d8123b472d87328e5b4"
+url = "https://github.com/jdx/aube/releases/download/v1.24.0/aube-v1.24.0-x86_64-unknown-linux-gnu.tar.gz"
+provenance = "github-attestations"
+
 [tools.aube."platforms.linux-x64-musl"]
+checksum = "sha256:4077980962b590e35402c3a51b752cfc6d151ad3ae43f3d1759349b4857f0443"
+url = "https://github.com/jdx/aube/releases/download/v1.24.0/aube-v1.24.0-x86_64-unknown-linux-musl.tar.gz"
+provenance = "github-attestations"
+
+[tools.aube."platforms.linux-x64-musl-baseline"]
 checksum = "sha256:4077980962b590e35402c3a51b752cfc6d151ad3ae43f3d1759349b4857f0443"
 url = "https://github.com/jdx/aube/releases/download/v1.24.0/aube-v1.24.0-x86_64-unknown-linux-musl.tar.gz"
 provenance = "github-attestations"
@@ -30,6 +40,11 @@ url = "https://github.com/jdx/aube/releases/download/v1.24.0/aube-v1.24.0-aarch6
 provenance = "github-attestations"
 
 [tools.aube."platforms.windows-x64"]
+checksum = "sha256:c4eb67851341ed42b6d85c45963f300213907c812c5d9ecaf5039ef8c257ea27"
+url = "https://github.com/jdx/aube/releases/download/v1.24.0/aube-v1.24.0-x86_64-pc-windows-msvc.zip"
+provenance = "github-attestations"
+
+[tools.aube."platforms.windows-x64-baseline"]
 checksum = "sha256:c4eb67851341ed42b6d85c45963f300213907c812c5d9ecaf5039ef8c257ea27"
 url = "https://github.com/jdx/aube/releases/download/v1.24.0/aube-v1.24.0-x86_64-pc-windows-msvc.zip"
 provenance = "github-attestations"
@@ -50,7 +65,15 @@ url = "https://unofficial-builds.nodejs.org/download/release/v26.3.0/node-v26.3.
 checksum = "sha256:a6e65cc653e40c1653b77742f9185dbce3ff1f99fa2746d211bddb53530ef206"
 url = "https://nodejs.org/dist/v26.3.0/node-v26.3.0-linux-x64.tar.gz"
 
+[tools.node."platforms.linux-x64-baseline"]
+checksum = "sha256:a6e65cc653e40c1653b77742f9185dbce3ff1f99fa2746d211bddb53530ef206"
+url = "https://nodejs.org/dist/v26.3.0/node-v26.3.0-linux-x64.tar.gz"
+
 [tools.node."platforms.linux-x64-musl"]
+checksum = "sha256:6ad2e7c0cf693fecc2febb1abf753940244f3baaa04626361ed52d64843ffc67"
+url = "https://unofficial-builds.nodejs.org/download/release/v26.3.0/node-v26.3.0-linux-x64-musl.tar.gz"
+
+[tools.node."platforms.linux-x64-musl-baseline"]
 checksum = "sha256:6ad2e7c0cf693fecc2febb1abf753940244f3baaa04626361ed52d64843ffc67"
 url = "https://unofficial-builds.nodejs.org/download/release/v26.3.0/node-v26.3.0-linux-x64-musl.tar.gz"
 
@@ -62,7 +85,15 @@ url = "https://nodejs.org/dist/v26.3.0/node-v26.3.0-darwin-arm64.tar.gz"
 checksum = "sha256:7453bd54a17bdc656e2e784d702f6eeb224fb517965e6f8c5a31a88c83d3804c"
 url = "https://nodejs.org/dist/v26.3.0/node-v26.3.0-darwin-x64.tar.gz"
 
+[tools.node."platforms.macos-x64-baseline"]
+checksum = "sha256:7453bd54a17bdc656e2e784d702f6eeb224fb517965e6f8c5a31a88c83d3804c"
+url = "https://nodejs.org/dist/v26.3.0/node-v26.3.0-darwin-x64.tar.gz"
+
 [tools.node."platforms.windows-x64"]
+checksum = "sha256:ec6d0f6b056c89498a9b26c4d5c77a31fd0b7fe45ba8a45fa87d26f66c3ebce4"
+url = "https://nodejs.org/dist/v26.3.0/node-v26.3.0-win-x64.zip"
+
+[tools.node."platforms.windows-x64-baseline"]
 checksum = "sha256:ec6d0f6b056c89498a9b26c4d5c77a31fd0b7fe45ba8a45fa87d26f66c3ebce4"
 url = "https://nodejs.org/dist/v26.3.0/node-v26.3.0-win-x64.zip"
 
@@ -85,7 +116,17 @@ checksum = "sha256:3f3b9e791b3d3d8f58ce792b881d6b1326b74fef96ba3a7e2cf7a6def212f
 url = "https://github.com/rvben/rumdl/releases/download/v0.2.25/rumdl-v0.2.25-x86_64-unknown-linux-musl.tar.gz"
 provenance = "github-attestations"
 
+[tools.rumdl."platforms.linux-x64-baseline"]
+checksum = "sha256:3f3b9e791b3d3d8f58ce792b881d6b1326b74fef96ba3a7e2cf7a6def212f688"
+url = "https://github.com/rvben/rumdl/releases/download/v0.2.25/rumdl-v0.2.25-x86_64-unknown-linux-musl.tar.gz"
+provenance = "github-attestations"
+
 [tools.rumdl."platforms.linux-x64-musl"]
+checksum = "sha256:3f3b9e791b3d3d8f58ce792b881d6b1326b74fef96ba3a7e2cf7a6def212f688"
+url = "https://github.com/rvben/rumdl/releases/download/v0.2.25/rumdl-v0.2.25-x86_64-unknown-linux-musl.tar.gz"
+provenance = "github-attestations"
+
+[tools.rumdl."platforms.linux-x64-musl-baseline"]
 checksum = "sha256:3f3b9e791b3d3d8f58ce792b881d6b1326b74fef96ba3a7e2cf7a6def212f688"
 url = "https://github.com/rvben/rumdl/releases/download/v0.2.25/rumdl-v0.2.25-x86_64-unknown-linux-musl.tar.gz"
 provenance = "github-attestations"
@@ -100,7 +141,17 @@ checksum = "sha256:73857b59d9e1085692c0bc7ec8e63fb68f017c4181feb37e4749884fc4678
 url = "https://github.com/rvben/rumdl/releases/download/v0.2.25/rumdl-v0.2.25-x86_64-apple-darwin.tar.gz"
 provenance = "github-attestations"
 
+[tools.rumdl."platforms.macos-x64-baseline"]
+checksum = "sha256:73857b59d9e1085692c0bc7ec8e63fb68f017c4181feb37e4749884fc4678ace"
+url = "https://github.com/rvben/rumdl/releases/download/v0.2.25/rumdl-v0.2.25-x86_64-apple-darwin.tar.gz"
+provenance = "github-attestations"
+
 [tools.rumdl."platforms.windows-x64"]
+checksum = "sha256:b69ab1731d3a801b1e5185c2b7dac8ed461f35a8e1d8cb8b1ec0da912f120fc3"
+url = "https://github.com/rvben/rumdl/releases/download/v0.2.25/rumdl-v0.2.25-x86_64-pc-windows-msvc.zip"
+provenance = "github-attestations"
+
+[tools.rumdl."platforms.windows-x64-baseline"]
 checksum = "sha256:b69ab1731d3a801b1e5185c2b7dac8ed461f35a8e1d8cb8b1ec0da912f120fc3"
 url = "https://github.com/rvben/rumdl/releases/download/v0.2.25/rumdl-v0.2.25-x86_64-pc-windows-msvc.zip"
 provenance = "github-attestations"
@@ -125,7 +176,15 @@ url = "https://github.com/tombi-toml/tombi/releases/download/v1.1.6/tombi-cli-1.
 checksum = "sha256:774491f7cc990b86ee2e14d41d08743f7bd953ba2269a46ca5096e75de83e18a"
 url = "https://github.com/tombi-toml/tombi/releases/download/v1.1.6/tombi-cli-1.1.6-x86_64-unknown-linux-musl.tar.gz"
 
+[tools.tombi."platforms.linux-x64-baseline"]
+checksum = "sha256:774491f7cc990b86ee2e14d41d08743f7bd953ba2269a46ca5096e75de83e18a"
+url = "https://github.com/tombi-toml/tombi/releases/download/v1.1.6/tombi-cli-1.1.6-x86_64-unknown-linux-musl.tar.gz"
+
 [tools.tombi."platforms.linux-x64-musl"]
+checksum = "sha256:774491f7cc990b86ee2e14d41d08743f7bd953ba2269a46ca5096e75de83e18a"
+url = "https://github.com/tombi-toml/tombi/releases/download/v1.1.6/tombi-cli-1.1.6-x86_64-unknown-linux-musl.tar.gz"
+
+[tools.tombi."platforms.linux-x64-musl-baseline"]
 checksum = "sha256:774491f7cc990b86ee2e14d41d08743f7bd953ba2269a46ca5096e75de83e18a"
 url = "https://github.com/tombi-toml/tombi/releases/download/v1.1.6/tombi-cli-1.1.6-x86_64-unknown-linux-musl.tar.gz"
 
@@ -137,6 +196,14 @@ url = "https://github.com/tombi-toml/tombi/releases/download/v1.1.6/tombi-cli-1.
 checksum = "sha256:e0e81fbbd629d207a739e13b849246dba9ae43f744d2cdd3c8cd00939a8ffe2a"
 url = "https://github.com/tombi-toml/tombi/releases/download/v1.1.6/tombi-cli-1.1.6-x86_64-apple-darwin.tar.gz"
 
+[tools.tombi."platforms.macos-x64-baseline"]
+checksum = "sha256:e0e81fbbd629d207a739e13b849246dba9ae43f744d2cdd3c8cd00939a8ffe2a"
+url = "https://github.com/tombi-toml/tombi/releases/download/v1.1.6/tombi-cli-1.1.6-x86_64-apple-darwin.tar.gz"
+
 [tools.tombi."platforms.windows-x64"]
+checksum = "sha256:44938ccdae426a576e63f95c2ff8a762f40d995540db6771665cc2990cfccc8a"
+url = "https://github.com/tombi-toml/tombi/releases/download/v1.1.6/tombi-cli-1.1.6-x86_64-pc-windows-msvc.zip"
+
+[tools.tombi."platforms.windows-x64-baseline"]
 checksum = "sha256:44938ccdae426a576e63f95c2ff8a762f40d995540db6771665cc2990cfccc8a"
 url = "https://github.com/tombi-toml/tombi/releases/download/v1.1.6/tombi-cli-1.1.6-x86_64-pc-windows-msvc.zip"
