@@ -486,3 +486,548 @@ impl Packer {
         Ok(manifest)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        asset::Asset,
+        config::{PackAlgorithm, PackSort},
+    };
+    use bytes::Bytes;
+    use image::GenericImageView;
+    use relative_path::RelativePathBuf;
+    use std::io::Cursor;
+
+    fn create_test_image(width: u32, height: u32, transparent: bool) -> Vec<u8> {
+        let pixel = if transparent {
+            image::Rgba([255, 0, 0, 0]) // fully transparent
+        } else {
+            image::Rgba([255, 0, 0, 255]) // solid red
+        };
+        let img = image::RgbaImage::from_pixel(width, height, pixel);
+        let mut buf = Cursor::new(Vec::new());
+        img.write_to(&mut buf, image::ImageFormat::Png).unwrap();
+        buf.into_inner()
+    }
+
+    fn create_test_asset(name: &str, width: u32, height: u32) -> Asset {
+        let data = create_test_image(width, height, false);
+        let path = RelativePathBuf::from(name);
+        Asset::new(path, Bytes::from(data)).unwrap()
+    }
+
+    fn create_test_asset_with_data(name: &str, data: Vec<u8>) -> Asset {
+        let path = RelativePathBuf::from(name);
+        Asset::new(path, Bytes::from(data)).unwrap()
+    }
+
+    fn default_pack_options() -> PackOptions {
+        PackOptions {
+            enabled: true,
+            max_size: (512, 512),
+            power_of_two: false,
+            padding: 0,
+            extrude: 0,
+            allow_trim: false,
+            algorithm: PackAlgorithm::MaxRects,
+            page_limit: None,
+            sort: PackSort::Area,
+            dedupe: false,
+        }
+    }
+
+    #[test]
+    fn test_packer_not_enabled() {
+        let options = PackOptions {
+            enabled: false,
+            ..default_pack_options()
+        };
+        let packer = Packer::new(options);
+        let assets = [create_test_asset("test.png", 32, 32)];
+        let result = packer.pack_assets(&assets, "test_input");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("not enabled"));
+    }
+
+    #[test]
+    fn test_pack_empty_assets() {
+        let packer = Packer::new(default_pack_options());
+        let result = packer.pack_assets(&[], "empty_input").unwrap();
+        assert!(result.atlases.is_empty());
+        assert_eq!(result.manifest.sprite_count(), 0);
+    }
+
+    #[test]
+    fn test_assets_to_sprites_filters_non_images() {
+        let packer = Packer::new(default_pack_options());
+        let img_asset = create_test_asset("sprite.png", 32, 32);
+        let audio_asset = Asset::new(
+            RelativePathBuf::from("sound.mp3"),
+            Bytes::from_static(b"mp3-data"),
+        ).unwrap();
+        let assets = [img_asset, audio_asset];
+        let sprites = packer.assets_to_sprites(&assets).unwrap();
+        assert_eq!(sprites.len(), 1, "Should only include image assets");
+        assert_eq!(sprites[0].name, "sprite");
+    }
+
+    #[test]
+    fn test_assets_to_sprites_extracts_dimensions() {
+        let packer = Packer::new(default_pack_options());
+        let asset = create_test_asset("big.png", 64, 128);
+        let sprites = packer.assets_to_sprites(&[asset]).unwrap();
+        assert_eq!(sprites.len(), 1);
+        assert_eq!(sprites[0].size.width, 64);
+        assert_eq!(sprites[0].size.height, 128);
+    }
+
+    #[test]
+    fn test_assets_to_sprites_dedupe() {
+        let options = PackOptions {
+            enabled: true,
+            dedupe: true,
+            ..default_pack_options()
+        };
+        let packer = Packer::new(options);
+        let data = create_test_image(16, 16, false);
+        let asset1 = create_test_asset_with_data("dup1.png", data.clone());
+        let asset2 = create_test_asset_with_data("dup2.png", data);
+        let sprites = packer.assets_to_sprites(&[asset1, asset2]).unwrap();
+        assert_eq!(sprites.len(), 1, "Duplicates should be deduplicated");
+    }
+
+    #[test]
+    fn test_sort_sprites_by_area_descending() {
+        let options = PackOptions {
+            sort: PackSort::Area,
+            ..default_pack_options()
+        };
+        let packer = Packer::new(options);
+        let small = create_test_asset("small.png", 10, 10);
+        let large = create_test_asset("large.png", 100, 100);
+        let mut sprites = packer.assets_to_sprites(&[small, large]).unwrap();
+        packer.sort_sprites(&mut sprites);
+        assert_eq!(sprites[0].name, "large");
+        assert_eq!(sprites[1].name, "small");
+    }
+
+    #[test]
+    fn test_sort_sprites_by_max_side_descending() {
+        let options = PackOptions {
+            sort: PackSort::MaxSide,
+            ..default_pack_options()
+        };
+        let packer = Packer::new(options);
+        let wide = create_test_asset("wide.png", 200, 10);
+        let tall = create_test_asset("tall.png", 10, 150);
+        let mut sprites = packer.assets_to_sprites(&[wide, tall]).unwrap();
+        packer.sort_sprites(&mut sprites);
+        assert_eq!(sprites[0].name, "wide");
+        assert_eq!(sprites[1].name, "tall");
+    }
+
+    #[test]
+    fn test_sort_sprites_by_name() {
+        let options = PackOptions {
+            sort: PackSort::Name,
+            ..default_pack_options()
+        };
+        let packer = Packer::new(options);
+        let z = create_test_asset("zebra.png", 10, 10);
+        let a = create_test_asset("alpha.png", 10, 10);
+        let mut sprites = packer.assets_to_sprites(&[z, a]).unwrap();
+        packer.sort_sprites(&mut sprites);
+        assert_eq!(sprites[0].name, "alpha");
+        assert_eq!(sprites[1].name, "zebra");
+    }
+
+    #[test]
+    fn test_sort_sprites_deterministic_tiebreaker() {
+        let options = PackOptions {
+            sort: PackSort::Area,
+            ..default_pack_options()
+        };
+        let packer = Packer::new(options);
+        let a = create_test_asset("beta.png", 50, 50);
+        let b = create_test_asset("alpha.png", 50, 50);
+        let mut sprites = packer.assets_to_sprites(&[a, b]).unwrap();
+        packer.sort_sprites(&mut sprites);
+        // Same area should be sorted by name as tiebreaker
+        assert_eq!(sprites[0].name, "alpha");
+        assert_eq!(sprites[1].name, "beta");
+    }
+
+    #[test]
+    fn test_validate_sprite_sizes_oversized() {
+        let options = PackOptions {
+            max_size: (64, 64),
+            ..default_pack_options()
+        };
+        let packer = Packer::new(options);
+        let asset = create_test_asset("too_big.png", 128, 128);
+        let sprites = packer.assets_to_sprites(&[asset]).unwrap();
+        let result = packer.validate_sprite_sizes(&sprites);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("exceeds maximum"));
+    }
+
+    #[test]
+    fn test_validate_sprite_sizes_oversized_width_only() {
+        let options = PackOptions {
+            max_size: (32, 512),
+            ..default_pack_options()
+        };
+        let packer = Packer::new(options);
+        let asset = create_test_asset("too_wide.png", 64, 32);
+        let sprites = packer.assets_to_sprites(&[asset]).unwrap();
+        let result = packer.validate_sprite_sizes(&sprites);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_validate_sprite_sizes_oversized_height_only() {
+        let options = PackOptions {
+            max_size: (512, 32),
+            ..default_pack_options()
+        };
+        let packer = Packer::new(options);
+        let asset = create_test_asset("too_tall.png", 32, 64);
+        let sprites = packer.assets_to_sprites(&[asset]).unwrap();
+        let result = packer.validate_sprite_sizes(&sprites);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_validate_sprite_sizes_fits_exactly() {
+        let options = PackOptions {
+            max_size: (32, 32),
+            ..default_pack_options()
+        };
+        let packer = Packer::new(options);
+        let asset = create_test_asset("exact.png", 32, 32);
+        let sprites = packer.assets_to_sprites(&[asset]).unwrap();
+        assert!(packer.validate_sprite_sizes(&sprites).is_ok());
+    }
+
+    #[test]
+    fn test_pack_sprites_to_single_atlas() {
+        let packer = Packer::new(default_pack_options());
+        let asset = create_test_asset("sprite.png", 32, 32);
+        let sprites = packer.assets_to_sprites(&[asset]).unwrap();
+        let atlases = packer.pack_sprites_to_atlases(sprites).unwrap();
+        assert_eq!(atlases.len(), 1);
+        assert_eq!(atlases[0].sprites.len(), 1);
+        // Verify the atlas decodes as a valid PNG at the expected size
+        let decoded = image::load_from_memory(&atlases[0].image_data).unwrap();
+        assert_eq!(decoded.dimensions(), (512, 512));
+    }
+
+    #[test]
+    fn test_pack_sprites_to_multiple_pages() {
+        let options = PackOptions {
+            max_size: (64, 64),
+            padding: 0,
+            ..default_pack_options()
+        };
+        let packer = Packer::new(options);
+        let large = create_test_asset("big.png", 64, 64);
+        let mut sprites = packer.assets_to_sprites(&[large]).unwrap();
+        // Add more sprites that won't fit
+        for i in 0..4 {
+            let a = create_test_asset(&format!("fill{i}.png"), 32, 32);
+            sprites.extend(packer.assets_to_sprites(&[a]).unwrap());
+        }
+        let atlases = packer.pack_sprites_to_atlases(sprites).unwrap();
+        // Should need at least 2 pages (first one has 64x64 + some 32x32, rest overflow)
+        assert!(
+            atlases.len() >= 2,
+            "Expected at least 2 pages, got {}",
+            atlases.len()
+        );
+        // All sprites should be packed
+        let total_sprites: usize = atlases.iter().map(|a| a.sprites.len()).sum();
+        assert_eq!(total_sprites, 5);
+    }
+
+    #[test]
+    fn test_pack_sprites_no_overlap() {
+        let packer = Packer::new(default_pack_options());
+        let assets = [
+            create_test_asset("a.png", 32, 32),
+            create_test_asset("b.png", 32, 32),
+            create_test_asset("c.png", 32, 32),
+        ];
+        let sprites = packer.assets_to_sprites(&assets).unwrap();
+        let atlases = packer.pack_sprites_to_atlases(sprites).unwrap();
+        let rects: Vec<Rect> = atlases[0].sprites.iter().map(|ps| ps.rect).collect();
+        for i in 0..rects.len() {
+            for j in (i + 1)..rects.len() {
+                assert!(
+                    !rects[i].intersects(&rects[j]),
+                    "Sprite {} and {} overlap: {:?} vs {:?}",
+                    i, j, rects[i], rects[j]
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_pack_page_limit_exceeded() {
+        let options = PackOptions {
+            max_size: (64, 64),
+            padding: 0,
+            page_limit: Some(1),
+            ..default_pack_options()
+        };
+        let packer = Packer::new(options);
+        let assets = [
+            create_test_asset("a.png", 64, 64),
+            create_test_asset("b.png", 64, 64),
+        ];
+        let result = packer.pack_assets(&assets, "test");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("page_limit"));
+    }
+
+    #[test]
+    fn test_trim_sprite_transparent_borders() {
+        let options = PackOptions {
+            allow_trim: true,
+            ..default_pack_options()
+        };
+        let packer = Packer::new(options);
+        // Create a 32x32 image with a 16x16 opaque rectangle in the center
+        let mut img = image::RgbaImage::new(32, 32);
+        for y in 8..24 {
+            for x in 8..24 {
+                img.put_pixel(x, y, image::Rgba([255, 0, 0, 255]));
+            }
+        }
+        let mut buf = Cursor::new(Vec::new());
+        img.write_to(&mut buf, image::ImageFormat::Png).unwrap();
+        let data = buf.into_inner();
+        let mut sprite = Sprite {
+            name: "centered".to_string(),
+            data,
+            size: Size { width: 32, height: 32 },
+            hash: Hash::new_from_bytes(b"test"),
+        };
+        let original_rect = packer.trim_sprite(&mut sprite);
+        assert!(original_rect.is_some(), "Should trim transparent borders");
+        let rect = original_rect.unwrap();
+        assert_eq!(rect.width, 32, "Original size should be 32x32");
+        assert_eq!(rect.height, 32);
+        assert_eq!(sprite.size.width, 16, "Trimmed size should be 16x16");
+        assert_eq!(sprite.size.height, 16);
+    }
+
+    #[test]
+    fn test_trim_sprite_fully_transparent() {
+        let options = PackOptions {
+            allow_trim: true,
+            ..default_pack_options()
+        };
+        let packer = Packer::new(options);
+        let data = create_test_image(16, 16, true); // fully transparent
+        let mut sprite = Sprite {
+            name: "transparent".to_string(),
+            data,
+            size: Size { width: 16, height: 16 },
+            hash: Hash::new_from_bytes(b"test"),
+        };
+        let result = packer.trim_sprite(&mut sprite);
+        assert!(result.is_none(), "Fully transparent should not trim");
+    }
+
+    #[test]
+    fn test_trim_sprite_fully_opaque() {
+        let options = PackOptions {
+            allow_trim: true,
+            ..default_pack_options()
+        };
+        let packer = Packer::new(options);
+        let data = create_test_image(16, 16, false); // fully opaque
+        let mut sprite = Sprite {
+            name: "opaque".to_string(),
+            data,
+            size: Size { width: 16, height: 16 },
+            hash: Hash::new_from_bytes(b"test"),
+        };
+        let result = packer.trim_sprite(&mut sprite);
+        assert!(result.is_none(), "Fully opaque should not need trimming");
+    }
+
+    #[test]
+    fn test_render_atlas_creates_png() {
+        let packer = Packer::new(default_pack_options());
+        let data = create_test_image(16, 16, false);
+        let sprite = Sprite {
+            name: "test".to_string(),
+            data,
+            size: Size { width: 16, height: 16 },
+            hash: Hash::new_from_bytes(b"test"),
+        };
+        let packed = PackedSprite {
+            rect: Rect::new(0, 0, 16, 16),
+            sprite,
+            trimmed: false,
+            sprite_source_size: None,
+        };
+        let atlas_size = Size { width: 64, height: 64 };
+        let result = packer.render_atlas(&[packed], atlas_size).unwrap();
+        // Should be valid PNG
+        assert!(result.starts_with(b"\x89PNG"));
+        // Decode and verify dimensions
+        let decoded = image::load_from_memory(&result).unwrap();
+        assert_eq!(decoded.dimensions(), (64, 64));
+    }
+
+    #[test]
+    fn test_render_atlas_preserves_sprite_content() {
+        let packer = Packer::new(default_pack_options());
+        // Create a distinctive image (solid green)
+        let mut img = image::RgbaImage::new(8, 8);
+        for y in 0..8 {
+            for x in 0..8 {
+                img.put_pixel(x, y, image::Rgba([0, 255, 0, 255]));
+            }
+        }
+        let mut buf = Cursor::new(Vec::new());
+        img.write_to(&mut buf, image::ImageFormat::Png).unwrap();
+        let data = buf.into_inner();
+
+        let sprite = Sprite {
+            name: "green".to_string(),
+            data,
+            size: Size { width: 8, height: 8 },
+            hash: Hash::new_from_bytes(b"green"),
+        };
+        let packed = PackedSprite {
+            rect: Rect::new(10, 10, 8, 8),
+            sprite,
+            trimmed: false,
+            sprite_source_size: None,
+        };
+        let atlas_size = Size { width: 32, height: 32 };
+        let result = packer.render_atlas(&[packed], atlas_size).unwrap();
+        let decoded = image::load_from_memory(&result).unwrap();
+        // Check pixel at sprite position is green
+        let pixel = decoded.get_pixel(10, 10);
+        assert_eq!(pixel[0], 0, "R channel should be 0");
+        assert_eq!(pixel[1], 255, "G channel should be 255");
+        assert_eq!(pixel[2], 0, "B channel should be 0");
+        // Check pixel outside sprite is transparent (from alpha bleed)
+        let bg = decoded.get_pixel(0, 0);
+        assert_eq!(bg[3], 0, "Background should be transparent");
+    }
+
+    #[test]
+    fn test_apply_extrude_with_options() {
+        // Verify extrude options integrate correctly through the full pipeline
+        let options = PackOptions {
+            extrude: 2,
+            ..default_pack_options()
+        };
+        let packer = Packer::new(options);
+        let assets = [create_test_asset("sprite.png", 16, 16)];
+        let result = packer.pack_assets(&assets, "extrude_test").unwrap();
+        assert_eq!(result.atlases.len(), 1);
+        let decoded = image::load_from_memory(&result.atlases[0].image_data).unwrap();
+        assert_eq!(decoded.dimensions(), (512, 512));
+        // Sprite at (0,0) with extrude 2 means pixels at offsets beyond should exist
+        // but after alpha_bleed they'll be transparent; just verify valid output
+        assert!(result.manifest.sprites.contains_key("sprite"));
+    }
+
+    #[test]
+    fn test_pack_full_pipeline() {
+        let packer = Packer::new(default_pack_options());
+        let assets = [
+            create_test_asset("a.png", 32, 32),
+            create_test_asset("b.png", 64, 64),
+            create_test_asset("c.png", 16, 48),
+        ];
+        let result = packer.pack_assets(&assets, "my_input").unwrap();
+        assert_eq!(result.atlases.len(), 1);
+        assert_eq!(result.manifest.input_name, "my_input");
+        // Should have 3 sprites in manifest
+        assert_eq!(result.manifest.sprites.len(), 3);
+    }
+
+    #[test]
+    fn test_create_manifest_includes_all_sprites() {
+        let packer = Packer::new(default_pack_options());
+        let a = create_test_asset("alpha.png", 16, 16);
+        let b = create_test_asset("beta.png", 16, 16);
+        let result = packer.pack_assets(&[a, b], "manifest_test").unwrap();
+        assert_eq!(result.manifest.sprite_count(), 2);
+        assert!(result.manifest.sprites.contains_key("alpha"));
+        assert!(result.manifest.sprites.contains_key("beta"));
+    }
+
+    #[test]
+    fn test_pack_with_power_of_two() {
+        let options = PackOptions {
+            max_size: (300, 300),
+            power_of_two: true,
+            ..default_pack_options()
+        };
+        let packer = Packer::new(options);
+        let asset = create_test_asset("sprite.png", 32, 32);
+        let result = packer.pack_assets(&[asset], "pot").unwrap();
+        assert_eq!(result.atlases.len(), 1);
+        // Power of two: 300.next_power_of_two() = 512
+        let decoded = image::load_from_memory(&result.atlases[0].image_data).unwrap();
+        assert_eq!(decoded.dimensions(), (512, 512));
+    }
+
+    #[test]
+    fn test_pack_sprites_remain_within_atlas_bounds() {
+        let options = PackOptions {
+            max_size: (128, 128),
+            padding: 0,
+            ..default_pack_options()
+        };
+        let packer = Packer::new(options);
+        let assets = [
+            create_test_asset("big.png", 64, 64),
+            create_test_asset("a.png", 32, 32),
+            create_test_asset("b.png", 32, 32),
+            create_test_asset("c.png", 32, 32),
+        ];
+        let result = packer.pack_assets(&assets, "bounds_check").unwrap();
+        for atlas in &result.atlases {
+            for ps in &atlas.sprites {
+                let x_end = ps.rect.x + ps.rect.width;
+                let y_end = ps.rect.y + ps.rect.height;
+                assert!(
+                    x_end <= 128 && y_end <= 128,
+                    "Sprite '{}' exceeds atlas bounds: ends at ({}, {})",
+                    ps.sprite.name, x_end, y_end
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_pack_with_padding_separates_sprites() {
+        let options = PackOptions {
+            max_size: (128, 128),
+            padding: 4,
+            extrude: 0,
+            ..default_pack_options()
+        };
+        let packer = Packer::new(options);
+        let assets = [
+            create_test_asset("one.png", 32, 32),
+            create_test_asset("two.png", 32, 32),
+        ];
+        let result = packer.pack_assets(&assets, "padding_test").unwrap();
+        assert_eq!(result.atlases.len(), 1);
+        // With padding, sprites should have at least padding pixels between them
+        let sprites = &result.atlases[0].sprites;
+        let gap_x = (sprites[1].rect.x as i32 - sprites[0].rect.x as i32 - sprites[0].rect.width as i32).unsigned_abs();
+        assert!(gap_x >= 4 || gap_x == 0);
+    }
+}

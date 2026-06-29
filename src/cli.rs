@@ -154,6 +154,83 @@ fn parse_size(s: &str) -> Result<(u32, u32), String> {
     ))
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_size_valid() {
+        let result = parse_size("2048x2048").unwrap();
+        assert_eq!(result, (2048, 2048));
+    }
+
+    #[test]
+    fn test_parse_size_varied_dimensions() {
+        let result = parse_size("512x1024").unwrap();
+        assert_eq!(result, (512, 1024));
+    }
+
+    #[test]
+    fn test_parse_size_minimal() {
+        let result = parse_size("1x1").unwrap();
+        assert_eq!(result, (1, 1));
+    }
+
+    #[test]
+    fn test_parse_size_large() {
+        let result = parse_size("8192x4096").unwrap();
+        assert_eq!(result, (8192, 4096));
+    }
+
+    #[test]
+    fn test_parse_size_invalid_no_x() {
+        let err = parse_size("2048").unwrap_err();
+        assert!(err.contains("WxH"));
+    }
+
+    #[test]
+    fn test_parse_size_invalid_empty() {
+        let err = parse_size("").unwrap_err();
+        assert!(err.contains("WxH"));
+    }
+
+    #[test]
+    fn test_parse_size_invalid_non_numeric() {
+        let err = parse_size("abcxdef").unwrap_err();
+        assert!(err.contains("Width") || err.contains("number"));
+    }
+
+    #[test]
+    fn test_parse_size_invalid_negative() {
+        let err = parse_size("-100x100").unwrap_err();
+        assert!(err.contains("Width") || err.contains("number"));
+    }
+
+    #[test]
+    fn test_sync_target_cloud_write_on_sync() {
+        let target = SyncTarget::Cloud { dry_run: false };
+        assert!(target.write_on_sync());
+    }
+
+    #[test]
+    fn test_sync_target_cloud_dry_run_no_write() {
+        let target = SyncTarget::Cloud { dry_run: true };
+        assert!(!target.write_on_sync());
+    }
+
+    #[test]
+    fn test_sync_target_studio_no_write() {
+        let target = SyncTarget::Studio;
+        assert!(!target.write_on_sync());
+    }
+
+    #[test]
+    fn test_sync_target_debug_no_write() {
+        let target = SyncTarget::Debug;
+        assert!(!target.write_on_sync());
+    }
+}
+
 #[derive(Args)]
 pub struct UploadArgs {
     /// The file to upload.

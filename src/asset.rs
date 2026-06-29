@@ -257,3 +257,158 @@ impl From<&LockfileEntry> for AssetRef {
         AssetRef::Cloud(value.asset_id)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bytes::Bytes;
+
+    #[test]
+    fn test_is_supported_extension() {
+        assert!(is_supported_extension(OsStr::new("png")));
+        assert!(is_supported_extension(OsStr::new("svg")));
+        assert!(is_supported_extension(OsStr::new("jpg")));
+        assert!(is_supported_extension(OsStr::new("jpeg")));
+        assert!(is_supported_extension(OsStr::new("mp3")));
+        assert!(is_supported_extension(OsStr::new("fbx")));
+        assert!(is_supported_extension(OsStr::new("rbxm")));
+        assert!(is_supported_extension(OsStr::new("rbxmx")));
+        assert!(is_supported_extension(OsStr::new("mp4")));
+        assert!(!is_supported_extension(OsStr::new("txt")));
+        assert!(!is_supported_extension(OsStr::new("exe")));
+        assert!(!is_supported_extension(OsStr::new("")));
+    }
+
+    #[test]
+    fn test_asset_new_image_extensions() {
+        for (ext, data) in [("png", &b"dummy-png-data"[..]), ("jpg", &b"dummy-jpg-data"[..]), ("bmp", &b"dummy-bmp-data"[..]), ("tga", &b"dummy-tga-data"[..])] {
+            let path = RelativePathBuf::from(format!("test.{ext}"));
+            let asset = Asset::new(path, Bytes::from_static(data)).unwrap();
+            assert_eq!(asset.ext, ext);
+            assert!(matches!(asset.ty, AssetType::Image(_)));
+        }
+    }
+
+    #[test]
+    fn test_asset_new_audio_extensions() {
+        for (ext, data) in [("mp3", &b"dummy-mp3-data"[..]), ("ogg", &b"dummy-ogg-data"[..]), ("flac", &b"dummy-flac-data"[..]), ("wav", &b"dummy-wav-data"[..])] {
+            let path = RelativePathBuf::from(format!("test.{ext}"));
+            let asset = Asset::new(path, Bytes::from_static(data)).unwrap();
+            assert_eq!(asset.ext, ext);
+            assert!(matches!(asset.ty, AssetType::Audio(_)));
+        }
+    }
+
+    #[test]
+    fn test_asset_new_model_extensions() {
+        for (ext, data) in [("fbx", &b"dummy-fbx-data"[..]), ("gltf", &b"dummy-gltf-data"[..]), ("glb", &b"dummy-glb-data"[..])] {
+            let path = RelativePathBuf::from(format!("test.{ext}"));
+            let asset = Asset::new(path, Bytes::from_static(data)).unwrap();
+            assert_eq!(asset.ext, ext);
+            assert!(matches!(asset.ty, AssetType::Model(_)));
+        }
+    }
+
+    #[test]
+    fn test_asset_new_video_extensions() {
+        for (ext, data) in [("mp4", &b"dummy-mp4-data"[..]), ("mov", &b"dummy-mov-data"[..])] {
+            let path = RelativePathBuf::from(format!("test.{ext}"));
+            let asset = Asset::new(path, Bytes::from_static(data)).unwrap();
+            assert_eq!(asset.ext, ext);
+            assert!(matches!(asset.ty, AssetType::Video(_)));
+        }
+    }
+
+    #[test]
+    fn test_asset_new_svg_converts_to_png() {
+        let path = RelativePathBuf::from("icon.svg");
+        let asset = Asset::new(path, Bytes::from_static(b"<svg></svg>")).unwrap();
+        assert_eq!(asset.ext, "png", "SVG extension should be renamed to png");
+        assert!(matches!(asset.ty, AssetType::Image(_)));
+    }
+
+    #[test]
+    fn test_asset_new_unknown_extension_fails() {
+        let path = RelativePathBuf::from("test.txt");
+        let result = Asset::new(path, Bytes::from_static(b"hello"));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_asset_new_no_extension_fails() {
+        let path = RelativePathBuf::from("noext");
+        let result = Asset::new(path, Bytes::from_static(b"data"));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_asset_type_variants() {
+        assert_eq!(AssetType::Model(ModelType::Fbx).asset_type(), "Model");
+        assert_eq!(AssetType::Animation.asset_type(), "Animation");
+        assert_eq!(AssetType::Image(ImageType::Png).asset_type(), "Image");
+        assert_eq!(AssetType::Audio(AudioType::Mp3).asset_type(), "Audio");
+        assert_eq!(AssetType::Video(VideoType::Mp4).asset_type(), "Video");
+    }
+
+    #[test]
+    fn test_asset_type_file_types() {
+        assert_eq!(AssetType::Animation.file_type(), "model/x-rbxm");
+        assert_eq!(AssetType::Model(ModelType::Fbx).file_type(), "model/fbx");
+        assert_eq!(AssetType::Model(ModelType::GltfJson).file_type(), "model/gltf+json");
+        assert_eq!(AssetType::Model(ModelType::GltfBinary).file_type(), "model/gltf-binary");
+        assert_eq!(AssetType::Model(ModelType::Roblox).file_type(), "model/x-rbxm");
+        assert_eq!(AssetType::Image(ImageType::Png).file_type(), "image/png");
+        assert_eq!(AssetType::Image(ImageType::Jpg).file_type(), "image/jpeg");
+        assert_eq!(AssetType::Image(ImageType::Bmp).file_type(), "image/bmp");
+        assert_eq!(AssetType::Image(ImageType::Tga).file_type(), "image/tga");
+        assert_eq!(AssetType::Audio(AudioType::Mp3).file_type(), "audio/mpeg");
+        assert_eq!(AssetType::Audio(AudioType::Ogg).file_type(), "audio/ogg");
+        assert_eq!(AssetType::Audio(AudioType::Flac).file_type(), "audio/flac");
+        assert_eq!(AssetType::Audio(AudioType::Wav).file_type(), "audio/wav");
+        assert_eq!(AssetType::Video(VideoType::Mp4).file_type(), "video/mp4");
+        assert_eq!(AssetType::Video(VideoType::Mov).file_type(), "video/mov");
+    }
+
+    #[test]
+    fn test_asset_ref_cloud_display() {
+        let cloud = AssetRef::Cloud(123456789);
+        assert_eq!(cloud.to_string(), "rbxassetid://123456789");
+    }
+
+    #[test]
+    fn test_asset_ref_cloud_zero() {
+        let cloud = AssetRef::Cloud(0);
+        assert_eq!(cloud.to_string(), "rbxassetid://0");
+    }
+
+    #[test]
+    fn test_asset_ref_studio_display() {
+        let studio = AssetRef::Studio("rbxassetid://123".to_string());
+        assert_eq!(studio.to_string(), "rbxasset://rbxassetid://123");
+    }
+
+    #[test]
+    fn test_asset_ref_from_web_asset() {
+        let web = WebAsset { id: 42 };
+        let asset_ref: AssetRef = web.into();
+        assert_eq!(asset_ref.to_string(), "rbxassetid://42");
+    }
+
+    #[test]
+    fn test_asset_ref_from_lockfile_entry() {
+        let entry = LockfileEntry {
+            asset_id: 999,
+            sprite_info: None,
+        };
+        let asset_ref: AssetRef = (&entry).into();
+        assert_eq!(asset_ref.to_string(), "rbxassetid://999");
+    }
+
+    #[test]
+    fn test_asset_type_serialization() {
+        let json = serde_json::to_string(&AssetType::Image(ImageType::Png)).unwrap();
+        assert_eq!(json, "\"Image\"");
+        let json = serde_json::to_string(&AssetType::Animation).unwrap();
+        assert_eq!(json, "\"Animation\"");
+    }
+}
