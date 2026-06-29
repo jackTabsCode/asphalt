@@ -62,9 +62,7 @@ Syncs all of your assets defined in your inputs.
 There are three targets you can use to sync assets:
 
 - `cloud`: Uploads your assets to Roblox. This will generate a `asphalt.lock.toml` file which you should commit to source control. This is the default target.
-
 - `studio`: Syncs assets locally to Roblox Studio. This is useful for testing assets in Studio before uploading them to Roblox.
-
 - `debug`: Syncs assets to an `.asphalt-debug` folder in the current directory. You can use this option see how Asphalt will process your files.
 
 ```bash
@@ -119,38 +117,38 @@ output_path = "src/shared"
 ### Format
 
 - `creator`: [Creator](#creator)
-	- The Roblox creator to upload the assets under.
+- The Roblox creator to upload the assets under.
 - `codegen`: [Codegen](#codegen) (optional)
-	- Code generation options.
--	`inputs`: map<string, [Input](#input)>
-	- A map of input names to input configurations.
+- Code generation options.
+- `inputs`: map<string, [Input](#input)>
+- A map of input names to input configurations.
 
 #### Creator
 
--	`type`: "user" or "group"
--	`id`: number
+- `type`: "user" or "group"
+- `id`: number
 
 #### Codegen
 
 - `typescript`: boolean (optional)
-    - Generate a TypeScript definition file.
+  - Generate a TypeScript definition file.
 - `style`: "flat" | "nested" (optional)
-    - The code generation style to use. Defaults to `flat`, which lets you index assets as if they were paths. You may consider using `nested` if you are not a TypeScript user as Luau does not support template literal types.
+  - The code generation style to use. Defaults to `flat`, which lets you index assets as if they were paths. You may consider using `nested` if you are not a TypeScript user as Luau does not support template literal types.
 - `strip_extensions`: boolean (optional)
-    - Whether to strip the file extension. Defaults to `false` for the same reason described above.
+  - Whether to strip the file extension. Defaults to `false` for the same reason described above.
 - `content`: boolean (optional)
-    - Whether to output `Content` instead of `string`s. Defaults to `false`.
+  - Whether to output `Content` instead of `string`s. Defaults to `false`.
 
 #### Input
 
--	`path`: glob
-	-	A glob pattern to match files to upload.
--	`output_path`: string
-	-	The directory path to output the generated code.
--	`web`: map<string, [WebAsset](#webasset)>
-	-	A map of paths relative to the input path to existing assets on Roblox.
+- `path`: glob
+- A glob pattern to match files to upload.
+- `output_path`: string
+- The directory path to output the generated code.
+- `web`: map<string, [WebAsset](#webasset)>
+- A map of paths relative to the input path to existing assets on Roblox.
 - `bleed`: boolean (optional)
-	- Whether to alpha bleed images. Defaults to `true`. Keep in mind that changing this setting won't invalidate your lockfile or reupload your images.
+- Whether to alpha bleed images. Defaults to `true`. Keep in mind that changing this setting won't invalidate your lockfile or reupload your images.
 
 #### WebAsset
 
@@ -172,15 +170,15 @@ Make sure that you select an appropriate IP and that your API key is under the C
 ## Supported Asset Types
 
 - Images (.png, .jpg, .bmp, .tga, .svg)
-	- SVGs are supported by Asphalt by converting them to PNGs. If an SVG uses the `currentColor` fill, it will be converted to white so that it can be colored on Roblox.
+- SVGs are supported by Asphalt by converting them to PNGs. If an SVG uses the `currentColor` fill, it will be converted to white so that it can be colored on Roblox.
 - Audio (.mp3, .ogg, .wav, .flac)
 - Videos (.mp4, .mov)
-	- When uploading videos, you must provide the `--expected-price` argument, which is the price you expect to be charged for the video. See the [Roblox documentation on Videos](https://create.roblox.com/docs/en-us/ui/video-frames#upload-videos) for more details.
+- When uploading videos, you must provide the `--expected-price` argument, which is the price you expect to be charged for the video. See the [Roblox documentation on Videos](https://create.roblox.com/docs/en-us/ui/video-frames#upload-videos) for more details.
 - Animations (.rbxm, .rbxmx)
-	- Asphalt detects animations by looking to see if the saved class is a KeyframeSequence or a CurveAnimation. If it isn't, Asphalt will assume it is a Model.
+- Asphalt detects animations by looking to see if the saved class is a KeyframeSequence or a CurveAnimation. If it isn't, Asphalt will assume it is a Model.
 - Roblox Models (.rbxm, .rbxmx)
 - 3D Models (.fbx, .gltf, .glb)
-	- Roblox does not offer control over the import settings through the web API. As such, this is not a route most should take. You should instead use the [3D Importer](https://create.roblox.com/docs/art/modeling/3d-importer) to upload these assets, then either sync them with Rojo or save them as Roblox model files.
+- Roblox does not offer control over the import settings through the web API. As such, this is not a route most should take. You should instead use the [3D Importer](https://create.roblox.com/docs/art/modeling/3d-importer) to upload these assets, then either sync them with Rojo or save them as Roblox model files.
 
 ## Code Generation
 
