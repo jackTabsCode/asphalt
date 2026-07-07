@@ -23,8 +23,8 @@ image = "0.25.10"
 indicatif = "0.18.4"
 indicatif-log-bridge = "0.2.3"
 log = "0.4.29"
-rbx_binary = { version = "2.0.1", features = ["serde"] }
-rbx_xml = "2.0.1"
+rbx_binary = { version = "3.0.0", features = ["serde"] }
+rbx_xml = "3.0.0"
 relative-path = { version = "2.0.1", features = ["serde"] }
 reqwest = { version = "0.13.3", default-features = false, features = [
   "gzip",
