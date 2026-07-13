@@ -105,6 +105,13 @@
           "type": "boolean",
           "default": true
         },
+        "output_basename": {
+          "description": "The basename of the file to output the generated code",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "output_path": {
           "description": "The directory path to output the generated code",
           "type": "string"

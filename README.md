@@ -146,6 +146,8 @@ output_path = "src/shared"
 	-	A glob pattern to match files to upload.
 -	`output_path`: string
 	-	The directory path to output the generated code.
+-	`output_basename`: string
+	-	The filename of the generated files. Defaults to the input's name.
 -	`web`: map<string, [WebAsset](#webasset)>
 	-	A map of paths relative to the input path to existing assets on Roblox.
 - 	`bleed`: boolean (optional)
