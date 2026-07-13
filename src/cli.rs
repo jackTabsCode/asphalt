@@ -45,6 +45,9 @@ pub enum SyncTarget {
     Studio,
     /// Write assets to the .asphalt-debug folder.
     Debug,
+    /// Generate code from existing lockfile entries only.
+    /// Fails if any asset is not already in the lockfile.
+    Existing,
 }
 
 impl SyncTarget {
