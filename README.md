@@ -68,15 +68,15 @@ There are three targets you can use to sync assets:
 -   `debug`: Syncs assets to an `.asphalt-debug` folder in the current directory. You can use this option see how Asphalt will process your files.
 
 ```bash
-asphalt sync # Equivalent to --target cloud
-asphalt sync --target studio
-asphalt sync --target debug
+asphalt sync # Equivalent to cloud
+asphalt sync studio
+asphalt sync debug
 ```
 
 You can also perform a dry run to verify which assets will be synced. This exits with a non-zero status code if any asset hashes have changed. You can use this for CI checks to ensure that your assets are up-to-date.
 
 ```bash
-asphalt sync --dry-run
+asphalt sync cloud --dry-run
 ```
 
 ### `asphalt migrate-lockfile`
