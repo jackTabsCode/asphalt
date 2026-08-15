@@ -160,7 +160,20 @@ impl WebApiClient {
                 }
             }
 
-            let res = make_req(&self.inner).send().await?;
+            let res = match make_req(&self.inner).send().await {
+                Ok(res) => res,
+                Err(err) if attempt < MAX => {
+                    let wait = Duration::from_secs(1 << attempt);
+                    warn!(
+                        "Request failed to send ({err}), retrying in {:.2} seconds",
+                        wait.as_secs_f64()
+                    );
+                    tokio::time::sleep(wait).await;
+                    attempt += 1;
+                    continue;
+                }
+                Err(err) => return Err(err.into()),
+            };
             let status = res.status();
 
             match status {
@@ -190,9 +203,31 @@ impl WebApiClient {
                     continue;
                 }
                 StatusCode::OK => return Ok(res),
-                _ => {
+                StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => {
                     let body = res.text().await?;
                     self.fatally_failed.store(true, Ordering::SeqCst);
+                    bail!("Request failed with status {status}:\n{body}");
+                }
+                _ => {
+                    let body = res.text().await?;
+
+                    // Roblox's edge proxy intermittently rejects valid requests with an HTML
+                    // 400 page before they reach the API, so those are retryable alongside 5xx.
+                    let transient = status.is_server_error()
+                        || (status == StatusCode::BAD_REQUEST
+                            && body.trim_start().starts_with('<'));
+
+                    if transient && attempt < MAX {
+                        let wait = Duration::from_secs(1 << attempt);
+                        warn!(
+                            "Request failed with status {status}, retrying in {:.2} seconds",
+                            wait.as_secs_f64()
+                        );
+                        tokio::time::sleep(wait).await;
+                        attempt += 1;
+                        continue;
+                    }
+
                     bail!("Request failed with status {status}:\n{body}");
                 }
             }
