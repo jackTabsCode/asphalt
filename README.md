@@ -49,6 +49,12 @@ brew tap jacktabscode/tap
 brew install asphalt
 ```
 
+### [Nix](https://nixos.org/)
+
+```bash
+nix-shell -p asphalt
+```
+
 [Asphalt cannot be installed with Foreman.](https://github.com/Roblox/foreman/issues/97)
 
 </details>
